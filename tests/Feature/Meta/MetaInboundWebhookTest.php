@@ -177,21 +177,166 @@ class MetaInboundWebhookTest extends TestCase
         ]);
     }
 
+    // ── Inbound webhook idempotency ──────────────────────────────────────────
+    //
+    // The previous version of this test posted an entry with `changes => []`.
+    // entryEventKey() returns null for that (there is nothing to key on), so the
+    // `$eventKey === null ||` short-circuit in receiveGlobal meant isNewEvent()
+    // was never called and no row was ever written. It asserted 1 row, found 0,
+    // and had never exercised deduplication at all.
+    //
+    // These tests use realistic payloads so the m:<message-id> and
+    // s:<status-id>:<status> keying in entryEventKey() is genuinely covered.
+
+    /** Build a signed WhatsApp webhook body containing one inbound message. */
+    private function messageEntry(string $messageId, string $wabaId = 'waba_1'): array
+    {
+        return [
+            'object' => 'whatsapp_business_account',
+            'entry' => [[
+                'id' => $wabaId,
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'messaging_product' => 'whatsapp',
+                        'metadata' => ['display_phone_number' => '15550001111', 'phone_number_id' => 'pn_1'],
+                        'contacts' => [['profile' => ['name' => 'Test'], 'wa_id' => '15550002222']],
+                        'messages' => [[
+                            'from' => '15550002222',
+                            'id' => $messageId,
+                            'timestamp' => (string) time(),
+                            'type' => 'text',
+                            'text' => ['body' => 'hello'],
+                        ]],
+                    ],
+                ]],
+            ]],
+        ];
+    }
+
+    /** Build a signed WhatsApp webhook body carrying one status transition. */
+    private function statusEntry(string $messageId, string $status, string $wabaId = 'waba_1'): array
+    {
+        return [
+            'object' => 'whatsapp_business_account',
+            'entry' => [[
+                'id' => $wabaId,
+                'changes' => [[
+                    'field' => 'messages',
+                    'value' => [
+                        'messaging_product' => 'whatsapp',
+                        'metadata' => ['display_phone_number' => '15550001111', 'phone_number_id' => 'pn_1'],
+                        'statuses' => [[
+                            'id' => $messageId,
+                            'status' => $status,
+                            'timestamp' => (string) time(),
+                            'recipient_id' => '15550002222',
+                        ]],
+                    ],
+                ]],
+            ]],
+        ];
+    }
+
+    private function postSignedWebhook(array $body): \Illuminate\Testing\TestResponse
+    {
+        return $this->withHeaders(['X-Hub-Signature-256' => $this->signPayload(json_encode($body))])
+            ->postJson('/webhooks/whatsapp/global', $body);
+    }
+
+    /**
+     * Rows recorded by the CONTROLLER's idempotency check specifically.
+     *
+     * There are two independent layers, and a bare assertDatabaseCount conflates
+     * them: WhatsappWebhookController records under 'whatsapp_global', and
+     * WhatsappDriver records again under 'whatsapp_msg' keyed on the raw message
+     * id. Tests run with QUEUE_CONNECTION=sync, so the queued job executes inline
+     * and both fire — an inbound message therefore writes two rows, a status
+     * transition only one.
+     */
+    private function globalEventCount(): int
+    {
+        return (int) \Illuminate\Support\Facades\DB::table('inbound_webhook_events')
+            ->where('provider', 'whatsapp_global')
+            ->count();
+    }
+
+    /** NEGATIVE: the same message delivered twice must be recorded once. */
     #[Test]
-    public function global_webhook_dedupes_duplicate_entry_ids(): void
+    public function global_webhook_dedupes_a_redelivered_message(): void
     {
         $this->seedMetaIntegration();
-        $entryId = 'entry_dup_test_1';
-        $body = [
-            'object' => 'whatsapp_business_account',
-            'entry' => [['id' => $entryId, 'changes' => []]],
-        ];
-        $payload = json_encode($body);
-        $headers = ['X-Hub-Signature-256' => $this->signPayload($payload)];
+        $body = $this->messageEntry('wamid.DUPLICATE_TEST_1');
 
-        $this->withHeaders($headers)->postJson('/webhooks/whatsapp/global', $body)->assertOk();
-        $this->withHeaders($headers)->postJson('/webhooks/whatsapp/global', $body)->assertOk();
+        $this->postSignedWebhook($body)->assertOk();
+        $this->postSignedWebhook($body)->assertOk();
 
-        $this->assertDatabaseCount('inbound_webhook_events', 1);
+        $this->assertSame(1, $this->globalEventCount(), 'A redelivered message must not be recorded twice.');
+    }
+
+    /**
+     * POSITIVE CONTROL for the test above.
+     *
+     * Without this, "1 row after two posts" is equally consistent with the
+     * endpoint recording nothing at all — which is exactly how the previous
+     * version of this test passed review while verifying nothing. Two genuinely
+     * distinct messages must produce two rows.
+     */
+    #[Test]
+    public function global_webhook_records_two_distinct_messages_separately(): void
+    {
+        $this->seedMetaIntegration();
+
+        $this->postSignedWebhook($this->messageEntry('wamid.DISTINCT_A'))->assertOk();
+        $this->postSignedWebhook($this->messageEntry('wamid.DISTINCT_B'))->assertOk();
+
+        $this->assertSame(2, $this->globalEventCount(), 'Two distinct messages must both be recorded.');
+    }
+
+    /**
+     * A message moves sent → delivered → read. entryEventKey() keys statuses on
+     * id + status precisely so each transition is processed while a re-delivery
+     * of the same transition dedupes. That claim lives in a code comment and had
+     * never been verified.
+     */
+    #[Test]
+    public function global_webhook_treats_each_status_transition_as_distinct(): void
+    {
+        $this->seedMetaIntegration();
+        $messageId = 'wamid.STATUS_FLOW_1';
+
+        foreach (['sent', 'delivered', 'read'] as $status) {
+            $this->postSignedWebhook($this->statusEntry($messageId, $status))->assertOk();
+        }
+
+        $this->assertSame(3, $this->globalEventCount(), 'sent/delivered/read must each be recorded.');
+    }
+
+    /** ...and a re-delivered status transition must still dedupe. */
+    #[Test]
+    public function global_webhook_dedupes_a_redelivered_status_transition(): void
+    {
+        $this->seedMetaIntegration();
+        $body = $this->statusEntry('wamid.STATUS_DUP_1', 'delivered');
+
+        $this->postSignedWebhook($body)->assertOk();
+        $this->postSignedWebhook($body)->assertOk();
+
+        $this->assertSame(1, $this->globalEventCount(), 'A redelivered status transition must dedupe.');
+    }
+
+    /**
+     * The second idempotency layer, asserted explicitly so its existence is
+     * documented by a test rather than only discoverable by grep.
+     */
+    #[Test]
+    public function inbound_message_is_recorded_by_both_idempotency_layers(): void
+    {
+        $this->seedMetaIntegration();
+
+        $this->postSignedWebhook($this->messageEntry('wamid.TWO_LAYER_1'))->assertOk();
+
+        $this->assertDatabaseHas('inbound_webhook_events', ['provider' => 'whatsapp_global']);
+        $this->assertDatabaseHas('inbound_webhook_events', ['provider' => 'whatsapp_msg']);
     }
 }
