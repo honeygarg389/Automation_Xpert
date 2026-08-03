@@ -7,6 +7,8 @@ use App\Modules\AI\Services\LlmGateway;
 use App\Modules\Social\Jobs\PublishSocialPostJob;
 use App\Modules\Social\Models\SocialAccount;
 use App\Modules\Social\Models\SocialPost;
+use App\Support\WorkspaceContext;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,7 +20,7 @@ class SocialPostController extends Controller
 {
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     public function index(Request $request): Response
@@ -43,7 +45,7 @@ class SocialPostController extends Controller
                 $q->where(function ($inner) use ($networkAccountIds) {
                     foreach ($networkAccountIds as $aid) {
                         $inner->orWhereJsonContains('target_accounts', $aid)
-                              ->orWhereJsonContains('target_accounts', (int) $aid);
+                            ->orWhereJsonContains('target_accounts', (int) $aid);
                     }
                 });
             })
@@ -52,9 +54,9 @@ class SocialPostController extends Controller
         $posts = $query->paginate(20)->withQueryString();
 
         return Inertia::render('Social/Posts/Index', [
-            'posts'    => $posts,
+            'posts' => $posts,
             'accounts' => $accounts,
-            'filters'  => ['status' => $status, 'network' => $network],
+            'filters' => ['status' => $status, 'network' => $network],
         ]);
     }
 
@@ -68,13 +70,13 @@ class SocialPostController extends Controller
 
     public function calendar(Request $request): Response
     {
-        $wid  = $this->workspaceId($request);
+        $wid = $this->workspaceId($request);
         $month = $request->query('month', now()->format('Y-m'));
         abort_unless(preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month), 422, 'Invalid month format.');
 
-        $filterStatus    = $request->query('status');
+        $filterStatus = $request->query('status');
         $filterAccountId = $request->query('account_id');
-        $filterNetwork   = $request->query('network');
+        $filterNetwork = $request->query('network');
 
         $userTz = $request->user()?->timezone ?? 'Asia/Dhaka';
         try {
@@ -84,8 +86,8 @@ class SocialPostController extends Controller
         }
 
         [$year, $mon] = explode('-', $month);
-        $start = \Carbon\Carbon::createFromDate((int) $year, (int) $mon, 1, $tz)->startOfMonth()->utc();
-        $end   = \Carbon\Carbon::createFromDate((int) $year, (int) $mon, 1, $tz)->endOfMonth()->utc();
+        $start = Carbon::createFromDate((int) $year, (int) $mon, 1, $tz)->startOfMonth()->utc();
+        $end = Carbon::createFromDate((int) $year, (int) $mon, 1, $tz)->endOfMonth()->utc();
 
         $accounts = SocialAccount::where('workspace_id', $wid)
             ->where('active', true)
@@ -103,27 +105,27 @@ class SocialPostController extends Controller
             ->when($filterAccountId, function ($q) use ($filterAccountId) {
                 $q->where(function ($inner) use ($filterAccountId) {
                     $inner->orWhereJsonContains('target_accounts', $filterAccountId)
-                          ->orWhereJsonContains('target_accounts', (int) $filterAccountId);
+                        ->orWhereJsonContains('target_accounts', (int) $filterAccountId);
                 });
             })
             ->when($filterNetwork && $networkAccountIds->isNotEmpty(), function ($q) use ($networkAccountIds) {
                 $q->where(function ($inner) use ($networkAccountIds) {
                     foreach ($networkAccountIds as $aid) {
                         $inner->orWhereJsonContains('target_accounts', $aid)
-                              ->orWhereJsonContains('target_accounts', (int) $aid);
+                            ->orWhereJsonContains('target_accounts', (int) $aid);
                     }
                 });
             })
             ->get(['id', 'title', 'status', 'scheduled_at', 'timezone', 'target_accounts']);
 
         return Inertia::render('Social/Calendar', [
-            'posts'    => $posts,
-            'month'    => $month,
+            'posts' => $posts,
+            'month' => $month,
             'accounts' => $accounts,
-            'filters'  => [
-                'status'     => $filterStatus,
+            'filters' => [
+                'status' => $filterStatus,
                 'account_id' => $filterAccountId,
-                'network'    => $filterNetwork,
+                'network' => $filterNetwork,
             ],
         ]);
     }
@@ -132,14 +134,14 @@ class SocialPostController extends Controller
     {
         $wid = $this->workspaceId($request);
         $validated = $request->validate([
-            'title'            => ['nullable', 'string', 'max:256'],
-            'body'             => ['required', 'string', 'max:5000'],
-            'media_urls'       => ['nullable', 'array'],
-            'media_urls.*'     => ['nullable', 'url', 'max:2048'],
-            'target_accounts'  => ['required', 'array', 'min:1'],
-            'target_accounts.*'=> ['integer'],
-            'scheduled_at'     => ['nullable', 'date'],
-            'timezone'         => ['nullable', 'string', 'max:64'],
+            'title' => ['nullable', 'string', 'max:256'],
+            'body' => ['required', 'string', 'max:5000'],
+            'media_urls' => ['nullable', 'array'],
+            'media_urls.*' => ['nullable', 'url', 'max:2048'],
+            'target_accounts' => ['required', 'array', 'min:1'],
+            'target_accounts.*' => ['integer'],
+            'scheduled_at' => ['nullable', 'date'],
+            'timezone' => ['nullable', 'string', 'max:64'],
         ]);
 
         // Ensure every requested account belongs to this workspace (cross-workspace IDOR guard).
@@ -190,7 +192,7 @@ class SocialPostController extends Controller
         $accounts = SocialAccount::where('workspace_id', $wid)->where('active', true)->get(['id', 'network', 'name', 'picture_url']);
 
         return Inertia::render('Social/Posts/Edit', [
-            'post'     => $post,
+            'post' => $post,
             'accounts' => $accounts,
         ]);
     }
@@ -201,14 +203,14 @@ class SocialPostController extends Controller
         abort_if(in_array($post->status, ['publishing', 'published']), 403, 'Cannot edit a post that is already published or being published.');
 
         $validated = $request->validate([
-            'title'            => ['nullable', 'string', 'max:256'],
-            'body'             => ['required', 'string', 'max:5000'],
-            'media_urls'       => ['nullable', 'array'],
-            'media_urls.*'     => ['nullable', 'url', 'max:2048'],
-            'target_accounts'  => ['required', 'array', 'min:1'],
-            'target_accounts.*'=> ['integer'],
-            'scheduled_at'     => ['nullable', 'date'],
-            'timezone'         => ['nullable', 'string', 'max:64'],
+            'title' => ['nullable', 'string', 'max:256'],
+            'body' => ['required', 'string', 'max:5000'],
+            'media_urls' => ['nullable', 'array'],
+            'media_urls.*' => ['nullable', 'url', 'max:2048'],
+            'target_accounts' => ['required', 'array', 'min:1'],
+            'target_accounts.*' => ['integer'],
+            'scheduled_at' => ['nullable', 'date'],
+            'timezone' => ['nullable', 'string', 'max:64'],
         ]);
 
         if (! empty($validated['scheduled_at']) && now()->subSeconds(30)->gt($validated['scheduled_at'])) {
@@ -261,15 +263,15 @@ class SocialPostController extends Controller
         $wid = $this->workspaceId($request);
 
         $validated = $request->validate([
-            'topic'             => ['required', 'string', 'max:500'],
-            'campaign_goal'     => ['nullable', 'string', 'max:200'],
-            'tone'              => ['nullable', 'string', 'in:professional,casual,humorous,inspirational,educational'],
-            'post_count'        => ['nullable', 'integer', 'min:3', 'max:14'],
-            'start_date'        => ['required', 'date', 'after_or_equal:today'],
-            'end_date'          => ['required', 'date', 'after:start_date'],
-            'target_accounts'   => ['required', 'array', 'min:1'],
+            'topic' => ['required', 'string', 'max:500'],
+            'campaign_goal' => ['nullable', 'string', 'max:200'],
+            'tone' => ['nullable', 'string', 'in:professional,casual,humorous,inspirational,educational'],
+            'post_count' => ['nullable', 'integer', 'min:3', 'max:14'],
+            'start_date' => ['required', 'date', 'after_or_equal:today'],
+            'end_date' => ['required', 'date', 'after:start_date'],
+            'target_accounts' => ['required', 'array', 'min:1'],
             'target_accounts.*' => ['integer'],
-            'timezone'          => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64'],
         ]);
 
         $requestedIds = collect($validated['target_accounts'])->map(fn ($id) => (int) $id);
@@ -282,19 +284,19 @@ class SocialPostController extends Controller
             return response()->json(['errors' => ['target_accounts' => ['One or more selected accounts are invalid.']]], 403);
         }
 
-        $networks  = $accounts->pluck('network')->unique()->values()->all();
+        $networks = $accounts->pluck('network')->unique()->values()->all();
         $postCount = $validated['post_count'] ?? 7;
-        $tone      = $validated['tone'] ?? 'professional';
-        $goal      = $validated['campaign_goal'] ?? 'increase engagement and brand awareness';
+        $tone = $validated['tone'] ?? 'professional';
+        $goal = $validated['campaign_goal'] ?? 'increase engagement and brand awareness';
 
         try {
-            $gateway  = app(LlmGateway::class);
+            $gateway = app(LlmGateway::class);
             $messages = $this->buildPlanMessages(
                 $validated['topic'], $networks, $postCount, $tone, $goal,
                 $validated['start_date'], $validated['end_date'], $validated['timezone'] ?? 'UTC'
             );
             $response = $gateway->chat($wid, $messages, ['temperature' => 0.7, 'max_tokens' => 4096]);
-            $posts    = $this->parsePlanResponse($response->content, $postCount);
+            $posts = $this->parsePlanResponse($response->content, $postCount);
 
             return response()->json(['posts' => $posts, 'accounts' => $accounts]);
         } catch (\Throwable $e) {
@@ -304,8 +306,8 @@ class SocialPostController extends Controller
 
     private function buildPlanMessages(
         string $topic,
-        array  $networks,
-        int    $count,
+        array $networks,
+        int $count,
         string $tone,
         string $goal,
         string $startDate,
@@ -313,8 +315,8 @@ class SocialPostController extends Controller
         string $timezone
     ): array {
         $networksStr = implode(', ', $networks);
-        $limits      = ['twitter' => 280, 'tiktok' => 2200, 'linkedin' => 3000, 'facebook' => 63206, 'instagram' => 2200, 'youtube' => 5000];
-        $limitLines  = collect($networks)->map(fn ($n) => "- {$n}: " . ($limits[$n] ?? 5000) . ' characters')->implode("\n");
+        $limits = ['twitter' => 280, 'tiktok' => 2200, 'linkedin' => 3000, 'facebook' => 63206, 'instagram' => 2200, 'youtube' => 5000];
+        $limitLines = collect($networks)->map(fn ($n) => "- {$n}: ".($limits[$n] ?? 5000).' characters')->implode("\n");
 
         $system = <<<SYSTEM
 You are an expert social media strategist. Generate a content calendar as JSON.
@@ -362,10 +364,10 @@ SYSTEM;
             }
 
             return [
-                'title'          => $post['title'] ?? '',
-                'body'           => $post['body'],
+                'title' => $post['title'] ?? '',
+                'body' => $post['body'],
                 'suggested_time' => $post['suggested_time'] ?? null,
-                'rationale'      => $post['rationale'] ?? '',
+                'rationale' => $post['rationale'] ?? '',
                 'platform_notes' => $post['platform_notes'] ?? null,
             ];
         })->all();
@@ -376,14 +378,14 @@ SYSTEM;
         $wid = $this->workspaceId($request);
 
         $validated = $request->validate([
-            'posts'                     => ['required', 'array', 'min:1', 'max:14'],
-            'posts.*.title'             => ['nullable', 'string', 'max:256'],
-            'posts.*.body'              => ['required', 'string', 'max:5000'],
-            'posts.*.scheduled_at'      => ['nullable', 'date'],
-            'posts.*.timezone'          => ['nullable', 'string', 'max:64'],
-            'posts.*.target_accounts'   => ['required', 'array', 'min:1'],
+            'posts' => ['required', 'array', 'min:1', 'max:14'],
+            'posts.*.title' => ['nullable', 'string', 'max:256'],
+            'posts.*.body' => ['required', 'string', 'max:5000'],
+            'posts.*.scheduled_at' => ['nullable', 'date'],
+            'posts.*.timezone' => ['nullable', 'string', 'max:64'],
+            'posts.*.target_accounts' => ['required', 'array', 'min:1'],
             'posts.*.target_accounts.*' => ['integer'],
-            'posts.*.ai_prompt'         => ['nullable', 'string', 'max:1000'],
+            'posts.*.ai_prompt' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $allIds = collect($validated['posts'])
@@ -408,16 +410,16 @@ SYSTEM;
             foreach ($validated['posts'] as $postData) {
                 $scheduledAt = $postData['scheduled_at'] ?? null;
                 $post = SocialPost::create([
-                    'workspace_id'    => $wid,
-                    'title'           => $postData['title'] ?? null,
-                    'body'            => $postData['body'],
-                    'media_urls'      => [],
+                    'workspace_id' => $wid,
+                    'title' => $postData['title'] ?? null,
+                    'body' => $postData['body'],
+                    'media_urls' => [],
                     'target_accounts' => array_map('intval', $postData['target_accounts']),
-                    'scheduled_at'    => $scheduledAt,
-                    'timezone'        => $postData['timezone'] ?? 'UTC',
-                    'status'          => $scheduledAt ? 'scheduled' : 'draft',
-                    'ai_generated'    => true,
-                    'ai_prompt'       => $postData['ai_prompt'] ?? null,
+                    'scheduled_at' => $scheduledAt,
+                    'timezone' => $postData['timezone'] ?? 'UTC',
+                    'status' => $scheduledAt ? 'scheduled' : 'draft',
+                    'ai_generated' => true,
+                    'ai_prompt' => $postData['ai_prompt'] ?? null,
                 ]);
                 $created[] = $post->id;
             }
