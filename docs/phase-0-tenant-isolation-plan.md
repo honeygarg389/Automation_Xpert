@@ -301,6 +301,19 @@ Grouped so each commit leaves the suite green.
 is also fixing rate limits.
 
 `MissingWorkspaceContextException` is deferred to whichever commit first throws it.
+
+**The characterisation tests flip in 1c, not 1b.** The three tests added in 1a
+(`characterisation_switching_workspace_does_not_affect_controllers_today`,
+`characterisation_the_broken_expression_always_yields_the_home_workspace`,
+`workspace_context_and_the_legacy_expression_currently_disagree`) describe controller
+behaviour and the legacy expression. 1b wired infrastructure only, so all three still passed
+and were deliberately NOT inverted — inverting them there would have meant editing passing
+tests to match a prediction the code did not satisfy.
+
+**Inverting them IS the definition of done for 1c.** When the controllers resolve through
+`WorkspaceContext`, switching workspace must change what `/app/contacts` returns, and the new
+component must agree with production rather than disagree with it. If 1c completes and those
+tests still pass unchanged, 1c is not finished.
 *This is not optional. The scope cannot be built on a broken resolver.*
 
 - **Create** `app/Support/WorkspaceContext.php`

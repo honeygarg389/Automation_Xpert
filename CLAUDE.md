@@ -175,6 +175,20 @@ Rules:
     ability-gated API routes 401 before validation. Issue a real token.
 - **Never invent codebase facts.** If you have not opened the file, say so and go read it.
 
+- **When a fix reveals a second bug the first was masking, fix both in the same commit** and
+  pin the second with its own regression test. Shipping the first alone converts a dormant
+  fault into a live one.
+
+  The example: the `ai-runs` rate limiter resolved the workspace from a non-existent
+  attribute, so it always fell back to the client IP. `Workspace::find(<ip>)` returned null —
+  which meant Laravel skipped the eager load on the next line, and that eager load
+  (`with('client.activePlan')`) was itself invalid, because `activePlan()` is a method, not a
+  relation. Fixing only the resolution would have produced a `RelationNotFoundException` on
+  the first authenticated request. Each bug hid the other.
+
+  Ask, whenever a fix makes a previously-dead code path live: **what has never actually
+  executed before, and is it correct?**
+
 - **Before hardening a check, grep for OTHER definitions of the same concept.** This codebase
   repeatedly implements one idea in two places, and fixing one of them closes nothing while
   looking correct.
