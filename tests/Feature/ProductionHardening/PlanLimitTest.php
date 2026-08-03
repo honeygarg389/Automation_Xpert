@@ -34,7 +34,7 @@ class PlanLimitTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->post("/app/broadcasts/campaigns/{$campaign->id}/launch");
+            ->post("/app/broadcasts/campaigns/{$campaign->uuid}/launch");
 
         $response->assertRedirect('/billing');
         $response->assertSessionHas('upgrade_required');

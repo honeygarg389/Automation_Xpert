@@ -45,7 +45,7 @@ class SlaTrackingTest extends TestCase
 
         $this->assertNull($this->conversation->first_response_at);
 
-        $response = $this->actingAs($user)->post(route('client.inbox.reply', $this->conversation->id), [
+        $response = $this->actingAs($user)->post(route('client.inbox.reply', $this->conversation->uuid), [
             'body' => 'Hello there!',
             'type' => 'text',
         ]);
@@ -64,7 +64,7 @@ class SlaTrackingTest extends TestCase
         $this->conversation->update(['first_response_at' => $firstResponse]);
 
         // Reply again
-        $this->actingAs($user)->post(route('client.inbox.reply', $this->conversation->id), [
+        $this->actingAs($user)->post(route('client.inbox.reply', $this->conversation->uuid), [
             'body' => 'Follow-up reply',
             'type' => 'text',
         ]);
@@ -83,7 +83,7 @@ class SlaTrackingTest extends TestCase
 
         $this->assertNull($this->conversation->resolved_at);
 
-        $this->actingAs($user)->post(route('client.inbox.status', $this->conversation->id), [
+        $this->actingAs($user)->post(route('client.inbox.status', $this->conversation->uuid), [
             'status' => 'resolved',
         ]);
 
@@ -100,7 +100,7 @@ class SlaTrackingTest extends TestCase
 
         // Change to open then resolve again
         $this->conversation->update(['status' => 'open']);
-        $this->actingAs($user)->post(route('client.inbox.status', $this->conversation->id), [
+        $this->actingAs($user)->post(route('client.inbox.status', $this->conversation->uuid), [
             'status' => 'resolved',
         ]);
 

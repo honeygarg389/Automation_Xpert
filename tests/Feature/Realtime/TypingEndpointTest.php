@@ -27,7 +27,7 @@ class TypingEndpointTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->postJson(route('client.inbox.typing', $conv->id), [
+            ->postJson(route('client.inbox.typing', $conv->uuid), [
                 'is_typing' => true,
             ]);
 
@@ -46,7 +46,7 @@ class TypingEndpointTest extends TestCase
         ]);
 
         $response = $this->actingAs($ctx2['user'])
-            ->postJson(route('client.inbox.typing', $conv->id), [
+            ->postJson(route('client.inbox.typing', $conv->uuid), [
                 'is_typing' => true,
             ]);
 

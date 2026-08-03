@@ -136,7 +136,7 @@ class HandoverTest extends TestCase
     {
         $user = $this->ctx['user'];
 
-        $response = $this->actingAs($user)->postJson(route('client.inbox.handover', $this->conversation->id), [
+        $response = $this->actingAs($user)->postJson(route('client.inbox.handover', $this->conversation->uuid), [
             'mode' => 'human',
         ]);
 
@@ -150,7 +150,7 @@ class HandoverTest extends TestCase
         $user = $this->ctx['user'];
         $this->conversation->update(['assigned_to' => 'human', 'handover_at' => now()]);
 
-        $response = $this->actingAs($user)->postJson(route('client.inbox.handover', $this->conversation->id), [
+        $response = $this->actingAs($user)->postJson(route('client.inbox.handover', $this->conversation->uuid), [
             'mode' => 'bot',
         ]);
 
