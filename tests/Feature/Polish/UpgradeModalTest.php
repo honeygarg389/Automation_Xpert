@@ -26,7 +26,7 @@ class UpgradeModalTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)
-            ->post(route('client.campaigns.launch', $campaign->id));
+            ->post(route('client.campaigns.launch', $campaign->uuid));
 
         // The EnforceLimit middleware redirects to /billing with flash data
         $response->assertRedirect();
