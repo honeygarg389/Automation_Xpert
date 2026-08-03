@@ -174,6 +174,21 @@ Rules:
   - **Auth style** — `actingAs($user, 'sanctum')` does not populate `currentAccessToken()`, so
     ability-gated API routes 401 before validation. Issue a real token.
 - **Never invent codebase facts.** If you have not opened the file, say so and go read it.
+
+- **Before hardening a check, grep for OTHER definitions of the same concept.** This codebase
+  repeatedly implements one idea in two places, and fixing one of them closes nothing while
+  looking correct.
+
+  Confirmed instances:
+  - `User::accessibleWorkspaces()` and `Workspace::isAccessibleBy()` both define workspace
+    membership. Filtering only the first left the second — used by `WorkspacePolicy::view`,
+    and therefore by workspace switching — as a complete bypass.
+  - Inbound WhatsApp webhooks deduplicate in two layers, `whatsapp_global` in the controller
+    and `whatsapp_msg` in the driver. A test asserting a single row count conflated them.
+
+  Both were caught only because a test failed for an unexpected reason. Search for the
+  concept, not the symbol you already have: sibling methods on the related model, the policy,
+  the middleware, and any service that answers the same question.
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
   asking.

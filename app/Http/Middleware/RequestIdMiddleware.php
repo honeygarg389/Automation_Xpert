@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\WorkspaceContext;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -29,7 +30,7 @@ class RequestIdMiddleware
         if ($user) {
             Log::withContext([
                 'user_id' => $user->id,
-                'workspace_id' => $user->current_workspace_id ?? $user->workspace_id,
+                'workspace_id' => WorkspaceContext::id(),
             ]);
         }
 

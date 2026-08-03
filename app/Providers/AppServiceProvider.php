@@ -30,14 +30,17 @@ use App\Listeners\SendSubscriptionRenewedNotification;
 use App\Listeners\SendSubscriptionStartedNotification;
 use App\Listeners\SendTrialEndingNotification;
 use App\Listeners\SendWelcomeNotification;
-use Illuminate\Auth\Events\Registered;
+use App\Models\Client;
 use App\Models\Workspace;
 use App\Modules\Shared\Services\ChannelManager;
 use App\Services\Billing\BillingGatewayRegistry;
+use App\Services\StorageManager;
+use App\Support\WorkspaceContext;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
 use Dedoc\Scramble\Support\Generator\SecurityScheme;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
@@ -66,7 +69,7 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->singleton(BillingGatewayRegistry::class, fn () => new BillingGatewayRegistry);
-        $this->app->singleton(\App\Services\StorageManager::class);
+        $this->app->singleton(StorageManager::class);
         $this->app->singleton(ChannelManager::class, fn () => new ChannelManager);
     }
 
@@ -120,11 +123,40 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('ai-runs', function (Request $request) {
-            $workspaceId = $request->user()?->current_workspace_id ?? $request->ip();
-            $workspace = $workspaceId ? Workspace::with('client.activePlan')->find($workspaceId) : null;
-            $perMinute = $workspace?->client?->activePlan?->limits['ai_runs_per_minute'] ?? 10;
+            // Two bugs lived here (plan §G-2):
+            //
+            // 1. `current_workspace_id` does not exist, so $workspaceId was
+            //    ALWAYS the client IP. Workspace::find('203.0.113.4') returned
+            //    null, so every customer silently got the default 10/min
+            //    regardless of the plan they had paid for, and the bucket was
+            //    keyed per-IP so users behind one NAT shared a limit.
+            //
+            // 2. `with('client.activePlan')` is not a valid eager load —
+            //    Client::activePlan() is a METHOD returning ?Plan, not a
+            //    relation. It never threw only because find() returned null, so
+            //    Laravel skipped eager loading entirely. Fixing (1) would have
+            //    surfaced a RelationNotFoundException on the first real hit.
+            $workspaceId = WorkspaceContext::id();
 
-            return Limit::perMinute((int) $perMinute)->by((string) $workspaceId);
+            $workspace = $workspaceId !== null
+                ? Workspace::with('client')->find($workspaceId)
+                : null;
+
+            // instanceof rather than nullsafe chaining: BelongsTo is not
+            // generically typed here, so static analysis sees Model and cannot
+            // resolve Client::activePlan().
+            $client = $workspace?->client;
+            $plan = $client instanceof Client ? $client->activePlan() : null;
+
+            // data_get rather than array access: Plan::$limits is an Eloquent
+            // `array` cast, which static analysis sees as the raw string|null
+            // column type.
+            $perMinute = (int) (data_get($plan, 'limits.ai_runs_per_minute') ?? 10);
+
+            // Namespaced so a workspace id can never collide with an IP.
+            $key = $workspaceId !== null ? 'ws:'.$workspaceId : 'ip:'.$request->ip();
+
+            return Limit::perMinute($perMinute)->by($key);
         });
 
         // ── Scramble / OpenAPI ──────────────────────────────────────────────

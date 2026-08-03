@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Workspace;
 use App\Modules\Broadcasting\Models\UsageMeter;
+use App\Support\WorkspaceContext;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,7 +27,10 @@ class EnforceLimit
     public function handle(Request $request, Closure $next, string $limitKey, string $countKey = ''): Response
     {
         $user = $request->user();
-        $workspaceId = $user?->current_workspace_id ?? $user?->workspace_id;
+        // Was `current_workspace_id ?? workspace_id`, which always yielded the
+        // HOME workspace — so plan limits were enforced against the wrong
+        // workspace whenever a user had switched. See plan §G-3.
+        $workspaceId = WorkspaceContext::id();
 
         if (! $workspaceId || ! $user) {
             return $next($request);

@@ -13,6 +13,7 @@ use App\Modules\Integrations\Services\CredentialResolver;
 use App\Services\I18n\I18nFileService;
 use App\Services\OnboardingService;
 use App\Services\StorageManager;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -253,7 +254,9 @@ class HandleInertiaRequests extends Middleware
         // fallback props (no translations, empty permissions → blank admin panel).
         // This only surfaced when the session carried a leftover current_workspace_id.
         if ($user instanceof User) {
-            $workspaceId = $request->session()->get('current_workspace_id') ?? $user->workspace_id;
+            // WorkspaceContext validates session membership; isAccessibleBy below
+            // remains as defence in depth.
+            $workspaceId = WorkspaceContext::id();
             if ($workspaceId) {
                 $workspace = Workspace::with('client')->find($workspaceId);
                 if ($workspace && $workspace->isAccessibleBy($user)) {
