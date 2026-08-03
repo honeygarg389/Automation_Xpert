@@ -1,0 +1,158 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\User;
+use Illuminate\Support\Facades\Auth;
+
+/**
+ * The single source of truth for "which workspace is this request operating in".
+ *
+ * ─── Why this exists ────────────────────────────────────────────────────────
+ *
+ * The codebase currently resolves the active workspace in ~90 places with:
+ *
+ *     $user->current_workspace_id ?? $user->workspace_id
+ *
+ * `users.current_workspace_id` does not exist — not a column, not an accessor,
+ * not a cast. Every one of those expressions therefore silently yields the
+ * user's HOME workspace. Meanwhile WorkspaceController writes the switched
+ * workspace to the session, and HandleInertiaRequests reads it — so the UI
+ * shows workspace B while every controller operates on workspace A.
+ *
+ * See docs/phase-0-tenant-isolation-plan.md §G-1.
+ *
+ * ─── Resolution order ───────────────────────────────────────────────────────
+ *
+ *   1. An explicit override set by for() — jobs, console commands, webhooks
+ *   2. The session's current_workspace_id, ONLY if the user is a member
+ *   3. The user's home workspace_id
+ *   4. null
+ *
+ * Step 2's membership check is not optional. The session is client-controlled
+ * input; trusting it without verification would turn workspace switching into a
+ * cross-tenant read the moment controllers start honouring it.
+ *
+ * ─── Status ─────────────────────────────────────────────────────────────────
+ *
+ * Commit 1a wires this into NOTHING. It is introduced with tests first so the
+ * call-site migration (1b, 1c) has something already proven to migrate to.
+ */
+class WorkspaceContext
+{
+    /** Explicit override, set by for(). Highest precedence. */
+    private static ?int $override = null;
+
+    /**
+     * Memoised resolution, keyed by user id, so a global scope calling id()
+     * once per query does not re-run the membership check every time.
+     *
+     * @var array<int, int|null>
+     */
+    private static array $resolved = [];
+
+    /**
+     * Run a callback with an explicit workspace, then restore the previous one.
+     *
+     * The sanctioned way for queued jobs, console commands and webhook handlers
+     * to establish tenant context — none of them have an authenticated user.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public static function for(int $workspaceId, callable $callback): mixed
+    {
+        $previous = self::$override;
+        self::$override = $workspaceId;
+
+        try {
+            return $callback();
+        } finally {
+            self::$override = $previous;
+        }
+    }
+
+    /**
+     * The workspace id this request/job is operating in, or null when there is
+     * no context (unauthenticated request, or a job that did not set one).
+     *
+     * Callers that must not proceed without context should check for null
+     * explicitly. A throwing variant is deliberately deferred to the commit
+     * that first needs it.
+     */
+    public static function id(): ?int
+    {
+        if (self::$override !== null) {
+            return self::$override;
+        }
+
+        $user = Auth::user();
+
+        if (! $user instanceof User) {
+            // Admin guard, guest, or a queued job: no workspace context.
+            return null;
+        }
+
+        if (array_key_exists($user->id, self::$resolved)) {
+            return self::$resolved[$user->id];
+        }
+
+        return self::$resolved[$user->id] = self::resolveForUser($user);
+    }
+
+    /** True when a workspace context can be established. */
+    public static function has(): bool
+    {
+        return self::id() !== null;
+    }
+
+    /**
+     * Whether the user may operate in the given workspace.
+     *
+     * Delegates to the existing accessibleWorkspaces() so there is one
+     * definition of membership rather than a competing second one.
+     */
+    public static function userCanAccess(User $user, int $workspaceId): bool
+    {
+        return $user->accessibleWorkspaces()->contains('id', $workspaceId);
+    }
+
+    /**
+     * Forget memoised resolutions. Call after changing a user's membership, and
+     * between tests.
+     */
+    public static function flush(): void
+    {
+        self::$override = null;
+        self::$resolved = [];
+    }
+
+    private static function resolveForUser(User $user): ?int
+    {
+        $sessionWorkspaceId = self::sessionWorkspaceId();
+
+        // The session is client-controlled. Honour it only when membership
+        // holds; otherwise fall through to the home workspace rather than
+        // failing the request, so a stale session cannot lock a user out.
+        if ($sessionWorkspaceId !== null && self::userCanAccess($user, $sessionWorkspaceId)) {
+            return $sessionWorkspaceId;
+        }
+
+        return $user->workspace_id !== null ? (int) $user->workspace_id : null;
+    }
+
+    private static function sessionWorkspaceId(): ?int
+    {
+        $request = request();
+
+        if (! $request->hasSession()) {
+            return null;
+        }
+
+        $value = $request->session()->get('current_workspace_id');
+
+        return is_numeric($value) ? (int) $value : null;
+    }
+}

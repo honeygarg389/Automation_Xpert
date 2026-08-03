@@ -286,6 +286,21 @@ Implemented as `whereHas('workspace.client', fn ($q) => $q->where('partner_id', 
 Grouped so each commit leaves the suite green.
 
 ### Commit 1 — Fix the workspace-resolution bug (prerequisite)
+
+**Split into four, sequenced 1a → 1a-bis → 1b → 1c. Do not chain; report after each.**
+
+| Commit | Contains | Behaviour change |
+|---|---|---|
+| **1a** | `WorkspaceContext` + the two-workspace test fixture + characterisation tests. Wired into nothing. | **None** |
+| **1a-bis** | `WorkspaceController` validates membership before writing the session; `accessibleWorkspaces()` filters by `client_id` (the mandatory G-1d mitigation) | Yes — and it touches broadcast channel authorization, so it gets its own diff and its own report |
+| **1b** | The 5 infrastructure call sites; ships the G-2 rate-limit and G-3 plan-limit fixes | Yes |
+| **1c** | ~85 controller call sites, module by module; re-verify every G-1b authorization site | Yes |
+
+`1a-bis` is deliberately separate from `1b`: session validation and the
+`accessibleWorkspaces()` filter are security changes and must not be buried in a commit that
+is also fixing rate limits.
+
+`MissingWorkspaceContextException` is deferred to whichever commit first throws it.
 *This is not optional. The scope cannot be built on a broken resolver.*
 
 - **Create** `app/Support/WorkspaceContext.php`
