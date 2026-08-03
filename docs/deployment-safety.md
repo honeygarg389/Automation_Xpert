@@ -1,4 +1,25 @@
-# Deployment Safety — proposal
+# Deployment Safety
+
+> # 🚧 HARD GATE — NOT NEGOTIABLE
+>
+> **NO REAL CUSTOMER DATA TOUCHES THIS SYSTEM UNTIL ALL FOUR ARE TRUE:**
+>
+> 1. ☐ `db:backup` is fixed (SEC-003 — the credential leak is closed)
+> 2. ☐ `db:restore` exists and works
+> 3. ☐ The owner has **personally practised a restore**, with their own hands
+> 4. ☐ Production runs on a **fresh, clean VPS** — not the testing box promoted in place
+>
+> **All four. Not three. Not "mostly done."**
+>
+> This is a rule, not a recommendation. It exists because the predictable failure mode is
+> deferring these once the structural work starts feeling good — which is precisely when the
+> cost of not having them begins to rise. Recorded and committed to by the project owner on
+> 2026-08-03.
+>
+> If you are reading this and any box is unticked, the answer to "can we onboard a customer
+> yet?" is **no**.
+
+
 
 **Status: proposal only. Nothing here is built.**
 Written for a non-developer operator. Investigated against this codebase on 2026-08-03.
@@ -40,6 +61,22 @@ It therefore still contains:
 
 **Do not run `php artisan test` on the VPS.** Until it is redeployed from this repository, treat
 it as a divergent copy: useful for trying things, not a reference for how the app behaves.
+
+### VPS sandbox rules — agreed 2026-08-03
+
+The VPS is a **throwaway sandbox**. Treat everything on it as disposable and assume it may be
+compromised, because the SSRF hole is live there.
+
+- ❌ **No real credentials** — no live payment gateway keys, no production API keys
+- ❌ **No real customer data** — not even a sample export
+- ❌ **No Meta / WhatsApp Business connection** to a real business account
+- ❌ **No live payment gateway** in anything but sandbox/test mode
+- ❌ **Never run the test suite on it** — it would drop the database
+- ✅ Fake data, test credentials, sandbox gateway modes only
+- ✅ Fine to wipe and rebuild at any time — nothing on it should be worth keeping
+
+When production is stood up on a fresh VPS, the sandbox should be **rebuilt from `master`** or
+destroyed. It should never become production, and it should never hold anything real.
 
 The divergence also means the VPS cannot validate our changes. Exercising Phase 0 work there
 requires redeploying it from `master` first.

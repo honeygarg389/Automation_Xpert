@@ -153,6 +153,26 @@ Rules:
   The service layer is another. UI is another.
 - **Tests are part of the deliverable**, not a follow-up. Mirror the existing test patterns,
   including `MultiTenantScopingTest`.
+
+- **Every "is blocked" test needs a positive control.** A test asserting that access is denied
+  proves nothing on its own — a 403 is equally consistent with the endpoint rejecting
+  *everyone*, and a test that 404s at route binding never reaches the check at all. Pair each
+  negative assertion with one proving the **same route, same verb, same user type** succeeds
+  for the legitimate case.
+
+  This convention exists because it caught two dead assertions in a single test
+  (`workspace_a_cannot_delete_workspace_b_contact`): the request 404'd on a wrong route key so
+  authorization was never exercised, and the follow-up `assertDatabaseHas` could not fail
+  because the model soft-deletes. Both had been passing as "proof" of protection for as long
+  as the test existed.
+
+  Related traps to check for:
+  - **Route keys** — `getRouteKeyName()` is `uuid` on several models. Passing `->id` 404s
+    before any authorization runs.
+  - **Soft deletes** — `assertDatabaseHas` cannot prove a delete was prevented on a
+    soft-deleting model. Use `assertNotSoftDeleted` / `assertSoftDeleted`.
+  - **Auth style** — `actingAs($user, 'sanctum')` does not populate `currentAccessToken()`, so
+    ability-gated API routes 401 before validation. Issue a real token.
 - **Never invent codebase facts.** If you have not opened the file, say so and go read it.
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
