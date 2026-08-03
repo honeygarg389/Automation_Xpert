@@ -1,4 +1,14 @@
-# Test Suite Baseline — pre-Phase 0
+# Test Suite Baseline
+
+> ## 🟢 THE GATE IS ZERO
+>
+> The suite passes: **446 tests, 1041 assertions, 0 failures.**
+>
+> **Any failure from here is a regression.** There are no longer any "pre-existing
+> failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
+> merge, full stop.
+>
+> **But read the caveat below before treating green as assurance.**
 
 **Recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
@@ -107,14 +117,56 @@ lands — but it must be re-derived against tests that actually exercise the pat
 
 Assertions rose 975 → 995: the 10 API cases now reach their assertions instead of dying at auth.
 
-## Regression gate for Phase 0
+## The arc: 29 → 0
 
-Any Phase 0 commit must keep the suite at **≤ 29 failures**, with the composition above.
-A new failing test name that is not in this document is a regression.
+| Stage | Tests | Assertions | Failures | What changed |
+|---|---:|---:|---:|---|
+| Baseline (§0.0) | 440 | 975 | **29** | Suite made runnable; database isolated from the working DB |
+| TASK 1 | 440 | 995 | **18** | 11 SSRF-harness defects — `actingAs` does not populate `currentAccessToken()`; a non-resolving test host |
+| TASK 2 | 441 | 998 | **17** | Cross-workspace contact delete — wrong route key, plus a non-load-bearing soft-delete assertion. Added a positive control |
+| TASK 3 | 441 | 1022 | **2** | 15 route-404s, all one cause: integer `id` passed where the route binds by `uuid` |
+| TASK 3b | 446 | 1041 | **0** | Webhook dedupe rewritten against realistic payloads; registration `agree_terms` + paired negative |
 
-Recommended before Phase 0 code lands (not yet done, not yet approved):
+**Not one of these was a production defect.** Every failure was a defect in the test.
 
-1. Fix my 11 (`Sanctum::actingAs`, resolving test host)
-2. Fix `MultiTenantScopingTest` to bind by `uuid` — this is a prerequisite for §G-4 to mean
-   anything
-3. Triage the 15 route-404s: stale tests, or genuinely missing routes?
+## ⚠️ Zero is a floor, not assurance
+
+Five tests were passing — or failing for the wrong reason — while verifying nothing they
+claimed to:
+
+| Test | Claimed | Actually did |
+|---|---|---|
+| `MultiTenantScopingTest::workspace_a_cannot_delete_workspace_b_contact` | cross-workspace delete blocked | 404'd at binding; and `assertDatabaseHas` could not fail on a soft-deleting model |
+| `LabelCrudTest::test_cross_workspace_attach_forbidden` | cross-workspace attach blocked | 404'd at binding |
+| `TypingEndpointTest::test_typing_endpoint_forbidden_for_other_workspace` | cross-workspace typing blocked | 404'd at binding |
+| `MetaInboundWebhookTest::global_webhook_dedupes_duplicate_entry_ids` | webhook dedupe works | empty payload produced no dedupe key; nothing recorded |
+| `RegistrationTest::test_new_users_can_register` | registration works | omitted a required field; never created a user |
+
+Three of the five asserted a **4xx** status, which a 404 satisfies — so "not allowed" read as
+proof of protection while proving only that a URL did not resolve.
+
+**Consequence:** a green suite in this codebase is evidence that nothing got *worse*. It is
+not evidence that behaviour is correct. When adding the workspace global scope, do not rely
+on this suite to catch a mistake — it did not detect the absence of protection, so it will
+not reliably detect its removal. See §G-1c in `phase-0-tenant-isolation-plan.md`.
+
+Countermeasure now in force (`CLAUDE.md`): every "is blocked" test must carry a positive
+control proving the same route succeeds for the legitimate user.
+
+## Discovered along the way
+
+**Two independent webhook idempotency layers**, which nobody had documented:
+
+| Layer | Provider key | Location |
+|---|---|---|
+| Controller | `whatsapp_global` | `WhatsappWebhookController:68` — keyed on `sha256(m:<id>)` |
+| Driver | `whatsapp_msg` | `WhatsappDriver:204` — keyed on the raw message id |
+
+Found because a first-draft test failed for an unexpected reason (expected 1, got 2). Now
+asserted explicitly by `inbound_message_is_recorded_by_both_idempotency_layers`.
+
+## Running the suite
+
+`php artisan test` cannot be used: it spawns child processes that do not inherit
+`-d memory_limit`, so it dies at the 128 MB default. `vendor/bin/phpunit` is not executable
+in this working copy (flattened symlinks). Use the command at the top of this document.
