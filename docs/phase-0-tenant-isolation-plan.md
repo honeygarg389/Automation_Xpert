@@ -399,6 +399,91 @@ Commit 1c is not complete until each of these has a test proving it still blocks
 cross-workspace access *with a working switcher*, plus a positive control proving it still
 permits legitimate access.
 
+### G-1c · 🔴 The inherited test suite is not evidence of protection
+
+**Established across TASK 2 and TASK 3 (2026-08-03).**
+
+**Three tests claimed to verify cross-workspace protection and verified nothing:**
+
+| Test | What it claimed | What it actually did |
+|---|---|---|
+| `MultiTenantScopingTest::workspace_a_cannot_delete_workspace_b_contact` | contact delete is blocked cross-workspace | 404'd at route binding (integer id vs uuid key); never reached authorization. Its second assertion, `assertDatabaseHas`, could not fail either — `Contact` soft-deletes, so the row survives a *successful* delete |
+| `LabelCrudTest::test_cross_workspace_attach_forbidden` | label attach is blocked cross-workspace | 404'd at route binding; never reached authorization |
+| `TypingEndpointTest::test_typing_endpoint_forbidden_for_other_workspace` | typing endpoint is blocked cross-workspace | 404'd at route binding; never reached authorization |
+
+All three asserted a **4xx** status. A 404 satisfies "not allowed" to a casual reader, so each
+looked like proof of protection while proving only that a URL did not resolve. Once corrected,
+all three do pass — the protection is real — but that was **luck, not evidence**. The same
+failure mode would have concealed a genuine hole just as effectively.
+
+**Consequence for Phase 0:** a passing test in this codebase warrants suspicion until it has
+been shown to exercise the path it names. Do not treat the inherited suite as a safety net
+when applying the global scope; it did not detect the absence of protection, so it will not
+detect its removal.
+
+This is part of the argument *for* the global scope rather than against it. Manual
+`where('workspace_id', …)` filters and manual `abort_unless` checks are only as reliable as
+the tests that verify them, and those tests have now been shown unreliable three times out of
+three. A global scope fails closed by construction; it does not depend on anyone remembering
+to write a filter, nor on a test correctly proving they did.
+
+Mitigation now in force: `CLAUDE.md` requires every "is blocked" test to carry a positive
+control proving the same route succeeds for the legitimate user. On its first application
+(TASK 3) it distinguished genuine ownership checks from blanket refusals in both surviving
+authorization tests.
+
+### G-1d · 🟠 Workspace membership is never revoked — latent today, live the day a customer moves
+
+**Established in TASK 4 (2026-08-03). Read-only investigation; nothing changed.**
+
+`ClientWorkspaceService:62` grants membership with **`syncWithoutDetaching`**, which only ever
+adds. **No code anywhere detaches a `workspace_user` row.** `User::accessibleWorkspaces()`
+merges owned + pivot workspaces with **no `client_id` filter**, and `Workspace::isAccessibleBy()`
+returns true for any pivot row.
+
+> If a user's `client_id` ever changes, they keep membership of their **previous** client's
+> workspaces permanently, and `isAccessibleBy()` will authorise it.
+
+**Not reachable today.** Every path was checked:
+
+| Path | Can it change `client_id`? |
+|---|---|
+| `Admin/ClientController::updateUser` | **No** — `abort(404)` unless `$user->client_id === $client->id`, and `client_id` is not a validated field |
+| `Auth/InvitationController::accept` | **No** — guarded by `if ($invitation->client_id && ! $user->client_id)`; an existing client member cannot be reassigned |
+| `Client/TeamController` | **No** — client-scoped |
+| Anything else | No other writer exists |
+
+Empirically confirmed: all 9 `workspace_user` rows in the working database are same-client.
+
+#### ⛔ Prerequisite for the partner tier — not merely a note
+
+This becomes **live the day any of these ships**:
+
+- **Move a customer to another partner** (planned)
+- **Partner reassignment** (planned)
+- **Client merge** (planned)
+
+Each changes `clients.partner_id` or a user's `client_id`, and each would silently leave the
+user holding membership of their former organisation's workspaces — a cross-tenant read across
+*partner* boundaries, which is the exact failure the white-label tier must not have.
+
+**Treat this as a blocking prerequisite on that work, listed on the ticket.** It must not be
+rediscovered when the feature is half-built.
+
+#### Mandatory mitigation in Phase 0
+
+`accessibleWorkspaces()` **must** filter by `client_id`. Agreed as mandatory rather than
+defence-in-depth, because it makes G-1d unreachable *by construction* rather than by the luck
+of no reassignment feature existing yet. A stale pivot row then grants nothing.
+
+#### Named follow-up — out of Phase 0 scope
+
+**`ClientWorkspaceService::detachStaleWorkspaces()`** — a counterpart to `syncClientUser()`
+that removes `workspace_user` rows for workspaces no longer belonging to the user's client.
+Deliberately deferred: the `client_id` filter above closes the access path, and detaching rows
+is data mutation that deserves its own change with its own tests. Recorded here so it exists
+as a written item rather than only in conversation.
+
 ### G-2 · 🟠 `ai-runs` rate limiter keys on IP, plan limits never apply
 
 ```php
