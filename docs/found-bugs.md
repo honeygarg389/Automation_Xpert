@@ -9,12 +9,34 @@ non-crashing) · **Low** (cosmetic, debt, or static-analysis noise).
 
 ---
 
-## BUG-001 — `SocialPostController::update()` 500s on an ordinary edit
+## BUG-001 — Social post save 500s without `scheduled_at` — ✅ FIXED
 
-- **Severity:** Critical — **fix before any customer exists, not "someday"**
-- **File:** `app/Modules/Social/Http/Controllers/SocialPostController.php`, ~line 222
-- **Status:** Live on `master`. Found 2026-08-03 while writing 1c tests for the Social module (`fix/workspace-context-1c-social`); not fixed there — unrelated to workspace-context.
+- **Severity:** Critical — was user-facing
+- **Status:** **FIXED in `5458466`**, branch `fix/social-post-update-500` (cut from `master`), merged into the 1c line. Found 2026-08-03, fixed 2026-08-04.
+- **File:** `app/Modules/Social/Http/Controllers/SocialPostController.php`
 - **User-facing:** Yes.
+
+**Scope was wider than first recorded.** This entry originally named only `update()`. Fixing
+it surfaced **four** unguarded reads, three of them in `store()` — so *creating* a post
+without a schedule crashed too, not just editing.
+
+| Method | Line (pre-fix) | Read |
+|---|---|---|
+| `store()` | ~169 | `'status' => $validated['scheduled_at'] ? …` |
+| `store()` | ~172 | `if (! $validated['scheduled_at'])` |
+| `store()` | ~181 | `$validated['scheduled_at'] ? 'scheduled' : …` |
+| `update()` | ~221 | `$validated['status'] = $validated['scheduled_at'] ? …` |
+
+**Fix:** both methods normalise the key once (`?? null`) before any read, rather than
+scattering four guards. The two pre-existing `! empty(…)` checks were already safe.
+
+**Regression cover:** `tests/Feature/Social/SocialPostScheduledAtTest.php` — 6 tests, each
+"without scheduled_at" case paired with a counterpart proving the fix did not simply null the
+field out, plus one confirming a past date is still rejected. Verified load-bearing: stashing
+the fix fails exactly the 3 "without" tests.
+
+**Workaround removed:** the `scheduled_at => ''` shim in `SocialWorkspaceScopingTest` is gone;
+those 12 tests pass against the real fix.
 
 **What triggers it.** `update()` validates `scheduled_at` as `nullable`, then does:
 
@@ -32,8 +54,8 @@ field is optional) throws `Undefined array key "scheduled_at"`, which becomes a 
 
 **Fix (not yet applied):** `$validated['status'] = ($validated['scheduled_at'] ?? null) ? 'scheduled' : 'draft';`
 
-**Blast radius:** every workspace, every social post edit that doesn't explicitly resend a
-scheduled time — plausibly the majority of edits to an already-drafted post.
+**Blast radius (pre-fix):** every workspace; every social post create or edit that did not
+explicitly send a scheduled time — plausibly the majority of both.
 
 ---
 
@@ -61,3 +83,38 @@ from view. Recorded instead so it's chosen, not lost.
 **Recommended fix:** either add proper PHPDoc `@property` annotations to `SocialPost` and
 `SocialAccount` (fixes it for real, helps every future edit to these files), or add to the
 baseline explicitly as a tracked decision — not as a side effect of not looking.
+
+
+---
+
+## BUG-003 — 87 candidate unguarded nullable-key reads across 30 files
+
+- **Severity:** Unknown until triaged — same class as BUG-001, which was Critical
+- **Status:** **Open. Scope decision pending** — deliberately not swept into one commit. Found 2026-08-04 by the codebase-wide scan requested alongside the BUG-001 fix.
+- **User-facing:** Potentially, wherever a nullable field is genuinely optional in the UI.
+
+Same root cause as BUG-001: Laravel's `validate()` omits an absent `nullable`/`sometimes` key
+from its result, so `$validated['key']` on a field the client did not send is an undefined
+array key.
+
+**87 candidates across 30 files.** Heaviest:
+
+| Count | File |
+|---|---|
+| 12 | `Http/Controllers/Client/SettingsController.php` |
+| 10 | `Http/Controllers/Admin/ClientController.php` |
+| 8 | `Modules/Social/Http/Controllers/SocialPostController.php` *(4 now fixed)* |
+| 6 | `Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php` |
+| 5 | `Modules/Whatsapp/Http/Controllers/WhatsappEmbeddedSignupController.php` |
+| 4 | `Modules/Broadcasting/Http/Controllers/CampaignController.php` |
+| 3 each | `Admin/EmailSystemController`, `Api/V1/MobileConversationController`, `Broadcasting/EmailAiController`, `Inbox/InboxController` |
+
+**This is an upper bound, not a confirmed count.** The scan looks only ~14 characters behind
+each access for a guard, so it reports false positives where the access sits inside an
+`if (isset(…))` block, after an earlier `$request->has()` check, or on a field the UI always
+sends. Real triage should shrink it.
+
+**Suggested approach when scoped:** triage by whether the field is genuinely optional in the
+UI — a field the frontend always sends cannot trigger the bug in practice, even though the
+pattern is fragile. Prioritise anything reachable from a form with optional inputs. Note that
+BUG-001 was found by accident, not by looking; the others will not surface on their own.

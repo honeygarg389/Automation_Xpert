@@ -48,21 +48,10 @@ class SocialWorkspaceScopingTest extends TestCase
         ]);
     }
 
-    /**
-     * update() requires body + target_accounts (min:1); title is nullable.
-     *
-     * scheduled_at is deliberately included even though it is itself nullable.
-     * SocialPostController::update() (line ~222) does
-     * `$validated['status'] = $validated['scheduled_at'] ? … : …` with no
-     * null-coalesce — Laravel's validate() omits absent nullable keys from its
-     * result, so a request that leaves scheduled_at out entirely 500s with
-     * "Undefined array key". Pre-existing, unrelated to workspace-context;
-     * flagged rather than fixed here per project convention on scope. Sending
-     * an empty string keeps this test about authorization, not that bug.
-     */
+    /** update() requires body + target_accounts (min:1); title is nullable. */
     private function validUpdatePayload(): array
     {
-        return ['body' => 'Updated body', 'target_accounts' => [1], 'scheduled_at' => ''];
+        return ['body' => 'Updated body', 'target_accounts' => [1]];
     }
 
     private function makeAccount(int $workspaceId, string $name): SocialAccount

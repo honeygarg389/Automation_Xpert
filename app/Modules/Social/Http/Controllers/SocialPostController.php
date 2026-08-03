@@ -166,6 +166,12 @@ class SocialPostController extends Controller
         // Strip empty media URL entries before persisting.
         $validated['media_urls'] = array_values(array_filter($validated['media_urls'] ?? [], fn ($v) => $v !== null && $v !== ''));
 
+        // Laravel's validate() OMITS an absent nullable key rather than returning
+        // it as null, so a request that simply does not send scheduled_at (the
+        // normal case for an unscheduled post) left every read below undefined.
+        // Normalise once here instead of guarding each use.
+        $validated['scheduled_at'] = $validated['scheduled_at'] ?? null;
+
         $post = SocialPost::create(array_merge($validated, [
             'workspace_id' => $wid,
             'status' => $validated['scheduled_at'] ? 'scheduled' : 'draft',
@@ -220,6 +226,10 @@ class SocialPostController extends Controller
         }
 
         $validated['media_urls'] = array_values(array_filter($validated['media_urls'] ?? [], fn ($v) => $v !== null && $v !== ''));
+
+        // See store(): validate() omits absent nullable keys, so an edit that
+        // does not resend scheduled_at previously threw "Undefined array key".
+        $validated['scheduled_at'] = $validated['scheduled_at'] ?? null;
         $validated['status'] = $validated['scheduled_at'] ? 'scheduled' : 'draft';
 
         $post->update($validated);
