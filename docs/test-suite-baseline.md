@@ -85,6 +85,28 @@ Two consequences:
 The 403 → 404 reasoning still holds *in principle* for uuid-bound models once the scope
 lands — but it must be re-derived against tests that actually exercise the path.
 
+## Progress log
+
+| Date | Task | Tests | Failures | Change |
+|---|---|---|---|---|
+| 2026-08-03 | Baseline recorded (after §0.0) | 440 | **29** | — |
+| 2026-08-03 | TASK 1 — repaired the 11 SSRF test defects (`fix/webhook-ssrf-tests`) | 440 | **18** | −11, zero regressions |
+
+**TASK 1 detail.** Both causes were test defects; neither touched production code.
+
+- `WebhookSsrfProtectionTest::test_api_endpoint_creation_rejects_non_public_urls` (10 cases) —
+  `/api/v1/webhooks` is guarded by `api.ability:webhooks:write`, which reads
+  `currentAccessToken()`. `actingAs($user, 'sanctum')` does not populate that, so the request
+  401'd before validation ran. Now issues a real token via
+  `createToken('ssrf-test', ['*'])->plainTextToken` + `withToken()`, mirroring
+  `Tests\Feature\Api\V1\OutboundWebhookApiTest`.
+- `PublicHttpUrlTest::test_it_allows_public_https_urls` (`subdomain`) — the case used
+  `hooks.example.com`, which does not resolve, so the rule correctly rejected it. The case was
+  testing the DNS resolver rather than subdomain handling. Now uses `www.example.com`, an IANA
+  reserved name that genuinely resolves.
+
+Assertions rose 975 → 995: the 10 API cases now reach their assertions instead of dying at auth.
+
 ## Regression gate for Phase 0
 
 Any Phase 0 commit must keep the suite at **≤ 29 failures**, with the composition above.
