@@ -365,6 +365,40 @@ abort_unless($widget->workspace_id === ($request->user()->current_workspace_id ?
 
 **Bearing on Phase 0:** the global scope must resolve context from `WorkspaceContext`, never from this expression. Commit 1 exists solely to fix this first.
 
+### G-1b · 🔴 Authorization checks currently work only because two bugs cancel out
+
+**Discovered in TASK 2 (2026-08-03). `fix/workspace-context` must not break this.**
+
+`ContactController::authoriseContact()` is a real, working check — TASK 2 proved
+cross-workspace contact deletion returns 403, with a positive control confirming the same
+user can delete their own contact:
+
+```php
+// app/Modules/Shared/Http/Controllers/ContactController.php:322
+$workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+abort_unless((int) $contact->workspace_id === (int) $workspaceId, 403);
+```
+
+But it is correct **by accident**. `current_workspace_id` does not exist (§G-1), so this
+always resolves to the user's *home* workspace — which today is also the only workspace they
+can operate in, because the switcher is broken in the same way. Two bugs cancelling out.
+
+**The moment `fix/workspace-context` makes the switcher work, this check changes meaning.** A
+user switched to workspace B would have their delete authorised against workspace A. Depending
+on the data, that is either a spurious 403 (annoying) or an authorisation against the wrong
+tenant (dangerous).
+
+Every call site of the `current_workspace_id ?? workspace_id` expression that feeds an
+`abort_unless`/`abort_if` must be **re-verified after the switcher works, not assumed still
+correct**. Known authorization-bearing instances:
+
+- `ContactController::authoriseContact()` — `:322`
+- `WhatsappWidgetController` — `:29`, `:57`, `:79` (three `abort_unless` calls)
+
+Commit 1c is not complete until each of these has a test proving it still blocks
+cross-workspace access *with a working switcher*, plus a positive control proving it still
+permits legitimate access.
+
 ### G-2 · 🟠 `ai-runs` rate limiter keys on IP, plan limits never apply
 
 ```php

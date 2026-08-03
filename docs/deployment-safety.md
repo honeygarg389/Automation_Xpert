@@ -3,6 +3,49 @@
 **Status: proposal only. Nothing here is built.**
 Written for a non-developer operator. Investigated against this codebase on 2026-08-03.
 
+---
+
+## ⚠️ Current reality — read this first (updated 2026-08-03)
+
+**There is no production environment, and there are zero customers.**
+
+| Environment | What it actually is |
+|---|---|
+| This Mac | Development. Dev data only. |
+| **Hostinger VPS** | **Effectively STAGING.** Bought for the owner's own testing. **Zero live customers, no customer data.** |
+| Production | **Does not exist yet.** |
+
+Three consequences, and they matter:
+
+**1. The VPS is staging, not production.** Nothing on it is customer-facing. A mistake there
+costs time, not trust.
+
+**2. Production must start CLEAN.** When the first real customer approaches, production should
+be a **fresh VPS**, provisioned deliberately — *not* this testing box promoted in place. The
+testing box has accumulated unknown state: hand-edited config, test records, half-finished
+experiments, possibly an old database schema. Promoting it means inheriting all of that
+invisibly. Resist the temptation; it will feel like a shortcut and it is not.
+
+**3. ⚠️ The VPS runs the original CodeCanyon build and does NOT have any of our fixes.**
+
+It therefore still contains:
+
+| Missing fix | Consequence on that box |
+|---|---|
+| Webhook SSRF fix | The SSRF vulnerability is **live** there — a customer-supplied webhook URL can read internal addresses and return the response |
+| Test-database isolation | `php artisan test` on that box would **drop its database** |
+| WooCommerce signature hardening | Signature check still skippable |
+| Licensing removal | Still contains the licence/activation system |
+| The `whatsmine` → AutomationXpert work | None of it |
+
+**Do not run `php artisan test` on the VPS.** Until it is redeployed from this repository, treat
+it as a divergent copy: useful for trying things, not a reference for how the app behaves.
+
+The divergence also means the VPS cannot validate our changes. Exercising Phase 0 work there
+requires redeploying it from `master` first.
+
+---
+
 Plain-language glossary, used throughout:
 
 - **Production** — the live app your customers use.
@@ -337,13 +380,35 @@ Honest assessment. Not a judgement — these are developer tasks.
 
 ---
 
-## Suggested order
+## Suggested order — REVISED for "no production, zero customers"
 
-1. **Fix `db:backup` (SEC-003) and build `db:restore`** — without these, nothing else here is trustworthy
-2. **Practise a restore into a scratch database** — proves the backup works
-3. **Stand up staging** — before `fix/workspace-context` goes anywhere near production
-4. **Add the emergency-brake flag** — as part of the isolation-scope work, not after
-5. **Automate deploys** — once the manual process is understood well enough to automate
+The original order put backup/restore first, on the reasoning that there was no verified way
+to undo a bad deploy. **That reasoning was written before I knew there are no customers.** It
+does not survive that fact, and I would rather revise it than defend it.
 
-Item 1 is the prerequisite for everything else. Today there is no verified way to undo a bad
-deploy, and that is the real risk — larger than any individual code change we have discussed.
+Backup and restore protect *data*. With zero customers, the only data at risk is dev and test
+data that migrations and seeders can rebuild in minutes. The genuinely irreplaceable asset —
+the code and these documents — is already backed up on GitHub.
+
+### Do now, while the house is empty
+
+1. **The structural work** — `fix/workspace-context`, the isolation scope, the partner tier.
+   These are far cheaper to do wrong now than later. A mistake costs an afternoon, not a
+   customer relationship or a breach notification.
+2. **The emergency-brake flag** (`ENFORCE_WORKSPACE_SCOPE`) — build it *with* the scope, not
+   bolted on afterwards.
+
+### Do before the first real customer — non-negotiable
+
+3. **Fix `db:backup` (SEC-003) and build `db:restore`**
+4. **Practise a restore** into a scratch database, on a calm afternoon
+5. **Provision a fresh production VPS** — clean, never the testing box
+6. **Adopt the pre-deploy checklist** as routine
+
+### Do when it starts paying for itself
+
+7. **Automate deploys** (Forge or a script) — once the manual process is well understood
+
+**The one thing that does not move:** items 3–6 must be complete *before* the first customer's
+data exists. It is tempting to defer them again once the structural work feels good. Don't —
+that is exactly the moment the cost of not having them starts rising sharply.
