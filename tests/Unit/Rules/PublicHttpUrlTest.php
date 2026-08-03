@@ -65,7 +65,11 @@ class PublicHttpUrlTest extends TestCase
             'public https'          => ['https://example.com/hook'],
             'explicit port 443'     => ['https://example.com:443/hook'],
             'with query string'     => ['https://example.com/hook?a=1&b=2'],
-            'subdomain'             => ['https://hooks.example.com/receive'],
+            // www.example.com is an IANA reserved name that genuinely resolves.
+            // A made-up subdomain (hooks.example.com) does not, and the rule
+            // correctly rejects unresolvable hosts — so using one here tested
+            // the DNS resolver, not the subdomain handling it was meant to.
+            'subdomain'             => ['https://www.example.com/receive'],
         ];
     }
 

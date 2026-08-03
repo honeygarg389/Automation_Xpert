@@ -64,12 +64,19 @@ class WebhookSsrfProtectionTest extends TestCase
         $this->assertDatabaseCount('webhook_endpoints', 0);
     }
 
+    /**
+     * The API route is guarded by `api.ability:webhooks:write`, which reads
+     * `currentAccessToken()`. actingAs() does not populate that, so it 401s
+     * before validation runs — issue a real token, mirroring
+     * Tests\Feature\Api\V1\OutboundWebhookApiTest.
+     */
     #[DataProvider('blockedDestinations')]
     public function test_api_endpoint_creation_rejects_non_public_urls(string $url): void
     {
-        $user = $this->clientUser();
+        ['user' => $user] = $this->createWorkspaceContext();
+        $token = $user->createToken('ssrf-test', ['*'])->plainTextToken;
 
-        $this->actingAs($user, 'sanctum')
+        $this->withToken($token)
             ->postJson('/api/v1/webhooks', ['url' => $url])
             ->assertStatus(422)
             ->assertJsonValidationErrors('url');
