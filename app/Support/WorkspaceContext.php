@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The single source of truth for "which workspace is this request operating in".
@@ -133,14 +134,42 @@ class WorkspaceContext
     {
         $sessionWorkspaceId = self::sessionWorkspaceId();
 
-        // The session is client-controlled. Honour it only when membership
-        // holds; otherwise fall through to the home workspace rather than
-        // failing the request, so a stale session cannot lock a user out.
-        if ($sessionWorkspaceId !== null && self::userCanAccess($user, $sessionWorkspaceId)) {
+        if ($sessionWorkspaceId !== null && ! self::userCanAccess($user, $sessionWorkspaceId)) {
+            // Resolution time is not switch time. There is no user action to
+            // refuse here — this fires on whatever page happens to load next,
+            // so erroring the request would lock the user out over a stale
+            // session value. Instead: record it, discard the bad value so the
+            // session self-heals and does not log on every subsequent request,
+            // and fall back to the home workspace.
+            //
+            // An explicit switch attempt IS refused with a message — see
+            // WorkspaceController::switch().
+            Log::warning('workspace.context.session_rejected', [
+                'user_id' => $user->id,
+                'user_client_id' => $user->client_id,
+                'rejected_workspace_id' => $sessionWorkspaceId,
+                'fell_back_to' => $user->workspace_id,
+            ]);
+
+            self::forgetSessionWorkspace();
+
+            $sessionWorkspaceId = null;
+        }
+
+        if ($sessionWorkspaceId !== null) {
             return $sessionWorkspaceId;
         }
 
         return $user->workspace_id !== null ? (int) $user->workspace_id : null;
+    }
+
+    private static function forgetSessionWorkspace(): void
+    {
+        $request = request();
+
+        if ($request->hasSession()) {
+            $request->session()->forget('current_workspace_id');
+        }
     }
 
     private static function sessionWorkspaceId(): ?int

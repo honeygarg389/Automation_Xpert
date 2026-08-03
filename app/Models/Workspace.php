@@ -51,8 +51,28 @@ class Workspace extends Model
     }
 
     /** Whether the given user can access this workspace (owner or member). */
+    /**
+     * Whether the user may access this workspace.
+     *
+     * MUST agree with User::accessibleWorkspaces(). These are two definitions of
+     * the same concept — this one is used by WorkspacePolicy::view (and so by
+     * workspace switching), the other by the switcher list and WorkspaceContext.
+     * Filtering only one of them leaves the other as a bypass.
+     *
+     * The client check comes first and is not optional: membership rows are
+     * never revoked (ClientWorkspaceService uses syncWithoutDetaching and
+     * nothing detaches), so a stale row from a former client must grant nothing.
+     * See docs/phase-0-tenant-isolation-plan.md §G-1d.
+     */
     public function isAccessibleBy(User $user): bool
     {
+        $workspaceClientId = $this->client_id === null ? null : (int) $this->client_id;
+        $userClientId = $user->client_id === null ? null : (int) $user->client_id;
+
+        if ($workspaceClientId !== $userClientId) {
+            return false;
+        }
+
         if ($this->owner_id === $user->id) {
             return true;
         }
