@@ -24,7 +24,13 @@ yarn-error.log
 database/.DS_Store
 .DS_Store
 
-/docs
+# Ignore everything in /docs EXCEPT markdown, which is the project record:
+# audit reports, phase plans, and the test-suite baseline that gates merges.
+# Note: this must exclude the directory *contents* (/docs/*), not the directory
+# itself (/docs) — git does not descend into an excluded directory, so a
+# negation under it would never be evaluated.
+/docs/*
+!/docs/*.md
 /landing
 
 /WhatsMe

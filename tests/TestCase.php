@@ -14,6 +14,34 @@ use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 abstract class TestCase extends BaseTestCase
 {
     /**
+     * Second line of defence for the test-database guardrail.
+     *
+     * tests/bootstrap.php checks the environment before the run starts. This
+     * checks the *resolved framework config* once the application is booted, so
+     * a runtime override — config(['database.connections.mysql.database' => …])
+     * in a service provider or a test helper — cannot slip past it.
+     *
+     * RefreshDatabase runs migrate:fresh, so an unguarded run drops every table
+     * in the connected schema.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $connection = config('database.default');
+        $database = config("database.connections.{$connection}.database");
+
+        if (! is_string($database) || ! str_ends_with($database, '_test')) {
+            $this->fail(sprintf(
+                'Refusing to run: resolved database [%s] on connection [%s] is not a test schema '
+                .'(name must end in "_test"). RefreshDatabase would drop every table in it.',
+                var_export($database, true),
+                var_export($connection, true),
+            ));
+        }
+    }
+
+    /**
      * Create an AdminUser with the SUPER_ADMIN role and all permissions,
      * so RBAC middleware passes in feature tests.
      */
