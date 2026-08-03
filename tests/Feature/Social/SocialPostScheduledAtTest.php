@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Social;
 
+use App\Modules\Social\Jobs\PublishSocialPostJob;
 use App\Modules\Social\Models\SocialAccount;
 use App\Modules\Social\Models\SocialPost;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -89,6 +90,7 @@ class SocialPostScheduledAtTest extends TestCase
 
         $this->assertSame('scheduled', $post->status);
         $this->assertNotNull($post->scheduled_at);
+        Queue::assertNotPushed(PublishSocialPostJob::class);
     }
 
     /** An unscheduled post is queued for immediate publishing, not left as a draft. */
@@ -108,6 +110,8 @@ class SocialPostScheduledAtTest extends TestCase
 
         $post = SocialPost::where('body', 'Publish now')->firstOrFail();
         $this->assertSame('publishing', $post->status);
+        $this->assertNull($post->scheduled_at);
+        Queue::assertPushed(PublishSocialPostJob::class);
     }
 
     // ── update() ────────────────────────────────────────────────────────────
@@ -133,7 +137,7 @@ class SocialPostScheduledAtTest extends TestCase
                 'target_accounts' => [$account->id],
                 // scheduled_at absent
             ])
-            ->assertRedirect()
+            ->assertRedirect(route('client.social.posts.index'))
             ->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('social_media_posts', [
@@ -141,6 +145,47 @@ class SocialPostScheduledAtTest extends TestCase
             'body' => 'Edited without a schedule',
             'status' => 'draft',
         ]);
+        $this->assertNull($post->refresh()->scheduled_at);
+    }
+
+    /**
+     * The path the bug kept dead: update() has NEVER successfully run without a
+     * scheduled_at key, so the semantics of omitting it on an ALREADY-scheduled
+     * post were previously unobservable. Normalising to null means an edit that
+     * drops the field also drops the schedule and reverts the post to a draft —
+     * pinned here so it is a decision rather than an accident.
+     *
+     * This is the consistent outcome: DispatchScheduledPostsJob selects on
+     * status = 'scheduled', so leaving a stale scheduled_at behind a 'draft'
+     * status would be inert but misleading.
+     */
+    #[Test]
+    public function updating_a_scheduled_post_without_scheduled_at_clears_the_schedule(): void
+    {
+        Queue::fake();
+        ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
+        $account = $this->account($workspace->id);
+
+        $post = SocialPost::create([
+            'workspace_id' => $workspace->id,
+            'body' => 'Original',
+            'status' => 'scheduled',
+            'scheduled_at' => now()->addWeek(),
+            'ai_generated' => false,
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('client.social.posts.update', $post), [
+                'body' => 'Schedule removed',
+                'target_accounts' => [$account->id],
+                // scheduled_at absent
+            ])
+            ->assertRedirect(route('client.social.posts.index'))
+            ->assertSessionHasNoErrors();
+
+        $post->refresh();
+        $this->assertSame('draft', $post->status);
+        $this->assertNull($post->scheduled_at);
     }
 
     /** COUNTERPART for update(): a valid future schedule still applies. */
