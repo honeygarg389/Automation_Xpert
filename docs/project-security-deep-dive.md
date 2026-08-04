@@ -184,6 +184,30 @@ This converts a read-only admin grant into full write access over every tenant. 
 
 **Mitigating factor.** Impersonation *is* audit-logged (`impersonation.started`/`ended`), so it is detectable after the fact.
 
+#### ⛔ This is a white-label blocker, not just an admin-panel issue
+
+**Escalated 2026-08-04. Added to the hard gate in `docs/deployment-safety.md`.**
+
+The finding above describes a *platform* admin with `view_clients` impersonating a client.
+Under the partner model the shape changes and gets materially worse:
+
+| | Today | Under the partner tier |
+|---|---|---|
+| Who holds the permission | A platform employee | **A partner's staff account** |
+| What they reach | Any client | Any client — **including other partners' customers** |
+| What the boundary is meant to guarantee | Platform-internal access control | **The core promise of white-label: partners cannot see each other's book of business** |
+
+A reseller platform whose *read-only* role confers cross-tenant impersonation is not
+sellable. `view_clients` is exactly the permission a partner would hand to a support agent or
+an analyst.
+
+**Therefore:** fix before the partner tier ships, independently of the customer-data gate.
+The two deadlines are different and this finding is subject to the earlier of them.
+
+Note the interaction with §G-1d: once partner reassignment exists, stale workspace membership
+and read-permission impersonation compound — one grants lingering access, the other grants it
+to the wrong role.
+
 **Recommended fix.** Introduce a dedicated `impersonate_clients` permission, assign it only to Super Admin, and gate both the policy and the route on it.
 
 **Effort:** Small. **Priority:** **P1.**

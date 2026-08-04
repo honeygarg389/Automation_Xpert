@@ -2,22 +2,55 @@
 
 > # 🚧 HARD GATE — NOT NEGOTIABLE
 >
-> **NO REAL CUSTOMER DATA TOUCHES THIS SYSTEM UNTIL ALL FOUR ARE TRUE:**
+> **NO REAL CUSTOMER DATA TOUCHES THIS SYSTEM UNTIL ALL SEVEN ARE TRUE:**
+>
+> **Recoverability** — added 2026-08-03
 >
 > 1. ☐ `db:backup` is fixed (SEC-003 — the credential leak is closed)
 > 2. ☐ `db:restore` exists and works
 > 3. ☐ The owner has **personally practised a restore**, with their own hands
 > 4. ☐ Production runs on a **fresh, clean VPS** — not the testing box promoted in place
 >
-> **All four. Not three. Not "mostly done."**
+> **Security** — added 2026-08-04
+>
+> 5. ☐ **DEEP-03** — impersonation is gated by a dedicated permission, not read-only
+>        `view_clients`. **Also a white-label blocker — see below.**
+> 6. ☐ **SEC-004** — SVG removed from logo/favicon upload (stored XSS), or sanitised and
+>        served as an attachment
+> 7. ☐ **SEC-006** — Sanctum tokens have a finite expiry (`sanctum.expiration` is currently
+>        `null` across 71 API routes)
+>
+> **All seven. Not six. Not "mostly done."**
+>
+> Gate-optional but belongs in the same pass: **DEEP-05** — `assignPlan` gated by the
+> read-only `view_clients` permission. A billing-integrity bug: a read permission can change
+> what a customer is paying for. Fix it while the others are open.
 >
 > This is a rule, not a recommendation. It exists because the predictable failure mode is
 > deferring these once the structural work starts feeling good — which is precisely when the
 > cost of not having them begins to rise. Recorded and committed to by the project owner on
-> 2026-08-03.
+> 2026-08-03, extended 2026-08-04.
 >
 > If you are reading this and any box is unticked, the answer to "can we onboard a customer
 > yet?" is **no**.
+>
+> ---
+>
+> ### ⛔ DEEP-03 is a white-label blocker, not just an admin-panel issue
+>
+> Today: an admin granted only **`view_clients`** — the permission you would give a read-only
+> support or analyst role — can fully impersonate **any client's administrator** and perform
+> every action that user can. `ClientPolicy::impersonate()` returns
+> `hasPermissionTo('view_clients')`, identical to `view()`.
+>
+> **Under the partner model this gets materially worse.** The attacker is no longer only a
+> platform employee: it is **a partner's staff account**. If a partner's low-privilege user
+> can reach impersonation, the blast radius is **other partners' customers** — precisely the
+> boundary the white-label tier exists to guarantee.
+>
+> A reseller platform whose read-only role confers cross-tenant impersonation is not sellable.
+> **This must be fixed before the partner tier ships, independently of the customer-data
+> gate.**
 
 
 
