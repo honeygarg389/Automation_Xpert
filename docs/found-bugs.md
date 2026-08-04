@@ -114,6 +114,27 @@ each access for a guard, so it reports false positives where the access sits ins
 `if (isset(…))` block, after an earlier `$request->has()` check, or on a field the UI always
 sends. Real triage should shrink it.
 
+### 📋 Scope policy — DECIDED 2026-08-04, does not need re-deciding
+
+Ruled by the project owner. Do not re-open this question per module.
+
+1. **Do NOT triage all 87 now.** The entry stays open and recorded as-is.
+
+2. **Opportunistic fixes during 1c.** When a file is being touched for 1c work anyway, check
+   that file's entries in the table above as part of that module's commit and fix any that are
+   **genuinely reachable** — i.e. the field is really optional in the UI, not one the frontend
+   always sends. No separate branch, no separate commit; it rides along with the module.
+   Cheap because the file is already open and already under test.
+
+3. **Heavy files 1c will not touch get their own pass AFTER Phase 0.** Specifically
+   `Http/Controllers/Client/SettingsController.php` (12) and
+   `Http/Controllers/Admin/ClientController.php` (10) — neither is in the 1c site inventory.
+   Recorded as a named roadmap item so it is not lost when Phase 0 closes.
+
+4. **Reachability is the test, not count.** A fragile pattern on a field the UI always sends
+   is debt, not a bug. Prioritise anything reachable from a form with genuinely optional
+   inputs — that is exactly the shape BUG-001 had.
+
 **Suggested approach when scoped:** triage by whether the field is genuinely optional in the
 UI — a field the frontend always sends cannot trigger the bug in practice, even though the
 pattern is fragile. Prioritise anything reachable from a form with optional inputs. Note that

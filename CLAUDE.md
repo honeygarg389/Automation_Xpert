@@ -215,3 +215,15 @@ Rules:
 4. White-label surface — partner dashboard, branding, custom domains, hostname middleware
 5. Partner billing — platform→partner subscriptions and usage slabs
 6. E-commerce pack, Google Business Profile, n8n/Make connectors, Calendly
+
+### Named items that must not be lost when a phase closes
+
+- **BUG-003 triage pass — immediately after Phase 0.** The heavy unguarded-nullable-key files
+  that 1c never touches: `Http/Controllers/Client/SettingsController.php` (12 candidates) and
+  `Http/Controllers/Admin/ClientController.php` (10). Same root cause as BUG-001, which was a
+  live customer-facing 500. Files touched during 1c get fixed opportunistically in their own
+  module commit; these two do not, so they need a deliberate pass. See `docs/found-bugs.md`
+  BUG-003 for the full list and the decided scope policy.
+- **`ClientWorkspaceService::detachStaleWorkspaces()`** — deferred out of Phase 0. See
+  `docs/phase-0-tenant-isolation-plan.md` §G-1d. Prerequisite for any partner-tier feature
+  that can move a customer between organisations.
