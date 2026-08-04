@@ -227,3 +227,38 @@ Rules:
 - **`ClientWorkspaceService::detachStaleWorkspaces()`** — deferred out of Phase 0. See
   `docs/phase-0-tenant-isolation-plan.md` §G-1d. Prerequisite for any partner-tier feature
   that can move a customer between organisations.
+
+**Owed but never delivered** (requested during the §A.6 model rulings, not produced):
+
+- **Propose (do not execute) `Template` → `SystemEmailTemplate`.** The bare name collides
+  conceptually with `WhatsappTemplate` and will eventually cause a wrong-import bug.
+- **Propose a rename for the `SocialAccount` basename collision.** `App\Models\SocialAccount`
+  (OAuth logins, `social_accounts`) and `App\Modules\Social\Models\SocialAccount`
+  (publishing, `social_media_accounts`) are different models with the same class basename.
+  A global scope is being applied to exactly one of them — this is how a wrong-import bug
+  gets written.
+
+**Unfixed security findings that live only inside long audit documents.** All confirmed, none
+scheduled, all would die quietly when Phase 0 closes:
+
+| ID | Sev | Summary | Where |
+|---|---|---|---|
+| DEEP-03 | High | Client impersonation gated by the read-only `view_clients` permission — a "view" grant confers full impersonation of any client's administrator | `project-security-deep-dive.md` |
+| DEEP-05 | Medium | `assignPlan` gated by `view_clients` — a read permission can change billing | same |
+| SEC-004 | High | SVG accepted for logo/favicon upload and served from public storage — stored XSS | `project-security-findings.md` |
+| SEC-006 | High | Sanctum tokens never expire (`expiration = null`) | same |
+
+**Design constraints that must not be violated later** (agreed in conversation, easily lost):
+
+- **Per-workspace integrations need a SEPARATE `workspace_integration_connections` table**
+  with encrypted per-workspace credentials. Do **not** extend `IntegrationConfig`, which is
+  platform-global and admin-managed. Applies to Google Business Profile, Calendly, n8n.
+- **SMTP will need a partner tier**: `workspace → partner → platform`. `WorkspaceSmtpConfig`
+  is the tenant override, `SmtpConfiguration` the platform fallback. Do not build the partner
+  layer now, but do not design anything that blocks inserting it.
+- **`Subscription` (user_id) vs `ClientSubscription` (client_id)**: `ClientSubscription` is
+  authoritative for billing. `Subscription` appears to have no live writers — **verify against
+  the billing gateways and seeders before marking it deprecated.** Separate task, not assumed.
+- **BUG-002**: 10 pre-existing PHPStan `property.notFound` errors in `app/Modules/Social`.
+  Fix properly with `@property` annotations, or baseline as a *tracked decision* — not as a
+  side effect of not looking. See `docs/found-bugs.md`.
