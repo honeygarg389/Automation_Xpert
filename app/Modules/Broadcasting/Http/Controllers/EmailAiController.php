@@ -4,11 +4,29 @@ namespace App\Modules\Broadcasting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\AI\Services\Llm\LlmManager;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class EmailAiController extends Controller
 {
+    /**
+     * The workspace this request is operating in.
+     *
+     * Was `current_workspace_id ?? workspace_id` inline in both actions, which
+     * always yielded the user's HOME workspace. Extracted to match the three
+     * sibling controllers in this module: two inline copies of one expression
+     * is how the next change touches one and misses the other.
+     *
+     * There is no tenancy abort here either — the resolution alone decides
+     * whose LLM provider credentials are loaded and whose AI quota is spent.
+     * See docs/phase-0-tenant-isolation-plan.md §G-1b.
+     */
+    private function workspaceId(Request $request): int
+    {
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
+    }
+
     public function improveSubject(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -16,7 +34,7 @@ class EmailAiController extends Controller
             'body' => ['nullable', 'string', 'max:8000'],
         ]);
 
-        $workspaceId = (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        $workspaceId = $this->workspaceId($request);
 
         try {
             $llm = LlmManager::forWorkspace($workspaceId);
@@ -93,7 +111,7 @@ PROMPT;
             'tone' => ['nullable', 'in:professional,friendly,urgent,informative'],
         ]);
 
-        $workspaceId = (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        $workspaceId = $this->workspaceId($request);
 
         try {
             $llm = LlmManager::forWorkspace($workspaceId);
@@ -102,7 +120,13 @@ PROMPT;
         }
 
         $tone = $validated['tone'] ?? 'professional';
-        $campaignCtx = $validated['campaign_name'] ? "Campaign name: \"{$validated['campaign_name']}\"." : '';
+
+        // BUG-003: validate() OMITS an absent `nullable` key rather than returning
+        // it as null, so indexing $validated['campaign_name'] directly threw
+        // "Undefined array key" — a 500 — whenever the key was not sent at all.
+        // Coalesce first: absent, null and '' all mean "no campaign context".
+        $campaignName = $validated['campaign_name'] ?? '';
+        $campaignCtx = $campaignName !== '' ? "Campaign name: \"{$campaignName}\"." : '';
 
         $systemPrompt = <<<PROMPT
 You are an email copywriter. Your ONLY job is to write the text of a single marketing or transactional email that will be sent to recipients.
