@@ -35,6 +35,7 @@ use App\Models\Workspace;
 use App\Modules\Shared\Services\ChannelManager;
 use App\Services\Billing\BillingGatewayRegistry;
 use App\Services\StorageManager;
+use App\Support\Http\ConnectionExceptionScrubber;
 use App\Support\WorkspaceContext;
 use Dedoc\Scramble\Scramble;
 use Dedoc\Scramble\Support\Generator\OpenApi;
@@ -76,6 +77,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureHttpClientSsl();
+        $this->scrubCredentialsFromConnectionFailures();
         $this->forceHttpsForWebhookUrls();
 
         Gate::define('viewAdmin', fn ($user) => $user?->isAdmin());
@@ -190,6 +192,22 @@ class AppServiceProvider extends ServiceProvider
         ) {
             URL::forceScheme('https');
         }
+    }
+
+    /**
+     * Keep query-string credentials out of connection-failure messages.
+     *
+     * Several providers authenticate with a query parameter rather than a header,
+     * and Guzzle appends the full URI to every ConnectException message. Those
+     * messages are written to logs, to `failed_jobs`, to `lead_scrape_jobs.error`
+     * and to HTTP responses. Registered globally rather than per call site so a
+     * new `Http::get($url, ['key' => …])` is covered the day it is written.
+     *
+     * See BUG-005 and BUG-006 in docs/found-bugs.md.
+     */
+    private function scrubCredentialsFromConnectionFailures(): void
+    {
+        Http::globalMiddleware(ConnectionExceptionScrubber::middleware());
     }
 
     private function configureHttpClientSsl(): void
