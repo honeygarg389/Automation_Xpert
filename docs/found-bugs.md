@@ -325,6 +325,18 @@ The real sinks for sites 1–2 are the log **and `lead_scrape_jobs.error`** — 
 database column written on every failed scrape, which makes this **customer-visible**, not
 admin-only. Site 3 lands in `integration_configs.last_test_message`, as Gemini's did.
 
+**Sites 1–2 are currently LATENT, not live.** `GooglePlacesScraper::run()` dies at line 29
+before any HTTP call is made — see BUG-007 — so those two sites cannot leak today because
+they never reach the network. They become live the moment BUG-007 is fixed, which is why the
+scrub is worth having in place first. **Only site 3 (`ConnectionTester:183`) leaks live
+today**; it is reachable through the admin "Test connection" button.
+
+This also means the scraper sites **cannot be given a meaningful regression test yet**: a
+consequence test would pass vacuously — no credential in `lead_scrape_jobs.error` because no
+request was ever made, not because anything was scrubbed. That coverage is owed once BUG-007
+is fixed, and is recorded as a skipped test in
+`tests/Feature/Security/CredentialNotInExceptionMessageTest.php`.
+
 **2. It is not a three-site bug. It is seven sites across four providers.** Found by sweeping
 for credentials in query arrays and filtering to `GET` — `Http::post($url, $array)` sends the
 array as the request **body**, which never enters the URI, so only `GET` leaks.
@@ -377,6 +389,60 @@ Option 1 is the one that would have prevented BUG-005 too.
 - **Per-provider tests for sites 4–7.** The central middleware covers them by construction,
   but this branch's consequence tests cover only the three Places sites. Meta, Nexmo, SMS.bd
   and the Social OAuth callback each deserve their own leak test. **Separate task.**
+
+---
+
+## BUG-007 — `GooglePlacesScraper` calls a method that does not exist; lead scraping has never worked
+
+**Severity:** Critical — user-facing, and the feature has never functioned
+**Found:** 2026-08-07, while writing the BUG-006 regression tests. **Not fixed** — own branch.
+
+`app/Modules/Leads/Services/GooglePlacesScraper.php:29`:
+
+```php
+$creds = $this->credentials->generic('google_places');
+```
+
+`CredentialResolver` has **no `generic()` method and no `__call()`**. The method it wants is
+`googlePlaces()`. Proven at runtime, not inferred:
+
+```
+has generic(): NO
+has __call():  NO
+THROWS: Error — Call to undefined method CredentialResolver::generic()
+```
+
+**Every lead-scrape job fails on its first statement**, before any HTTP request. It is not
+visible as a crash because `run()` wraps everything in `catch (\Throwable)` and writes the
+message to the database:
+
+```php
+} catch (\Throwable $e) {
+    Log::error('GooglePlacesScraper error: '.$e->getMessage());
+    $job->update(['status' => 'failed', 'error' => $e->getMessage(), …]);
+}
+```
+
+So the user sees a scrape job that silently fails, and `lead_scrape_jobs.error` contains
+"Call to undefined method …". The Google Places lead-scraping feature cannot ever have
+worked in this codebase.
+
+**Fix:** `generic('google_places')` → `googlePlaces()`. One word.
+
+**⚠️ It needs more review than its size suggests.** Fixing it makes a code path live that has
+**never executed** — every line after 29 in `run()`, plus `upsertPlace()` and the Places
+details call. Per the CLAUDE.md rule: *what has never actually executed before, and is it
+correct?* Specifically worth checking before shipping:
+
+- `upsertPlace()` writes `Lead::updateOrCreate` keyed on `google_place_id` with no
+  `workspace_id` in the match — a place already scraped by another workspace would be
+  **reassigned**, not duplicated. That is a tenant-isolation question, not a style one.
+- `UsageMeter::track($job->workspace_id, 'lead_credits', $count)` has never incremented.
+- The `sleep(2)` between `next_page_token` pages runs inside a queued job.
+- BUG-006 sites 1–2 become **live leaks** the moment this is fixed — which is why the
+  central scrub landed first.
+
+**Do not fix this as a drive-by.** Own branch, own tests.
 
 ---
 
