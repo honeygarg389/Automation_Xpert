@@ -217,7 +217,7 @@ All four paths close from this single change, because the secret is no longer in
 **What this fix does NOT do.** The four paths remain open as *mechanisms* —
 `AiChatbotController:112` still returns a raw `$e->getMessage()` to the browser for any
 exception. This change removed the secret from the message; it did not make those paths safe.
-See BUG-006, which leaks through the same four paths and is not fixed.
+See BUG-006, which leaks through the same five paths and is not fixed.
 
 ---
 
