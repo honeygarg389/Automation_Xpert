@@ -211,10 +211,10 @@ both `generateContent` and `batchEmbedContents`; the embeddings reference shows 
 header form. The `?key=` form still works for backwards compatibility, so this is not a
 breaking migration.
 
-All four paths close from this single change, because the secret is no longer in the URI for
+All five paths close from this single change, because the secret is no longer in the URI for
 `ConnectionException` to carry. **None of the four needed its own change.**
 
-**What this fix does NOT do.** The four paths remain open as *mechanisms* —
+**What this fix does NOT do.** The five paths remain open as *mechanisms* —
 `AiChatbotController:112` still returns a raw `$e->getMessage()` to the browser for any
 exception. This change removed the secret from the message; it did not make those paths safe.
 See BUG-006, which leaks through the same five paths and is not fixed.
@@ -256,7 +256,7 @@ needs a different fix and belongs on its own branch. Options, none evaluated in 
 1. Scrub the query string from `ConnectionException` messages centrally, before anything
    reports them — this would also protect every future query-param credential, and is the
    only option that fixes the class rather than the instance.
-2. Stop returning raw `$e->getMessage()` to clients and to logs at the four paths, which is
+2. Stop returning raw `$e->getMessage()` to clients and to logs at the five paths, which is
    worth doing regardless of this bug.
 3. Catch `ConnectionException` at the Places call sites and rethrow with a scrubbed message —
    narrowest, but leaves the general mechanism open.
