@@ -280,11 +280,12 @@ All five paths close from this single change, because the secret is no longer in
 **What this fix does NOT do.** The five paths remain open as *mechanisms* —
 `AiChatbotController:112` still returns a raw `$e->getMessage()` to the browser for any
 exception. This change removed the secret from the message; it did not make those paths safe.
-See BUG-006, which leaks through the same five paths and is not fixed.
+See BUG-006, which leaks the same way but into a *different* sink set — the log and
+`lead_scrape_jobs.error` rather than these five.
 
 ---
 
-## BUG-006 — Google Places API key leaks identically via the array query form
+## BUG-006 — Credentials in GET query params leak via ConnectionException — 7 sites, 4 providers
 
 **Severity:** Critical (credential disclosure) — same class as BUG-005, **not fixed**
 **Found:** 2026-08-06, while grepping for the BUG-005 pattern repo-wide.
@@ -299,33 +300,95 @@ $params = ['query' => $query, 'key' => $apiKey];
 $res = Http::get(self::PLACES_URL, $params)->json();
 ```
 
-**Sites:**
+**Places sites:**
 
 | # | File | Line | Endpoint |
 |---|---|---|---|
 | 1 | `Leads/Services/GooglePlacesScraper.php` | 40, 45 | Places `textsearch` |
 | 2 | `Leads/Services/GooglePlacesScraper.php` | 76–79 | Places `details` |
-| 3 | `Integrations/Services/ConnectionTester.php` | 176 | Places `textsearch` (admin test button) |
+| 3 | `Integrations/Services/ConnectionTester.php` | 181–183 | Places `textsearch` (admin test button) |
 
-It reaches the **same five paths** listed in BUG-005 — the errors log channel,
-`failed_jobs.exception`, the admin queue UI, and any `catch (\Throwable)` that returns
-`getMessage()` to a client. `GooglePlacesScraper` runs inside `ScrapeLeadsJob`, so path 2
-(the `failed_jobs` table) is the most likely destination.
+### ⚠️ Two corrections to the first write-up
 
-**Why it is not fixed with BUG-005.** The Google Places API has **no header-key equivalent** —
-`key` is a required query parameter — so the `x-goog-api-key` remedy does not apply. This
-needs a different fix and belongs on its own branch. Options, none evaluated in depth yet:
+**1. It does NOT reach the five BUG-005 sinks.** That claim was wrong, carried over by
+analogy rather than checked. `GooglePlacesScraper::run()` catches `\Throwable` **itself**
+(lines 62–65), so the exception never reaches `failed_jobs` at all:
+
+```php
+} catch (\Throwable $e) {
+    Log::error('GooglePlacesScraper error: '.$e->getMessage());
+    $job->update(['status' => 'failed', 'error' => $e->getMessage(), …]);
+}
+```
+
+The real sinks for sites 1–2 are the log **and `lead_scrape_jobs.error`** — a per-workspace
+database column written on every failed scrape, which makes this **customer-visible**, not
+admin-only. Site 3 lands in `integration_configs.last_test_message`, as Gemini's did.
+
+**Sites 1–2 are currently LATENT, not live.** `GooglePlacesScraper::run()` dies at line 29
+before any HTTP call is made — see BUG-007 — so those two sites cannot leak today because
+they never reach the network. They become live the moment BUG-007 is fixed, which is why the
+scrub is worth having in place first. **Only site 3 (`ConnectionTester:183`) leaks live
+today**; it is reachable through the admin "Test connection" button.
+
+This also means the scraper sites **cannot be given a meaningful regression test yet**: a
+consequence test would pass vacuously — no credential in `lead_scrape_jobs.error` because no
+request was ever made, not because anything was scrubbed. That coverage is owed once BUG-007
+is fixed, and is recorded as a skipped test in
+`tests/Feature/Security/CredentialNotInExceptionMessageTest.php`.
+
+**2. It is not a three-site bug. It is seven sites across four providers.** Found by sweeping
+for credentials in query arrays and filtering to `GET` — `Http::post($url, $array)` sends the
+array as the request **body**, which never enters the URI, so only `GET` leaks.
+
+| # | Site | Credential | Provider |
+|---|---|---|---|
+| 1 | `GooglePlacesScraper.php:45` | `key` | Google Places |
+| 2 | `GooglePlacesScraper.php:76` | `key` | Google Places |
+| 3 | `ConnectionTester.php:183` | `key` | Google Places |
+| 4 | `ConnectionTester.php:47` | **`access_token`** | Meta / Graph |
+| 5 | `ConnectionTester.php:145` | **`api_key` + `api_secret`** | Nexmo / Vonage |
+| 6 | `Broadcasting/Services/Sms/SmsDotBdDriver.php:18` | **`api_key`** | SMS.bd |
+| 7 | `Social/Http/Controllers/SocialAccountController.php:104` | **`access_token`** | Social OAuth |
+
+Not leaking, by verb alone: `BulkSmsBdDriver`, `NexmoDriver`, `MimSmsDriver`, and
+`InboxSetupController` ×4 — the last passes `appId|appSecret` and is `POST`, so it is safe
+only by luck of the verb. Any of these becoming a `GET` reintroduces the leak.
+
+**Why the BUG-005 remedy does not apply.** The endpoint in use —
+`maps.googleapis.com/maps/api/place/textsearch/json` — has **no documented header-key form**;
+the legacy Text Search reference lists only `query` and `radius` as required parameters and
+shows `?key=` in every example.
+
+A header form *does* exist, but only on the **Places API (New)** (`places.googleapis.com/v1`),
+which accepts `X-Goog-Api-Key` exactly like Gemini. That is a different host with a different
+request shape, response shape and field-mask model — an API migration, not a security patch.
+See the roadmap note below.
+
+**Fix chosen: the central scrub (option 1 below).** The seven-site inventory is the argument:
+per-site patching fixes three of seven and does not survive the next
+`Http::get($url, ['key' => …])` anyone writes.
 
 1. Scrub the query string from `ConnectionException` messages centrally, before anything
-   reports them — this would also protect every future query-param credential, and is the
-   only option that fixes the class rather than the instance.
-2. Stop returning raw `$e->getMessage()` to clients and to logs at the five paths, which is
-   worth doing regardless of this bug.
-3. Catch `ConnectionException` at the Places call sites and rethrow with a scrubbed message —
-   narrowest, but leaves the general mechanism open.
+   reports them — protects every future query-param credential, and fixes the class rather
+   than the instance. **This is the one being implemented.**
+2. Stop returning raw `$e->getMessage()` to clients and to logs, which is worth doing
+   regardless of this bug. **Still open** — see the note under BUG-005.
+3. Catch `ConnectionException` at each call site and rethrow scrubbed — narrowest, leaves the
+   general mechanism open. **Rejected.**
 
-Option 1 is the one that would have prevented BUG-005 too. **Decide deliberately; do not
-default to the narrowest fix.**
+Option 1 is the one that would have prevented BUG-005 too.
+
+### 📌 Deliberately out of scope, recorded so it is not lost
+
+- **Places API (New) migration.** The endpoint in use is marked *Legacy* by Google and the
+  documented replacement is `places.googleapis.com/v1`, which supports the `X-Goog-Api-Key`
+  header. Worth doing — it would remove the credential from the URI entirely rather than
+  scrubbing it after the fact — but it is an API migration with its own testing burden.
+  **Roadmap item, not a security patch.**
+- **Per-provider tests for sites 4–7.** The central middleware covers them by construction,
+  but this branch's consequence tests cover only the three Places sites. Meta, Nexmo, SMS.bd
+  and the Social OAuth callback each deserve their own leak test. **Separate task.**
 
 ---
 
@@ -342,8 +405,13 @@ tenant-isolation defect
 > **Provenance.** This was first recorded as a one-line "undefined method" bug. That
 > understated it. A full trace of the dead path found **four stacked defects**, one of which
 > (#4) is a tenant-isolation issue that has nothing to do with Places. The entry was rewritten
-> so the next person treats it as a build, not a patch. It supersedes the narrower BUG-007 on
-> `fix/places-key-in-url`; keep this version when those branches merge.
+> so the next person treats it as a build, not a patch. It supersedes a narrower BUG-007
+> written on `fix/places-key-in-url`, which was removed when the branches merged.
+>
+> Worth knowing for next time: the two entries did **not** conflict in git. They landed in
+> different regions of the file and auto-merged into two contradictory sections with no
+> warning. The duplicate had to be deleted deliberately, not resolved. **A clean merge is not
+> evidence that a document is coherent.**
 
 Every layer below was verified against the actual code. Nothing here is inferred by analogy.
 
