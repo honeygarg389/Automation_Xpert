@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Workspace;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -37,11 +38,27 @@ class WorkspaceController extends Controller
         ]);
 
         $workspace = Workspace::findOrFail($validated['workspace_id']);
+        $user = $request->user();
 
-        $this->authorize('view', $workspace);
+        // An explicit switch attempt to a workspace the user cannot reach is
+        // refused with a message rather than a bare 403, and recorded so a
+        // repeated attempt is visible. The session is left untouched, so the
+        // user simply stays where they were — a refusal must never lock anyone
+        // out of the workspace they already had.
+        if (! $workspace->isAccessibleBy($user)) {
+            Log::warning('workspace.switch.denied', [
+                'user_id' => $user->id,
+                'user_client_id' => $user->client_id,
+                'requested_workspace_id' => $workspace->id,
+                'workspace_client_id' => $workspace->client_id,
+                'ip' => $request->ip(),
+            ]);
+
+            return back()->with('error', __('You do not have access to that workspace.'));
+        }
 
         $request->session()->put('current_workspace_id', $workspace->id);
-        $request->user()->update(['workspace_id' => $workspace->id]);
+        $user->update(['workspace_id' => $workspace->id]);
 
         return redirect()->intended(route('client.dashboard'));
     }

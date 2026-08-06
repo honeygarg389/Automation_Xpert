@@ -13,6 +13,7 @@ use App\Modules\Broadcasting\Models\Campaign;
 use App\Modules\Ecommerce\Models\EcommerceStore;
 use App\Modules\Integrations\Models\IntegrationConfig;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -22,9 +23,18 @@ use Inertia\Response;
 
 class AutomationController extends Controller
 {
+    /**
+     * The workspace this request is operating in.
+     *
+     * Was `current_workspace_id ?? workspace_id`, which always yielded the
+     * HOME workspace. This feeds authorise() below, called from edit, update,
+     * destroy, runs, generateToken and test — six endpoints, all gated by one
+     * check that compared against the wrong workspace whenever a user had
+     * switched. See docs/phase-0-tenant-isolation-plan.md §G-1b.
+     */
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     public function index(Request $request): Response

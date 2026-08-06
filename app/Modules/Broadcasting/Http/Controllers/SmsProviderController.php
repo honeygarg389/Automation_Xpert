@@ -4,6 +4,7 @@ namespace App\Modules\Broadcasting\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Broadcasting\Models\SmsProviderConfig;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -171,9 +172,19 @@ class SmsProviderController extends Controller
         return back()->with('success', self::LABELS[$provider].' configuration removed.');
     }
 
+    /**
+     * The workspace this request is operating in.
+     *
+     * Was `current_workspace_id ?? workspace_id`, which always yielded the
+     * user's HOME workspace. This controller has no tenancy abort — its two
+     * abort_unless() calls check the provider slug against self::PROVIDERS, not
+     * the tenant — so the resolution IS the isolation: it decides which
+     * workspace's SMS credentials are read, written and deleted.
+     * See docs/phase-0-tenant-isolation-plan.md §G-1b.
+     */
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     private function mask(array $creds): array

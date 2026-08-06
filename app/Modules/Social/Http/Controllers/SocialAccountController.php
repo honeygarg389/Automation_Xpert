@@ -11,6 +11,7 @@ use App\Modules\Social\Services\Drivers\TikTokDriver;
 use App\Modules\Social\Services\Drivers\TwitterDriver;
 use App\Modules\Social\Services\Drivers\YoutubeDriver;
 use App\Modules\Social\Services\OAuth\OAuthManager;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -36,7 +37,7 @@ class SocialAccountController extends Controller
 
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     public function index(Request $request): Response
@@ -68,11 +69,11 @@ class SocialAccountController extends Controller
 
     public function callback(Request $request, string $network): RedirectResponse
     {
-        $code     = $request->query('code');
-        $state    = $request->query('state');
-        $error    = $request->query('error');
-        $wid      = Session::get('social_oauth_workspace', $this->workspaceId($request));
-        $stored   = Session::pull('social_oauth_state', []);
+        $code = $request->query('code');
+        $state = $request->query('state');
+        $error = $request->query('error');
+        $wid = Session::get('social_oauth_workspace', $this->workspaceId($request));
+        $stored = Session::pull('social_oauth_state', []);
 
         if ($error || ! $code) {
             return redirect()->route('client.social.accounts.index')->with('error', 'OAuth failed: '.($error ?? 'No code received'));

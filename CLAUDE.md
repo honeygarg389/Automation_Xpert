@@ -174,6 +174,35 @@ Rules:
   - **Auth style** — `actingAs($user, 'sanctum')` does not populate `currentAccessToken()`, so
     ability-gated API routes 401 before validation. Issue a real token.
 - **Never invent codebase facts.** If you have not opened the file, say so and go read it.
+
+- **When a fix reveals a second bug the first was masking, fix both in the same commit** and
+  pin the second with its own regression test. Shipping the first alone converts a dormant
+  fault into a live one.
+
+  The example: the `ai-runs` rate limiter resolved the workspace from a non-existent
+  attribute, so it always fell back to the client IP. `Workspace::find(<ip>)` returned null —
+  which meant Laravel skipped the eager load on the next line, and that eager load
+  (`with('client.activePlan')`) was itself invalid, because `activePlan()` is a method, not a
+  relation. Fixing only the resolution would have produced a `RelationNotFoundException` on
+  the first authenticated request. Each bug hid the other.
+
+  Ask, whenever a fix makes a previously-dead code path live: **what has never actually
+  executed before, and is it correct?**
+
+- **Before hardening a check, grep for OTHER definitions of the same concept.** This codebase
+  repeatedly implements one idea in two places, and fixing one of them closes nothing while
+  looking correct.
+
+  Confirmed instances:
+  - `User::accessibleWorkspaces()` and `Workspace::isAccessibleBy()` both define workspace
+    membership. Filtering only the first left the second — used by `WorkspacePolicy::view`,
+    and therefore by workspace switching — as a complete bypass.
+  - Inbound WhatsApp webhooks deduplicate in two layers, `whatsapp_global` in the controller
+    and `whatsapp_msg` in the driver. A test asserting a single row count conflated them.
+
+  Both were caught only because a test failed for an unexpected reason. Search for the
+  concept, not the symbol you already have: sibling methods on the related model, the policy,
+  the middleware, and any service that answers the same question.
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
   asking.
@@ -186,3 +215,50 @@ Rules:
 4. White-label surface — partner dashboard, branding, custom domains, hostname middleware
 5. Partner billing — platform→partner subscriptions and usage slabs
 6. E-commerce pack, Google Business Profile, n8n/Make connectors, Calendly
+
+### Named items that must not be lost when a phase closes
+
+- **BUG-003 triage pass — immediately after Phase 0.** The heavy unguarded-nullable-key files
+  that 1c never touches: `Http/Controllers/Client/SettingsController.php` (12 candidates) and
+  `Http/Controllers/Admin/ClientController.php` (10). Same root cause as BUG-001, which was a
+  live customer-facing 500. Files touched during 1c get fixed opportunistically in their own
+  module commit; these two do not, so they need a deliberate pass. See `docs/found-bugs.md`
+  BUG-003 for the full list and the decided scope policy.
+- **`ClientWorkspaceService::detachStaleWorkspaces()`** — deferred out of Phase 0. See
+  `docs/phase-0-tenant-isolation-plan.md` §G-1d. Prerequisite for any partner-tier feature
+  that can move a customer between organisations.
+
+**Owed but never delivered** (requested during the §A.6 model rulings, not produced):
+
+- **Propose (do not execute) `Template` → `SystemEmailTemplate`.** The bare name collides
+  conceptually with `WhatsappTemplate` and will eventually cause a wrong-import bug.
+- **Propose a rename for the `SocialAccount` basename collision.** `App\Models\SocialAccount`
+  (OAuth logins, `social_accounts`) and `App\Modules\Social\Models\SocialAccount`
+  (publishing, `social_media_accounts`) are different models with the same class basename.
+  A global scope is being applied to exactly one of them — this is how a wrong-import bug
+  gets written.
+
+**Unfixed security findings that live only inside long audit documents.** All confirmed, none
+scheduled, all would die quietly when Phase 0 closes:
+
+| ID | Sev | Summary | Where |
+|---|---|---|---|
+| DEEP-03 | High | Client impersonation gated by the read-only `view_clients` permission — a "view" grant confers full impersonation of any client's administrator | `project-security-deep-dive.md` |
+| DEEP-05 | Medium | `assignPlan` gated by `view_clients` — a read permission can change billing | same |
+| SEC-004 | High | SVG accepted for logo/favicon upload and served from public storage — stored XSS | `project-security-findings.md` |
+| SEC-006 | High | Sanctum tokens never expire (`expiration = null`) | same |
+
+**Design constraints that must not be violated later** (agreed in conversation, easily lost):
+
+- **Per-workspace integrations need a SEPARATE `workspace_integration_connections` table**
+  with encrypted per-workspace credentials. Do **not** extend `IntegrationConfig`, which is
+  platform-global and admin-managed. Applies to Google Business Profile, Calendly, n8n.
+- **SMTP will need a partner tier**: `workspace → partner → platform`. `WorkspaceSmtpConfig`
+  is the tenant override, `SmtpConfiguration` the platform fallback. Do not build the partner
+  layer now, but do not design anything that blocks inserting it.
+- **`Subscription` (user_id) vs `ClientSubscription` (client_id)**: `ClientSubscription` is
+  authoritative for billing. `Subscription` appears to have no live writers — **verify against
+  the billing gateways and seeders before marking it deprecated.** Separate task, not assumed.
+- **BUG-002**: 10 pre-existing PHPStan `property.notFound` errors in `app/Modules/Social`.
+  Fix properly with `@property` annotations, or baseline as a *tracked decision* — not as a
+  side effect of not looking. See `docs/found-bugs.md`.

@@ -9,6 +9,7 @@ use App\Models\Permission;
 use App\Models\Plan;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\Workspace;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
@@ -111,6 +112,52 @@ abstract class TestCase extends BaseTestCase
         }
 
         return ['user' => $user, 'workspace' => $workspace, 'client' => $client];
+    }
+
+    /**
+     * A user belonging to a client with TWO workspaces, both accessible.
+     *
+     * Every other fixture in this suite (createWorkspaceContext, and the ~140
+     * tests using it) builds a user whose home workspace is their ONLY
+     * workspace. That means no existing test can distinguish "resolved the
+     * active workspace" from "resolved the home workspace" — they are the same
+     * value. The suite is therefore structurally blind to the workspace
+     * switcher, which is exactly the behaviour Phase 0 commits 1b and 1c change.
+     *
+     * See docs/phase-0-tenant-isolation-plan.md §G-1.
+     *
+     * @return array{user: User, client: Client, home: Workspace, other: Workspace}
+     */
+    protected function createTwoWorkspaceUser(array $userAttrs = []): array
+    {
+        ['user' => $user, 'client' => $client, 'workspace' => $home] =
+            $this->createWorkspaceContext([], $userAttrs);
+
+        $other = Workspace::create([
+            'client_id' => $client->id,
+            'name' => 'Second Workspace',
+            'owner_id' => $user->id,
+        ]);
+
+        // Mirror how ClientWorkspaceService grants membership, so the fixture
+        // reflects production rather than inventing its own arrangement.
+        if (! $other->members()->where('user_id', $user->id)->exists()) {
+            $other->members()->attach($user->id, ['role' => 'member']);
+        }
+
+        $user->refresh();
+
+        // Guard the fixture itself: if these ever stop holding, every test built
+        // on it is silently testing something else.
+        $accessible = $user->accessibleWorkspaces()->pluck('id');
+        if (! $accessible->contains($home->id) || ! $accessible->contains($other->id)) {
+            $this->fail('createTwoWorkspaceUser: user cannot access both workspaces — fixture is broken.');
+        }
+        if ((int) $user->workspace_id !== (int) $home->id) {
+            $this->fail('createTwoWorkspaceUser: home workspace is not the user\'s workspace_id — fixture is broken.');
+        }
+
+        return ['user' => $user, 'client' => $client, 'home' => $home, 'other' => $other];
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Modules\Broadcasting\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Broadcasting\Models\WorkspaceSmtpConfig;
 use App\Services\Mail\MailService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -135,8 +136,18 @@ class EmailServerController extends Controller
         }
     }
 
+    /**
+     * The workspace this request is operating in.
+     *
+     * Was `current_workspace_id ?? workspace_id`, which always yielded the
+     * user's HOME workspace. Like SmsProviderController this has no tenancy
+     * abort at all: the resolution is the only thing standing between a
+     * switched user and the home workspace's SMTP credentials — including
+     * store(), which deletes the existing config for the resolved workspace
+     * before writing. See docs/phase-0-tenant-isolation-plan.md §G-1b.
+     */
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 }

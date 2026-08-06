@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Modules\Shared\Models\Conversation;
+use App\Support\WorkspaceContext;
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\ServiceProvider;
@@ -104,10 +105,11 @@ class BroadcastChannelsServiceProvider extends ServiceProvider
             return true;
         }
 
-        $current = $user->current_workspace_id ?? null;
-        if ($current && (int) $current === $workspaceId) {
-            return true;
-        }
+        // A grant branch on $user->current_workspace_id was removed here. That
+        // attribute does not exist, so the branch could never evaluate true and
+        // granted nothing — removing it narrows nothing. Membership is covered
+        // by accessibleWorkspaces() below, which WorkspaceContext also uses, so
+        // the two agree by construction.
 
         if ($user->accessibleWorkspaces()->contains('id', $workspaceId)) {
             return true;
@@ -125,7 +127,7 @@ class BroadcastChannelsServiceProvider extends ServiceProvider
         Log::warning('broadcast.auth.denied workspace access check', [
             'user_id' => $user->id,
             'user_workspace_id' => $user->workspace_id,
-            'user_current_workspace_id' => $current,
+            'resolved_workspace_id' => WorkspaceContext::id(),
             'user_client_id' => $user->client_id,
             'requested_workspace_id' => $workspaceId,
         ]);

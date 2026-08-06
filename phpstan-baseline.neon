@@ -1632,11 +1632,6 @@ parameters:
 			count: 1
 			path: app/Http/Controllers/WorkspaceController.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$current_workspace_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Middleware/EnforceLimit.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:activePlan\(\)\.$#'
@@ -1644,11 +1639,6 @@ parameters:
 			count: 1
 			path: app/Http/Middleware/EnforceLimit.php
 
-		-
-			message: '#^Using nullsafe property access "\?\-\>current_workspace_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Middleware/EnforceLimit.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>limits" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -6234,17 +6224,7 @@ parameters:
 			count: 1
 			path: app/Notifications/WorkspaceExportReadyNotification.php
 
-		-
-			message: '#^Access to an undefined property App\\Models\\AdminUser\|App\\Models\\User\:\:\$current_workspace_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Providers/AppServiceProvider.php
 
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$activePlan\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Providers/AppServiceProvider.php
 
 		-
 			message: '#^Call to function is_string\(\) with non\-falsy\-string will always evaluate to true\.$#'
@@ -6258,11 +6238,6 @@ parameters:
 			count: 1
 			path: app/Providers/AppServiceProvider.php
 
-		-
-			message: '#^Using nullsafe property access "\?\-\>current_workspace_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Providers/AppServiceProvider.php
 
 		-
 			message: '#^Access to an undefined property App\\Modules\\Shared\\Models\\Conversation\:\:\$workspace_id\.$#'

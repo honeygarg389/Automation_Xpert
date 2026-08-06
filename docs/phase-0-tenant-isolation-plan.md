@@ -286,6 +286,34 @@ Implemented as `whereHas('workspace.client', fn ($q) => $q->where('partner_id', 
 Grouped so each commit leaves the suite green.
 
 ### Commit 1 — Fix the workspace-resolution bug (prerequisite)
+
+**Split into four, sequenced 1a → 1a-bis → 1b → 1c. Do not chain; report after each.**
+
+| Commit | Contains | Behaviour change |
+|---|---|---|
+| **1a** | `WorkspaceContext` + the two-workspace test fixture + characterisation tests. Wired into nothing. | **None** |
+| **1a-bis** | `WorkspaceController` validates membership before writing the session; `accessibleWorkspaces()` filters by `client_id` (the mandatory G-1d mitigation) | Yes — and it touches broadcast channel authorization, so it gets its own diff and its own report |
+| **1b** | The 5 infrastructure call sites; ships the G-2 rate-limit and G-3 plan-limit fixes | Yes |
+| **1c** | ~85 controller call sites, module by module; re-verify every G-1b authorization site | Yes |
+
+`1a-bis` is deliberately separate from `1b`: session validation and the
+`accessibleWorkspaces()` filter are security changes and must not be buried in a commit that
+is also fixing rate limits.
+
+`MissingWorkspaceContextException` is deferred to whichever commit first throws it.
+
+**The characterisation tests flip in 1c, not 1b.** The three tests added in 1a
+(`characterisation_switching_workspace_does_not_affect_controllers_today`,
+`characterisation_the_broken_expression_always_yields_the_home_workspace`,
+`workspace_context_and_the_legacy_expression_currently_disagree`) describe controller
+behaviour and the legacy expression. 1b wired infrastructure only, so all three still passed
+and were deliberately NOT inverted — inverting them there would have meant editing passing
+tests to match a prediction the code did not satisfy.
+
+**Inverting them IS the definition of done for 1c.** When the controllers resolve through
+`WorkspaceContext`, switching workspace must change what `/app/contacts` returns, and the new
+component must agree with production rather than disagree with it. If 1c completes and those
+tests still pass unchanged, 1c is not finished.
 *This is not optional. The scope cannot be built on a broken resolver.*
 
 - **Create** `app/Support/WorkspaceContext.php`

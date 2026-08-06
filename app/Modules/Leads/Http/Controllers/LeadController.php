@@ -7,6 +7,7 @@ use App\Modules\Leads\Jobs\ScrapeLeadsJob;
 use App\Modules\Leads\Models\Lead;
 use App\Modules\Leads\Models\LeadScrapeJob;
 use App\Modules\Shared\Models\Contact;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,9 +15,18 @@ use Inertia\Response;
 
 class LeadController extends Controller
 {
+    /**
+     * The workspace this request is operating in.
+     *
+     * Was `current_workspace_id ?? workspace_id`, which always yielded the
+     * user's HOME workspace because current_workspace_id does not exist. This
+     * value also feeds the abort_unless() in destroy(), so before 1c that
+     * authorization check was evaluated against the wrong workspace whenever a
+     * user had switched. See docs/phase-0-tenant-isolation-plan.md §G-1b.
+     */
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     public function index(Request $request): Response

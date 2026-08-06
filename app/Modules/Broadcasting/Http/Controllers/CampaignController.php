@@ -16,6 +16,7 @@ use App\Modules\Shared\Services\SegmentResolver;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use App\Modules\Whatsapp\Services\CloudApiClient;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -365,9 +366,24 @@ class CampaignController extends Controller
         abort_unless((int) $campaign->workspace_id === (int) $workspaceId, 403);
     }
 
+    /**
+     * The workspace this request is operating in.
+     *
+     * Was `current_workspace_id ?? workspace_id`, which always yielded the
+     * user's HOME workspace because current_workspace_id does not exist. Every
+     * route on this controller resolves through here — the six direct callers
+     * above cover all 12 — and one of them is authorise(), so before 1c the
+     * only tenancy check in the module compared against the wrong workspace
+     * whenever a user had switched. See docs/phase-0-tenant-isolation-plan.md §G-1b.
+     *
+     * The launch route also carries `limit:campaigns_per_month`, whose
+     * middleware moved to WorkspaceContext in 1b. Until now the quota was
+     * metered against the switched workspace while the campaign was authorised
+     * and created against the home one; this realigns them.
+     */
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     private function validateCampaign(Request $request): array

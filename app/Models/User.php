@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\ClientWorkspaceService;
 use App\Services\Mail\MailService;
+use App\Services\StorageManager;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
@@ -86,7 +87,7 @@ class User extends Authenticatable implements MustVerifyEmail
             return $this->avatar;
         }
 
-        return app(\App\Services\StorageManager::class)->disk()->url($this->avatar);
+        return app(StorageManager::class)->disk()->url($this->avatar);
     }
 
     protected function casts(): array
@@ -152,13 +153,49 @@ class User extends Authenticatable implements MustVerifyEmail
             ->withTimestamps();
     }
 
-    /** All workspaces the user can access (owned + member). */
+    /**
+     * All workspaces the user can access (owned + member), restricted to their
+     * own client.
+     *
+     * The client_id restriction is a security control, not a convenience.
+     * ClientWorkspaceService grants membership with syncWithoutDetaching(), and
+     * nothing anywhere detaches a workspace_user row — so if a user's client_id
+     * ever changes they would otherwise retain access to their former
+     * organisation's workspaces permanently.
+     *
+     * No path can change client_id today, which is the only reason this is not
+     * already exploitable. Filtering here makes it unreachable by construction
+     * rather than by the continued absence of a reassignment feature — which
+     * the partner tier will introduce (move customer to another partner,
+     * partner reassignment, client merge).
+     *
+     * See docs/phase-0-tenant-isolation-plan.md §G-1d.
+     */
     public function accessibleWorkspaces(): Collection
     {
-        $owned = $this->ownedWorkspaces()->get();
-        $member = $this->workspaces()->get();
+        $clientId = $this->client_id;
 
-        return $owned->merge($member)->unique('id');
+        // Filtered in SQL rather than in PHP after merging: it avoids loading
+        // rows only to discard them, and keeps the collection strictly typed.
+        // A null-client user matches only null-client workspaces, rather than
+        // matching everything.
+        $owned = $this->ownedWorkspaces()
+            ->when(
+                $clientId === null,
+                fn ($q) => $q->whereNull('workspaces.client_id'),
+                fn ($q) => $q->where('workspaces.client_id', $clientId),
+            )
+            ->get();
+
+        $member = $this->workspaces()
+            ->when(
+                $clientId === null,
+                fn ($q) => $q->whereNull('workspaces.client_id'),
+                fn ($q) => $q->where('workspaces.client_id', $clientId),
+            )
+            ->get();
+
+        return $owned->merge($member)->unique('id')->values();
     }
 
     // -------------------------------------------------------------------------

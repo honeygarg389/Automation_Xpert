@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Broadcasting\Models\Campaign;
 use App\Modules\Broadcasting\Models\CampaignRecipient;
 use App\Services\AnalyticsService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -14,9 +15,14 @@ class CampaignReportController extends Controller
 {
     public function __invoke(Request $request, Campaign $campaign, AnalyticsService $analytics): Response
     {
-        // Match the client-app workspace selection used elsewhere
-        // (current_workspace_id wins over the user's home workspace_id).
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        // Match the client-app workspace selection used elsewhere.
+        //
+        // The previous expression, `current_workspace_id ?? workspace_id`, was
+        // the comment's intent but not its effect: current_workspace_id does not
+        // exist, so this always resolved to the HOME workspace and the abort_if
+        // below authorised against the wrong one whenever a user had switched.
+        // See docs/phase-0-tenant-isolation-plan.md §G-1b.
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_if((int) $campaign->workspace_id !== (int) $workspaceId, 403);
 
         // Make sure the totals on the campaign row reflect the latest recipient data.
