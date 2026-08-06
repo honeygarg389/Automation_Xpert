@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use League\HTMLToMarkdown\HtmlConverter;
 use Smalot\PdfParser\Parser;
+use Throwable;
 
 class IndexDocumentJob implements ShouldQueue
 {
@@ -149,7 +150,11 @@ class IndexDocumentJob implements ShouldQueue
         if (empty($url)) {
             return '';
         }
-        $resp = Http::retry(2, 500)->timeout(30)->get($url);
+        $resp = Http::retry(
+            times: 2,
+            sleepMilliseconds: fn (int $attempt, Throwable $e) => HttpRetry::sleepMs($attempt, $e),
+            when: fn (Throwable $e) => HttpRetry::shouldRetry($e),
+        )->timeout(30)->get($url);
         if (! $resp->successful()) {
             return '';
         }
@@ -251,7 +256,11 @@ class IndexDocumentJob implements ShouldQueue
         if (empty($sitemapUrl)) {
             return '';
         }
-        $resp = Http::retry(2, 500)->timeout(20)->get($sitemapUrl);
+        $resp = Http::retry(
+            times: 2,
+            sleepMilliseconds: fn (int $attempt, Throwable $e) => HttpRetry::sleepMs($attempt, $e),
+            when: fn (Throwable $e) => HttpRetry::shouldRetry($e),
+        )->timeout(20)->get($sitemapUrl);
         if (! $resp->successful()) {
             return '';
         }

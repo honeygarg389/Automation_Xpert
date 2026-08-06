@@ -2,7 +2,9 @@
 
 namespace App\Modules\AI\Services\Llm;
 
+use App\Support\Retry\HttpRetry;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class OpenAiProvider implements LlmProviderInterface
 {
@@ -23,7 +25,13 @@ class OpenAiProvider implements LlmProviderInterface
             $headers['OpenAI-Organization'] = $this->organization;
         }
 
-        $resp = Http::withHeaders($headers)->retry(2, 500)->timeout(60)->post(self::BASE.'/chat/completions', [
+        $resp = Http::withHeaders($headers)
+            ->retry(
+                times: 2,
+                sleepMilliseconds: fn (int $attempt, Throwable $e) => HttpRetry::sleepMs($attempt, $e),
+                when: fn (Throwable $e) => HttpRetry::shouldRetry($e),
+            )
+            ->timeout(60)->post(self::BASE.'/chat/completions', [
             'model' => $opts['model'] ?? $this->chatModel,
             'messages' => $messages,
             'max_tokens' => $opts['max_tokens'] ?? 1024,
@@ -48,7 +56,13 @@ class OpenAiProvider implements LlmProviderInterface
 
     public function embed(array $texts): array
     {
-        $resp = Http::withToken($this->apiKey)->retry(2, 500)->timeout(30)->post(self::BASE.'/embeddings', [
+        $resp = Http::withToken($this->apiKey)
+            ->retry(
+                times: 2,
+                sleepMilliseconds: fn (int $attempt, Throwable $e) => HttpRetry::sleepMs($attempt, $e),
+                when: fn (Throwable $e) => HttpRetry::shouldRetry($e),
+            )
+            ->timeout(30)->post(self::BASE.'/embeddings', [
             'model' => $this->embedModel,
             'input' => $texts,
         ]);

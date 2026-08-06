@@ -142,6 +142,60 @@ BUG-001 was found by accident, not by looking; the others will not surface on th
 
 ---
 
+## BUG-004 — Unreachable error handling after `Http::retry()` at 5 AI call sites
+
+**Severity:** Medium (not a crash — misleading code that will cause a wrong fix later)
+**Found:** 2026-08-06, while planning Group D of the retry work. **Not fixed** — separate concern.
+
+Five call sites follow `Http::retry(...)` with a `successful()` guard that **can never run**:
+
+```php
+$resp = Http::retry(2, 500)->timeout(60)->post(...);
+
+if (! $resp->successful()) {
+    throw new \RuntimeException('OpenAI chat failed: '.$resp->body());   // unreachable
+}
+```
+
+`PendingRequest::retry()` defaults to `$throw = true`, and the send loop ends with:
+
+```php
+// vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1075-1077
+if ($potentialTries > 1 && $this->retryThrow) {
+    $response->throw();
+}
+```
+
+With `times = 2`, `$potentialTries > 1` is true, so **any** unsuccessful response throws
+`RequestException` from inside `retry()`. Execution never reaches the guard below it.
+
+**Sites:**
+
+| File | Method | Exception it *thinks* it throws |
+|---|---|---|
+| `AI/Services/Llm/OpenAiProvider.php` | `chat()` | `RuntimeException` |
+| `AI/Services/Llm/OpenAiProvider.php` | `embed()` | `RuntimeException` |
+| `AI/Services/Llm/AnthropicProvider.php` | `chat()` | `RuntimeException` |
+| `AI/Services/Llm/GeminiProvider.php` | `chat()` | `RuntimeException` |
+| `AI/Services/Llm/GeminiProvider.php` | `embed()` | `RuntimeException` |
+
+**Why it matters.** `RequestException extends HttpClientException extends Exception` — it is
+**not** a `RuntimeException`. Any caller written to `catch (\RuntimeException $e)` around these
+providers is not catching the failure it was written for. `AiKnowledgeBaseController` catches
+exactly that (`catch (\RuntimeException $e)` at two sites), so the intended user-facing error
+message cannot be produced by an HTTP failure.
+
+The two `IndexDocumentJob` sites differ: they `return ''` rather than throwing, so their guard
+is unreachable too, but the consequence is that the exception propagates out of the job and
+the (jittered) job-level backoff takes over — which is arguably the correct behaviour.
+
+**Deliberately not fixed in Group D.** Group D changed only retry *timing* and the retry
+*predicate*; it did not touch `times` or error handling. Fixing this means choosing between
+`throw: false` plus a real guard, or deleting the dead guard and catching `RequestException`
+at the callers — a behaviour change with its own blast radius. Decide it on its own.
+
+---
+
 ## BUG-005 — Gemini API key travels in the URL and reaches logs, the DB, and API responses — ✅ FIXED
 
 **Severity:** Critical (credential disclosure) — violated the CLAUDE.md rule that provider
@@ -150,9 +204,9 @@ tokens are never logged.
 `fix/gemini-key-in-url`.
 
 > **Note on numbering.** This entry was first written on `fix/retry-backoff-jitter`
-> (commit `75c2bea`) alongside BUG-004, listing only the two `GeminiProvider` sites. The
-> version here is authoritative: it names the **third** site found later, and records the
-> fix. When that branch merges, keep this entry and drop the older one.
+> (commit `75c2bea`) alongside BUG-004, listing only the two `GeminiProvider` sites. That
+> older duplicate was dropped when the branches merged, but two facts it alone recorded — the
+> Sentry sink and the reachability chain below — were ported across rather than lost.
 
 Gemini authenticated with a query-string parameter rather than a header:
 
@@ -201,6 +255,15 @@ message straight to the database, so an admin pressing "Test connection" while D
 would have stored the key in a column and displayed it back. It is the same class of sink as
 the other four and needed no separate fix — removing the key from the URL closed it too.
 
+The chain was reachable, not theoretical: `AiChatbotController::test()` →
+`ChatbotRunner::run()` → `LlmGateway::chat()` → `LlmManager::forWorkspace()`, and
+`LlmManager:91` constructs `GeminiProvider` whenever the workspace selects `gemini` — it is in
+both the chat and embed fallback orders. Path 4 is the most severe of the five: it does not
+merely log the key, it hands it to the HTTP client.
+
+Sentry (`bootstrap/app.php:154`) would have captured it as well; it is currently inert only
+because no DSN is set. Enabling Sentry without this fix would have opened a sixth sink.
+
 **`RequestException` was never a vector** — `prepareMessage()` builds its message from the
 response status and body only, never the request URL. Only `ConnectionException` leaked,
 which is precisely the condition retries make more likely to be hit repeatedly.
@@ -212,7 +275,7 @@ header form. The `?key=` form still works for backwards compatibility, so this i
 breaking migration.
 
 All five paths close from this single change, because the secret is no longer in the URI for
-`ConnectionException` to carry. **None of the four needed its own change.**
+`ConnectionException` to carry. **None of the five needed its own change.**
 
 **What this fix does NOT do.** The five paths remain open as *mechanisms* —
 `AiChatbotController:112` still returns a raw `$e->getMessage()` to the browser for any

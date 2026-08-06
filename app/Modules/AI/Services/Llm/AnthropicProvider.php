@@ -2,7 +2,9 @@
 
 namespace App\Modules\AI\Services\Llm;
 
+use App\Support\Retry\HttpRetry;
 use Illuminate\Support\Facades\Http;
+use Throwable;
 
 class AnthropicProvider implements LlmProviderInterface
 {
@@ -41,7 +43,11 @@ class AnthropicProvider implements LlmProviderInterface
             'x-api-key' => $this->apiKey,
             'anthropic-version' => '2023-06-01',
             'content-type' => 'application/json',
-        ])->retry(2, 500)->timeout(60)->post(self::BASE.'/messages', $body);
+        ])->retry(
+            times: 2,
+            sleepMilliseconds: fn (int $attempt, Throwable $e) => HttpRetry::sleepMs($attempt, $e),
+            when: fn (Throwable $e) => HttpRetry::shouldRetry($e),
+        )->timeout(60)->post(self::BASE.'/messages', $body);
 
         if (! $resp->successful()) {
             throw new \RuntimeException('Anthropic chat failed: '.$resp->body());
