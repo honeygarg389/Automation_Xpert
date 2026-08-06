@@ -185,7 +185,7 @@ Site 3 is admin-triggered and interactive, so its failures surface to a user mor
 than the background paths. Fixing only `GeminiProvider` would have closed two of three and
 looked complete.
 
-**Four paths recorded the key:**
+**Five paths recorded the key:**
 
 | # | Path | Where it ended up |
 |---|---|---|
@@ -193,6 +193,13 @@ looked complete.
 | 2 | `failed_jobs.exception` (`longText`) via `IndexDocumentJob` → `LlmGateway::embed()` | persisted in the database |
 | 3 | `Admin/QueueController.php:29` → `Admin/Queue/Index.jsx:72` | admin UI (`title={job.exception}` shows full text on hover) |
 | 4 | `AiChatbotController.php:112` — `catch (\Throwable $e)` → `response()->json(['error' => $e->getMessage()], 422)` | **returned to the browser** |
+| 5 | `ConnectionTester.php:27-35` — `catch (\Throwable $e)` → `$config->update(['last_test_message' => $e->getMessage()])` | **persisted to `integration_configs.last_test_message`** and rendered in the admin UI |
+
+Path 5 was found while writing the tests, after the first four were documented.
+`ConnectionTester::test()` wraps its whole dispatch in `catch (\Throwable)` and writes the
+message straight to the database, so an admin pressing "Test connection" while DNS is down
+would have stored the key in a column and displayed it back. It is the same class of sink as
+the other four and needed no separate fix — removing the key from the URL closed it too.
 
 **`RequestException` was never a vector** — `prepareMessage()` builds its message from the
 response status and body only, never the request URL. Only `ConnectionException` leaked,
@@ -237,7 +244,7 @@ $res = Http::get(self::PLACES_URL, $params)->json();
 | 2 | `Leads/Services/GooglePlacesScraper.php` | 76–79 | Places `details` |
 | 3 | `Integrations/Services/ConnectionTester.php` | 176 | Places `textsearch` (admin test button) |
 
-It reaches the **same four paths** listed in BUG-005 — the errors log channel,
+It reaches the **same five paths** listed in BUG-005 — the errors log channel,
 `failed_jobs.exception`, the admin queue UI, and any `catch (\Throwable)` that returns
 `getMessage()` to a client. `GooglePlacesScraper` runs inside `ScrapeLeadsJob`, so path 2
 (the `failed_jobs` table) is the most likely destination.
