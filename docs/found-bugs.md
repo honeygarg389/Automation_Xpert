@@ -139,3 +139,109 @@ Ruled by the project owner. Do not re-open this question per module.
 UI — a field the frontend always sends cannot trigger the bug in practice, even though the
 pattern is fragile. Prioritise anything reachable from a form with optional inputs. Note that
 BUG-001 was found by accident, not by looking; the others will not surface on their own.
+
+---
+
+## BUG-004 — Unreachable error handling after `Http::retry()` at 5 AI call sites
+
+**Severity:** Medium (not a crash — misleading code that will cause a wrong fix later)
+**Found:** 2026-08-06, while planning Group D of the retry work. **Not fixed** — separate concern.
+
+Five call sites follow `Http::retry(...)` with a `successful()` guard that **can never run**:
+
+```php
+$resp = Http::retry(2, 500)->timeout(60)->post(...);
+
+if (! $resp->successful()) {
+    throw new \RuntimeException('OpenAI chat failed: '.$resp->body());   // unreachable
+}
+```
+
+`PendingRequest::retry()` defaults to `$throw = true`, and the send loop ends with:
+
+```php
+// vendor/laravel/framework/src/Illuminate/Http/Client/PendingRequest.php:1075-1077
+if ($potentialTries > 1 && $this->retryThrow) {
+    $response->throw();
+}
+```
+
+With `times = 2`, `$potentialTries > 1` is true, so **any** unsuccessful response throws
+`RequestException` from inside `retry()`. Execution never reaches the guard below it.
+
+**Sites:**
+
+| File | Method | Exception it *thinks* it throws |
+|---|---|---|
+| `AI/Services/Llm/OpenAiProvider.php` | `chat()` | `RuntimeException` |
+| `AI/Services/Llm/OpenAiProvider.php` | `embed()` | `RuntimeException` |
+| `AI/Services/Llm/AnthropicProvider.php` | `chat()` | `RuntimeException` |
+| `AI/Services/Llm/GeminiProvider.php` | `chat()` | `RuntimeException` |
+| `AI/Services/Llm/GeminiProvider.php` | `embed()` | `RuntimeException` |
+
+**Why it matters.** `RequestException extends HttpClientException extends Exception` — it is
+**not** a `RuntimeException`. Any caller written to `catch (\RuntimeException $e)` around these
+providers is not catching the failure it was written for. `AiKnowledgeBaseController` catches
+exactly that (`catch (\RuntimeException $e)` at two sites), so the intended user-facing error
+message cannot be produced by an HTTP failure.
+
+The two `IndexDocumentJob` sites differ: they `return ''` rather than throwing, so their guard
+is unreachable too, but the consequence is that the exception propagates out of the job and
+the (jittered) job-level backoff takes over — which is arguably the correct behaviour.
+
+**Deliberately not fixed in Group D.** Group D changed only retry *timing* and the retry
+*predicate*; it did not touch `times` or error handling. Fixing this means choosing between
+`throw: false` plus a real guard, or deleting the dead guard and catching `RequestException`
+at the callers — a behaviour change with its own blast radius. Decide it on its own.
+
+---
+
+## BUG-005 — Gemini API key travels in the URL and reaches logs, the DB, and API responses
+
+**Severity:** Critical (credential disclosure) — **violates the CLAUDE.md rule that provider
+tokens are never logged**
+**Found:** 2026-08-06, at the Group D Gemini gate. **Not fixed** — GeminiProvider was
+deliberately excluded from Group D pending this decision.
+
+`GeminiProvider` authenticates with a query-string parameter, not a header:
+
+```php
+// AI/Services/Llm/GeminiProvider.php:44 and :76
+->post(self::BASE."/models/{$model}:generateContent?key={$this->apiKey}", $body);
+```
+
+On a **connection failure** (DNS, TLS, timeout — not an HTTP error status), Guzzle builds the
+message and appends the URI verbatim:
+
+```php
+// vendor/guzzlehttp/guzzle/src/Handler/CurlFactory.php:271
+$message .= sprintf(' for %s', $redactedUriString);
+```
+
+`Utils::redactUserInfo()` redacts only `user:pass@host` credentials — **it does not touch the
+query string**. Laravel wraps that message unchanged in `ConnectionException`. The key is now
+inside an exception message, and four paths record it:
+
+| # | Path | Where it ends up |
+|---|---|---|
+| 1 | `bootstrap/app.php:146` — `Log::channel('errors')->error($e->getMessage(), …)` | **every** reportable exception's message is logged, on disk |
+| 2 | `failed_jobs.exception` (`longText`) via `IndexDocumentJob` → `LlmGateway::embed()` | persisted in the database |
+| 3 | `Admin/QueueController.php:29` → `Admin/Queue/Index.jsx:72` | rendered in the admin UI (`title={job.exception}` shows the full text on hover) |
+| 4 | `AiChatbotController.php:112` — `catch (\Throwable $e)` → `response()->json(['error' => $e->getMessage()], 422)` | **returned to the browser** |
+
+Path 4 is the worst: it is not merely logging, it hands the key to the HTTP client. The chain
+is reachable — `AiChatbotController::test()` → `ChatbotRunner::run()` → `LlmGateway::chat()` →
+`LlmManager::forWorkspace()`, and `LlmManager:91` constructs `GeminiProvider` whenever the
+workspace selects `gemini` (it is in both the chat and embed fallback orders).
+
+Sentry (`bootstrap/app.php:154`) would capture it too; currently inert because no DSN is set.
+
+**Note:** `RequestException` is *not* a vector — `prepareMessage()` builds its message from the
+response status and body only, never the request URL. **Only `ConnectionException` leaks.** So
+this needs a network failure, not an API error, which is exactly the condition retries make
+more likely to be hit repeatedly.
+
+**Suggested fix (not applied, not approved):** send the key as the `x-goog-api-key` header,
+which the Gemini REST API accepts, so it never enters a URI. Failing that, scrub the query
+string from `ConnectionException` messages centrally before anything reports them. The
+existing log/response paths should also be reviewed for returning raw `getMessage()` to users.
