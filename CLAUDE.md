@@ -203,6 +203,26 @@ Rules:
   Both were caught only because a test failed for an unexpected reason. Search for the
   concept, not the symbol you already have: sibling methods on the related model, the policy,
   the middleware, and any service that answers the same question.
+- **A clean merge is not evidence that a document is coherent.** Git conflicts on overlapping
+  *lines*, not contradictory *meaning*. Two branches that append to different regions of the
+  same file merge silently — and append-structured files (`docs/found-bugs.md`, roadmaps,
+  changelogs) are exactly the shape that produces contradictions no conflict marker will
+  flag.
+
+  This happened: `docs/bug-007-scope` carried an authoritative four-defect BUG-007 and
+  `fix/places-key-in-url` carried a narrower superseded one. `git merge-tree` exited **0** and
+  produced a file with **two contradictory BUG-007 sections** and no warning. It was caught
+  only because the merge was dry-run first and then run with `--no-commit`.
+
+  So: **dry-run every doc merge** (`git merge-tree --write-tree`), and when two branches both
+  touch a tracked document, **merge with `--no-commit` and inspect** — a clean exit means
+  "no overlapping lines", never "the result makes sense". Verify the structure afterwards
+  (`grep -c '^## BUG-'` and friends) rather than trusting the absence of conflict markers.
+
+  Related trap: `git commit` during a merge commits the **index**. Editing a file to resolve
+  something *after* the merge staged it, without re-running `git add`, commits the unresolved
+  version while the working tree looks correct. Check the committed tree
+  (`git show <ref>:<path>`), not the working file.
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
   asking.
