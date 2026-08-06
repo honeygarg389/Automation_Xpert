@@ -2,7 +2,7 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **591 tests, 37,885 assertions, 0 failures.**
+> The suite passes: **625 tests, 37,925 assertions, 0 failures.**
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
 > failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
@@ -10,9 +10,17 @@
 >
 > **But read the caveat below before treating green as assurance.**
 
-**Current number recorded:** 2026-08-06, on `master` at `49a3b92`, immediately after the
-two Phase 0 merges. This is the first full run since MySQL access was restored on this
-machine, so it is the honest current figure rather than a carried-forward one.
+**Current number recorded:** 2026-08-06, on `master` at `7a2fb01`, after the BUG-005 and
+Group D merges. Every figure here is measured, not carried forward.
+
+**How it reached 625 from the 591 recorded earlier the same day** — two `--no-ff` merges,
+each with its own suite run, and the total is exactly the sum because both branches added
+only new test files and touched disjoint source files:
+
+| Merge | Adds | Running total |
+|---|---|---|
+| `b4b0520` — BUG-005, Gemini key removed from URLs | 9 security tests | 600 |
+| `7a2fb01` — Group D, retry wiring at 6 AI HTTP sites | 25 wiring tests | **625** |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
@@ -27,18 +35,18 @@ php -d memory_limit=2G vendor/phpunit/phpunit/phpunit --no-coverage
 `-d memory_limit`, so it dies at the 128 MB default. `vendor/bin/phpunit` is not executable
 in this working copy (flattened symlinks).
 
-## Result — current (2026-08-06, `master` @ `49a3b92`)
+## Result — current (2026-08-06, `master` @ `7a2fb01`)
 
 | Metric | Value |
 |---|---|
-| Tests | **591** |
-| Assertions | 37,885 |
+| Tests | **625** |
+| Assertions | 37,925 |
 | **Failures** | **0** |
 | Errors | **0** |
 | Skipped | **0** |
 | Risky / Incomplete | **0** |
-| Time | 29.9 s |
-| Peak memory | 149 MB |
+| Time | 18.8 s |
+| Peak memory | 151 MB |
 | Connection | `mysql` → **`whatsmine_test`** ✅ (working DB untouched) |
 
 The two `S` markers recorded in the original baseline (DNS-dependent cases in
@@ -125,6 +133,8 @@ lands — but it must be re-derived against tests that actually exercise the pat
 | 2026-08-03 | Baseline recorded (after §0.0) | 440 | **29** | — |
 | 2026-08-03 | TASK 1 — repaired the 11 SSRF test defects (`fix/webhook-ssrf-tests`) | 440 | **18** | −11, zero regressions |
 | 2026-08-06 | Phase 0 merges landed on `master` (`310580e`, `49a3b92`) | 591 | **0** | +145 tests, zero regressions |
+| 2026-08-06 | BUG-005 merged (`b4b0520`) — Gemini key out of URLs | 600 | **0** | +9 security tests |
+| 2026-08-06 | Group D merged (`7a2fb01`) — retry wiring at 6 AI HTTP sites | 625 | **0** | +25 wiring tests |
 
 **TASK 1 detail.** Both causes were test defects; neither touched production code.
 
@@ -177,11 +187,11 @@ not reliably detect its removal. See §G-1c in `phase-0-tenant-isolation-plan.md
 Countermeasure now in force (`CLAUDE.md`): every "is blocked" test must carry a positive
 control proving the same route succeeds for the legitimate user.
 
-**The assertion count is not a coverage measure.** Of the 37,885 assertions, roughly 32,000
+**The assertion count is not a coverage measure.** Of the 37,925 assertions, roughly 32,000
 come from `JitterTest` alone, whose randomised-draw loops assert an invariant on every draw.
 The Unit suite accounts for 36,711 assertions across just 104 tests; the Feature suite — where
 tenant isolation is actually proven — carries only 1,174 across 487 tests. The jump from 1,041
-to 37,885 assertions therefore reflects one loop-heavy unit test, **not** a 36× increase in
+to 37,925 assertions therefore reflects one loop-heavy unit test, **not** a 36× increase in
 coverage. Judge coverage by what the Feature suite exercises, never by this total.
 
 **Status of the workspace-context work on `master`.** The five completed 1c modules — Leads,
