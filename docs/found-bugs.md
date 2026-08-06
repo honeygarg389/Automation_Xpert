@@ -326,3 +326,34 @@ needs a different fix and belongs on its own branch. Options, none evaluated in 
 
 Option 1 is the one that would have prevented BUG-005 too. **Decide deliberately; do not
 default to the narrowest fix.**
+
+---
+
+## 📌 Status note — retry work (Group D), as of 2026-08-06
+
+Not a bug. Recorded here because it corrects a **pushed, immutable** commit message, and
+because the two findings it depends on — BUG-004 and BUG-005 — are on this page.
+
+**Landed on `master` (`7a2fb01`).** Four of the five files named as untouched are wired and
+tested: `OpenAiProvider` (chat + embed), `AnthropicProvider`, `EmbeddingStore`
+(`qdrantClient()`, keeping its 300ms base), `IndexDocumentJob` (fetchUrl + processSitemap).
+Six sites, 25 wiring tests, all stash-checked.
+
+**Genuinely outstanding:**
+
+1. **`GeminiProvider`'s retry wiring** — both sites still use the bare `Http::retry(2, 500)`.
+   It was deferred behind BUG-005, because the key travelled in the URL and retrying a
+   connection failure multiplied the leak. **BUG-005 is now fixed, so this can proceed.**
+2. **Per-job `backoff()` tests for the 16 queued jobs** — still none. No test exercises
+   `backoff()` on any job; 8 of the 16 have no test reference at all. `Queue::fake()` never
+   resolves a backoff schedule, so the green suite says nothing about them.
+
+Both live on `fix/retry-backoff-jitter`, which is kept for that reason.
+
+**⚠️ `24ecbf1`'s PARTIAL disclosure now overstates what is outstanding.** It lists
+`OpenAiProvider, AnthropicProvider, GeminiProvider, EmbeddingStore, IndexDocumentJob:138,240`
+as untouched; only `GeminiProvider` still is. It also says the work was never verified against
+the suite, which was true when MySQL access was broken on the dev machine and is no longer.
+
+It is **left unedited on purpose** — it is pushed history and an accurate record of what was
+known at that commit. This note supersedes it. Read them together, not separately.
