@@ -101,8 +101,13 @@ class ConnectionTester
         }
 
         if (str_contains($config->provider, 'gemini')) {
-            $resp = HttpFacade::timeout(15)
-                ->get("https://generativelanguage.googleapis.com/v1beta/models?key={$apiKey}");
+            // Key travels as a header, never in the URL: Guzzle appends the URI to
+            // ConnectionException messages, and test() below catches \Throwable and
+            // persists that message to integration_configs.last_test_message, where
+            // the admin UI renders it. See BUG-005.
+            $resp = HttpFacade::withHeaders(['x-goog-api-key' => $apiKey])
+                ->timeout(15)
+                ->get('https://generativelanguage.googleapis.com/v1beta/models');
 
             return $resp->successful()
                 ? ['ok' => true,  'message' => 'Gemini connection successful.']
