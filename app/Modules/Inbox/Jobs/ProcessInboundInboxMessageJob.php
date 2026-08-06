@@ -4,6 +4,7 @@ namespace App\Modules\Inbox\Jobs;
 
 use App\Modules\Inbox\Services\InstagramDriver;
 use App\Modules\Inbox\Services\MessengerDriver;
+use App\Support\Retry\Jitter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,9 +25,18 @@ class ProcessInboundInboxMessageJob implements ShouldQueue
     public int $maxExceptions = 3;
 
     /** Exponential back-off in seconds. */
+    private const BACKOFF_SECONDS = [30, 60, 120, 240, 300];
+
+    /**
+     * Hard ceiling. The schedule already grew and capped correctly, so jitter is
+     * capped at the same 300 s rather than being allowed to lift the tail.
+     */
+    public const BACKOFF_CAP_SECONDS = 300;
+
+    /** @return list<int> */
     public function backoff(): array
     {
-        return [30, 60, 120, 240, 300];
+        return Jitter::jittered(self::BACKOFF_SECONDS, Jitter::DEFAULT_RATIO, self::BACKOFF_CAP_SECONDS);
     }
 
     public function __construct(

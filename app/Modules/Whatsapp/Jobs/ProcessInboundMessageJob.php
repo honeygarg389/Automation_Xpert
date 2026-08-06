@@ -3,6 +3,7 @@
 namespace App\Modules\Whatsapp\Jobs;
 
 use App\Modules\Whatsapp\Services\WhatsappDriver;
+use App\Support\Retry\Jitter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,9 +25,18 @@ class ProcessInboundMessageJob implements ShouldQueue
     public int $maxExceptions = 3;
 
     /** Exponential back-off in seconds: 30 s, 60 s, 120 s, 240 s, 300 s. */
+    private const BACKOFF_SECONDS = [30, 60, 120, 240, 300];
+
+    /**
+     * Hard ceiling. The schedule already grew and capped correctly, so jitter is
+     * capped at the same 300 s rather than being allowed to lift the tail.
+     */
+    public const BACKOFF_CAP_SECONDS = 300;
+
+    /** @return list<int> */
     public function backoff(): array
     {
-        return [30, 60, 120, 240, 300];
+        return Jitter::jittered(self::BACKOFF_SECONDS, Jitter::DEFAULT_RATIO, self::BACKOFF_CAP_SECONDS);
     }
 
     public function __construct(

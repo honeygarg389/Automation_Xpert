@@ -8,6 +8,7 @@ use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Segment;
 use App\Modules\Shared\Services\ContactService;
 use App\Modules\Shared\Services\SegmentResolver;
+use App\Support\Retry\Jitter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,6 +22,24 @@ class LaunchCampaignJob implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
+    /**
+     * Base retry schedule in seconds, before jitter. Declared no backoff at all
+     * before, so both attempts fired back-to-back inside the same failure
+     * window and the second was spent before the fault could clear.
+     */
+    private const BACKOFF_SECONDS = [30, 120];
+
+    /** Ceiling on any single jittered delay: 120 + 30% jitter. */
+    public const BACKOFF_CAP_SECONDS = 156;
+
+    /**
+     * @return list<int>
+     */
+    public function backoff(): array
+    {
+        return Jitter::jittered(self::BACKOFF_SECONDS);
+    }
 
     public function __construct(public readonly int $campaignId) {}
 
