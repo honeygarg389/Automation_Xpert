@@ -2,7 +2,7 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **446 tests, 1041 assertions, 0 failures.**
+> The suite passes: **591 tests, 37,885 assertions, 0 failures.**
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
 > failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
@@ -10,7 +10,11 @@
 >
 > **But read the caveat below before treating green as assurance.**
 
-**Recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
+**Current number recorded:** 2026-08-06, on `master` at `49a3b92`, immediately after the
+two Phase 0 merges. This is the first full run since MySQL access was restored on this
+machine, so it is the honest current figure rather than a carried-forward one.
+
+**Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
 
 ## Command
@@ -23,20 +27,39 @@ php -d memory_limit=2G vendor/phpunit/phpunit/phpunit --no-coverage
 `-d memory_limit`, so it dies at the 128 MB default. `vendor/bin/phpunit` is not executable
 in this working copy (flattened symlinks).
 
-## Result
+## Result — current (2026-08-06, `master` @ `49a3b92`)
 
 | Metric | Value |
 |---|---|
-| Tests | **440** |
+| Tests | **591** |
+| Assertions | 37,885 |
+| **Failures** | **0** |
+| Errors | **0** |
+| Skipped | **0** |
+| Risky / Incomplete | **0** |
+| Time | 29.9 s |
+| Peak memory | 149 MB |
+| Connection | `mysql` → **`whatsmine_test`** ✅ (working DB untouched) |
+
+The two `S` markers recorded in the original baseline (DNS-dependent cases in
+`PublicHttpUrlTest`) are gone; nothing is skipped.
+
+### Original baseline for comparison (2026-08-03, after §0.0)
+
+| Metric | Value |
+|---|---|
+| Tests | 440 |
 | Assertions | 975 |
 | **Failures** | **29** |
 | Errors | 0 |
 | Skipped | 2 (`S` markers — DNS-dependent cases in `PublicHttpUrlTest`) |
 | Time | 22.7 s |
 | Peak memory | 137 MB |
-| Connection | `mysql` → **`whatsmine_test`** ✅ (working DB untouched) |
 
-## Failure attribution
+## Failure attribution — historical (2026-08-03)
+
+The attribution below describes the **original** 29 failures and is kept as the record of
+how the gate reached zero. All of it is resolved; none of these tests fail today.
 
 **18 pre-existing · 11 introduced by the SSRF commit (mine)**
 
@@ -101,6 +124,7 @@ lands — but it must be re-derived against tests that actually exercise the pat
 |---|---|---|---|---|
 | 2026-08-03 | Baseline recorded (after §0.0) | 440 | **29** | — |
 | 2026-08-03 | TASK 1 — repaired the 11 SSRF test defects (`fix/webhook-ssrf-tests`) | 440 | **18** | −11, zero regressions |
+| 2026-08-06 | Phase 0 merges landed on `master` (`310580e`, `49a3b92`) | 591 | **0** | +145 tests, zero regressions |
 
 **TASK 1 detail.** Both causes were test defects; neither touched production code.
 
@@ -152,6 +176,26 @@ not reliably detect its removal. See §G-1c in `phase-0-tenant-isolation-plan.md
 
 Countermeasure now in force (`CLAUDE.md`): every "is blocked" test must carry a positive
 control proving the same route succeeds for the legitimate user.
+
+**The assertion count is not a coverage measure.** Of the 37,885 assertions, roughly 32,000
+come from `JitterTest` alone, whose randomised-draw loops assert an invariant on every draw.
+The Unit suite accounts for 36,711 assertions across just 104 tests; the Feature suite — where
+tenant isolation is actually proven — carries only 1,174 across 487 tests. The jump from 1,041
+to 37,885 assertions therefore reflects one loop-heavy unit test, **not** a 36× increase in
+coverage. Judge coverage by what the Feature suite exercises, never by this total.
+
+**Status of the workspace-context work on `master`.** The five completed 1c modules — Leads,
+Social, Automation, Client-controllers (CampaignReport) and Broadcasting — are merged and
+covered by 67 green isolation tests. **1c groups 6–12 remain unmigrated.** The three
+characterisation tests in `WorkspaceContextTest` still assert the **broken** behaviour by
+design (`Characterisation: switching workspace does not affect controllers today`); they pass
+because the bug is still exactly as documented, and they invert when 1c completes. Green on
+those three means "unchanged", not "fixed".
+
+**The retry work is partial.** No test exercises `backoff()` on any job — 8 of the 16 jobs
+have no test reference at all, and the only occurrences of "backoff" in `tests/` are two
+comments. Job references are `Queue::assertPushed` under `Queue::fake()`, which never resolves
+a backoff schedule. See `24ecbf1` for the full disclosure.
 
 ## Discovered along the way
 
