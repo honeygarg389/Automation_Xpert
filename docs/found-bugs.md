@@ -329,6 +329,135 @@ default to the narrowest fix.**
 
 ---
 
+## BUG-007 — Google Places lead scraping has NEVER worked: four stacked defects
+
+**Severity:** Critical — a shipped feature that has never functioned, and one layer is a
+tenant-isolation defect
+**Found:** 2026-08-07, while writing the BUG-006 regression tests. **Not fixed.**
+
+> **This is a BUILD TASK, not a patch.** Do not attempt a one-line fix. The defects are
+> stacked: fixing each one wakes the next, and the path below the first has never executed at
+> all. It needs building deliberately against live Google Places documentation, with tests.
+
+> **Provenance.** This was first recorded as a one-line "undefined method" bug. That
+> understated it. A full trace of the dead path found **four stacked defects**, one of which
+> (#4) is a tenant-isolation issue that has nothing to do with Places. The entry was rewritten
+> so the next person treats it as a build, not a patch. It supersedes the narrower BUG-007 on
+> `fix/places-key-in-url`; keep this version when those branches merge.
+
+Every layer below was verified against the actual code. Nothing here is inferred by analogy.
+
+### 1. `generic()` does not exist — fatal on the first statement
+
+`app/Modules/Leads/Services/GooglePlacesScraper.php:29`:
+
+```php
+$creds = $this->credentials->generic('google_places');
+```
+
+`CredentialResolver` has seven public methods — `meta`, `oauth`, `llm`, `sms`, `googlePlaces`,
+`google`, `qdrant` — and **no `generic()`, no `__call()`, no `__get()`**. The method it wants
+is `googlePlaces()`. Proven at runtime:
+
+```
+method_exists generic():  NO
+method_exists __call():   NO
+generic() -> Error: Call to undefined method CredentialResolver::generic()
+```
+
+`run()` wraps everything in `catch (\Throwable)` and writes the message to
+`lead_scrape_jobs.error`, so this is invisible as a crash. **Every lead-scrape job any
+customer has ever run has failed here**, with "Call to undefined method …" sitting in that
+column. Nothing reaches `failed_jobs`, so `ScrapeLeadsJob`'s `$tries = 2` never fires.
+
+### 2. The naive fix converts the fatal into a different fatal
+
+`googlePlaces(): ?GenericCredentials` takes **no arguments** and is **nullable** — `resolve()`
+returns `null` when the provider has no `IntegrationConfig`, when it is disabled, or when its
+credentials are empty. Line 30 dereferences it unguarded:
+
+```php
+$apiKey = $creds->get('api_key');
+```
+
+Confirmed at runtime: `googlePlaces() -> NULL`. So swapping the method name alone turns
+"Call to undefined method" into **"Call to a member function get() on null"** for every
+workspace that has not configured Places — which is the **default state**. The existing
+`if (! $apiKey)` guard on line 31 was clearly meant to cover this; it sits one line too late.
+
+### 3. The Places `status` field is never checked — silent success on failure
+
+The legacy Places API returns **HTTP 200** with a `status` body field: `OK`, `ZERO_RESULTS`,
+`REQUEST_DENIED`, `OVER_QUERY_LIMIT`, `INVALID_REQUEST`. The scraper reads only
+`$res['results'] ?? []` and never looks at `status`.
+
+An invalid key, a billing failure or a quota breach therefore returns 200, `results` is
+absent, `$count` stays 0, and the job is marked **`done` with 0 leads**. The user sees
+"completed, found nothing" — indistinguishable from a genuinely empty search.
+
+`Integrations/Services/ConnectionTester.php:186` **does** check `status` for the same API.
+One concept, two implementations, only one correct — the pattern CLAUDE.md warns about.
+
+### 4. ⚠️ Cross-tenant lead theft — a tenant-isolation defect, not a Places bug
+
+```php
+Lead::updateOrCreate(['google_place_id' => $placeId], ['workspace_id' => $workspaceId, …]);
+```
+
+- `google_place_id` is **globally `unique()`** in the schema — not composite with
+  `workspace_id` (`create_leads_tables.php:26`).
+- `Lead` has **no `BelongsToWorkspace` trait and no global scope** — only `HasFactory` and
+  `MasksDemoData`.
+- `updateOrCreate` matches on `google_place_id` **alone**, then overwrites `workspace_id`.
+
+So when workspace B scrapes an area workspace A has already scraped, the match finds **A's
+row** and reassigns it to B. The lead is **transferred, not duplicated** — workspace A
+silently loses data to another tenant. For a lead-generation product where two customers
+plausibly scrape the same city, this is not a corner case.
+
+**This intersects Phase 0 directly.** It is exactly the class of defect the
+`BelongsToWorkspace` global scope exists to prevent, and `Lead` is a customer-owned model
+with a `workspace_id` column that does not carry the trait. It should be picked up by the
+Phase 0 CI guard (any model whose table has `workspace_id` but lacks the trait), and the fix
+needs a schema decision — a composite unique on `(workspace_id, google_place_id)` plus a data
+migration for existing rows — not a code tweak. **Do not fix this inside a Places branch.**
+
+### What must be verified against live documentation when this is built
+
+Nothing below has ever executed, so none of it is confirmed by observation:
+
+- **Response shape** — `results[].place_id / name / formatted_address / types / rating /
+  user_ratings_total / geometry.location`, and details `result.formatted_phone_number /
+  website`. These match the legacy API as documented, and every read is `?? null` guarded,
+  but no real response from this account has ever been seen.
+- **The endpoint is Legacy.** Google marks `maps.googleapis.com/maps/api/place/*` as legacy
+  and directs new work to the Places API (New) at `places.googleapis.com/v1`, which also
+  accepts the key as an `X-Goog-Api-Key` header instead of a query parameter. Decide which
+  API to build against **before** writing code — that choice also determines whether BUG-006
+  applies at all.
+- **Cost.** `upsertPlace()` makes **one Place Details call per result**, billed separately and
+  more expensively than Text Search. A 60-result scrape becomes 60+ billed calls. Nobody has
+  ever seen this bill.
+- **`fields=formatted_phone_number,website,url`** requests `url`, which is never consumed.
+- **`sleep(2)`** between pagination pages runs inside a queued job, stalling a worker.
+- **Unbounded loop** — `while ($pageToken)` has no page cap, no result cap, and no plan-limit
+  check before scraping.
+- **`UsageMeter::track(…, 'lead_credits', $count)`** has never incremented; the billing path
+  goes live with the feature.
+
+### Interaction with BUG-006
+
+The two `GooglePlacesScraper` leak sites in BUG-006 **stay latent until this is built**. They
+are protected-in-advance by the `ConnectionExceptionScrubber` middleware once
+`fix/places-key-in-url` merges, but are not reachable meanwhile — execution never gets as far
+as the network. The `ConnectionTester` Places site is the only one that leaks live today.
+
+That is also why BUG-006's `GooglePlacesScraper` consequence test is **skipped** rather than
+written: with the scraper dead, it would pass because no request was ever made, not because
+anything was scrubbed. Un-skip it when this feature is built.
+
+---
+
 ## 📌 Status note — retry work (Group D), as of 2026-08-06
 
 Not a bug. Recorded here because it corrects a **pushed, immutable** commit message, and
