@@ -15,6 +15,7 @@ use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use App\Modules\Whatsapp\Services\CloudApiClient;
+use App\Support\Retry\Jitter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -34,7 +35,28 @@ class SendCampaignMessageJob implements ShouldQueue
 
     public int $tries = 3;
 
-    public int $backoff = 60;
+    /**
+     * Base retry schedule in seconds, before jitter.
+     *
+     * Was a flat `public int $backoff = 60`. This job fans out one instance per
+     * recipient, so a provider outage mid-campaign fails thousands of them
+     * inside the same second — and a constant 60 then sent all of those retries
+     * back at the recovering provider in the same second too, repeatedly. The
+     * schedule now grows so successive waves spread out, and jitter smears each
+     * wave across a window instead of a single instant.
+     */
+    private const BACKOFF_SECONDS = [60, 180, 600];
+
+    /** Ceiling on any single jittered delay: 600 + 30% jitter. */
+    public const BACKOFF_CAP_SECONDS = 780;
+
+    /**
+     * @return list<int>
+     */
+    public function backoff(): array
+    {
+        return Jitter::jittered(self::BACKOFF_SECONDS);
+    }
 
     public function __construct(
         public readonly int $campaignId,

@@ -5,6 +5,7 @@ namespace App\Modules\Ecommerce\Jobs;
 use App\Events\CommerceEventReceived;
 use App\Modules\Ecommerce\Models\EcommerceCart;
 use App\Modules\Ecommerce\Models\EcommerceOrder;
+use App\Support\Retry\Jitter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -17,6 +18,18 @@ class CheckAbandonedCartJob implements ShouldQueue
     use Queueable;
 
     public int $tries = 2;
+
+    /** Base retry schedule in seconds, before jitter. Previously none: both attempts fired back-to-back. */
+    private const BACKOFF_SECONDS = [30, 120];
+
+    /** Ceiling on any single jittered delay: 120 + 30% jitter. */
+    public const BACKOFF_CAP_SECONDS = 156;
+
+    /** @return list<int> */
+    public function backoff(): array
+    {
+        return Jitter::jittered(self::BACKOFF_SECONDS);
+    }
 
     public function __construct(public readonly int $cartId) {}
 

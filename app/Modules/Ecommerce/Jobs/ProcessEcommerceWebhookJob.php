@@ -13,6 +13,7 @@ use App\Modules\Ecommerce\Services\ContactEnricher;
 use App\Modules\Ecommerce\Services\PayloadNormalizer;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Services\ContactService;
+use App\Support\Retry\Jitter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -24,6 +25,18 @@ class ProcessEcommerceWebhookJob implements ShouldQueue
     public int $tries = 3;
 
     public int $timeout = 60;
+
+    /** Base retry schedule in seconds, before jitter. Previously none: all 3 attempts fired back-to-back. */
+    private const BACKOFF_SECONDS = [30, 120, 300];
+
+    /** Ceiling on any single jittered delay: 300 + 30% jitter. */
+    public const BACKOFF_CAP_SECONDS = 390;
+
+    /** @return list<int> */
+    public function backoff(): array
+    {
+        return Jitter::jittered(self::BACKOFF_SECONDS);
+    }
 
     /** Minutes to wait before treating an unconverted checkout as abandoned. */
     public const ABANDONED_AFTER_MINUTES = 30;

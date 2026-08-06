@@ -6,6 +6,7 @@ use App\Modules\Ecommerce\Models\EcommerceProduct;
 use App\Modules\Ecommerce\Models\EcommerceStore;
 use App\Modules\Ecommerce\Services\Clients\StoreClientFactory;
 use App\Modules\Ecommerce\Services\PayloadNormalizer;
+use App\Support\Retry\Jitter;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -21,7 +22,20 @@ class SyncStoreProductsJob implements ShouldQueue
 
     public int $timeout = 120;
 
-    public array $backoff = [30, 120, 300];
+    /**
+     * Backoff (seconds) between retries. Unchanged schedule — a property could
+     * not carry jitter, since a property initializer cannot call random_int().
+     */
+    private const BACKOFF_SECONDS = [30, 120, 300];
+
+    /** Hard ceiling: jitter must not lift the tail above the existing cap. */
+    public const BACKOFF_CAP_SECONDS = 300;
+
+    /** @return list<int> */
+    public function backoff(): array
+    {
+        return Jitter::jittered(self::BACKOFF_SECONDS, Jitter::DEFAULT_RATIO, self::BACKOFF_CAP_SECONDS);
+    }
 
     public function __construct(
         public readonly int $storeId,

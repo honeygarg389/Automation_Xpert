@@ -8,6 +8,8 @@ use App\Modules\AI\Services\EmbeddingStore;
 use App\Modules\AI\Services\Llm\LlmManager;
 use App\Modules\AI\Services\LlmGateway;
 use App\Services\StorageManager;
+use App\Support\Retry\HttpRetry;
+use App\Support\Retry\Jitter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -25,6 +27,18 @@ class IndexDocumentJob implements ShouldQueue
     public int $tries = 3;
 
     public int $timeout = 120;
+
+    /** Base retry schedule in seconds, before jitter. Previously none: all 3 attempts fired back-to-back. */
+    private const BACKOFF_SECONDS = [30, 120, 300];
+
+    /** Ceiling on any single jittered delay: 300 + 30% jitter. */
+    public const BACKOFF_CAP_SECONDS = 390;
+
+    /** @return list<int> */
+    public function backoff(): array
+    {
+        return Jitter::jittered(self::BACKOFF_SECONDS);
+    }
 
     public function __construct(public readonly int $documentId) {}
 
