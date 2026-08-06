@@ -3,8 +3,10 @@
 namespace App\Modules\AI\Services;
 
 use App\Modules\AI\Models\AiKbChunk;
+use App\Support\Retry\HttpRetry;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Vector storage and similarity search.
@@ -57,7 +59,14 @@ class EmbeddingStore
     {
         $client = Http::baseUrl(rtrim(config('services.qdrant.url'), '/'))
             ->timeout(10)
-            ->retry(2, 300);
+            // Qdrant is self-hosted, so connection failures are the common case and
+            // a 4xx usually means a genuinely malformed request. baseMs stays 300
+            // to preserve this client's existing (tighter) schedule.
+            ->retry(
+                times: 2,
+                sleepMilliseconds: fn (int $attempt, Throwable $e) => HttpRetry::sleepMs($attempt, $e, baseMs: 300),
+                when: fn (Throwable $e) => HttpRetry::shouldRetry($e),
+            );
 
         $apiKey = config('services.qdrant.api_key');
         if ($apiKey) {
