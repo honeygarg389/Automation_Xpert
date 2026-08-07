@@ -192,9 +192,28 @@ class InboundWebhookWorkspaceContextTest extends TestCase
     }
 
     /**
-     * The other half: with the driver establishing context per message, tenant
-     * B's pre-existing contact is REUSED rather than duplicated — which is only
-     * possible if the lookup ran in B's context, not A's.
+     * ⚠️ THIS IS THE TEST THAT ACTUALLY DISCRIMINATES. Read why.
+     *
+     * A stash-check showed the two-tenant test above passes WITH OR WITHOUT the
+     * driver's per-message `for()`. With no pre-existing rows, the explicit
+     * `workspace_id` arguments carry it: the scope filters READS, and creating a
+     * row that does not exist yet needs no successful read. Both messages land
+     * either way. That test proves correct SEPARATION; it does not prove the
+     * mechanism.
+     *
+     * The discriminator is an EXISTING row that must be MATCHED. With tenant B's
+     * contact already present:
+     *
+     *   with for()     lookup runs in B's context, finds it, updates. Message lands.
+     *   without for()  context is null, the scope fails closed, the lookup misses,
+     *                  updateOrCreate attempts an INSERT, the UNIQUE index on
+     *                  (workspace_id, phone_e164) refuses it, the exception is
+     *                  swallowed by the driver's per-message try/catch, and
+     *                  TENANT B'S MESSAGE IS SILENTLY DROPPED.
+     *
+     * Measured: without the for(), messages total 1 instead of 2. The contact
+     * count stays 1 either way — which is why asserting only on contacts, as I
+     * first did, could not fail.
      */
     #[Test]
     public function the_per_message_context_lets_the_driver_match_an_existing_contact_in_the_right_tenant(): void
@@ -217,6 +236,17 @@ class InboundWebhookWorkspaceContextTest extends TestCase
         $this->assertSame(1, DB::table('contacts')->where('phone_e164', '+8802000000002')->count(),
             'Tenant B\'s existing contact was duplicated, so the lookup did not run in B\'s context.');
         $this->assertSame(202, (int) DB::table('contacts')->where('phone_e164', '+8802000000002')->value('workspace_id'));
+
+        // THE LOAD-BEARING ASSERTION. Without the per-message for() the contact
+        // insert is refused by the unique index, the driver swallows it, and
+        // this message never exists. Asserting on contacts alone cannot see that.
+        $this->assertSame(2, DB::table('messages')->count(),
+            'Tenant B\'s message was dropped. The contact lookup ran in the wrong workspace, hit '
+            .'the UNIQUE (workspace_id, phone_e164) index, and the per-message try/catch swallowed it.');
+        $this->assertNotNull(
+            DB::table('messages')->where('provider_message_id', 'wamid.BBB')->first(),
+            'Tenant B\'s message specifically is the one that goes missing.'
+        );
     }
 
     /** POSITIVE CONTROL: a single-tenant payload still works normally. */
