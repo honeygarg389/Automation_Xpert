@@ -1,0 +1,146 @@
+<?php
+
+namespace Tests\Feature\Workspace;
+
+use PHPUnit\Framework\Attributes\Test;
+use RecursiveDirectoryIterator;
+use RecursiveIteratorIterator;
+use Tests\TestCase;
+
+/**
+ * Phase 0, slice 2. The bypass inventory.
+ *
+ * `withoutWorkspaceScope('reason: …')` requires a reason by signature, which
+ * makes each bypass self-documenting. It does not make them *countable* — and a
+ * bypass that nobody counts is a hole that nobody revisits.
+ *
+ * This greps for BOTH spellings, per CLAUDE.md:
+ *
+ *   - `withoutWorkspaceScope`  — the sanctioned form
+ *   - `withoutGlobalScope`     — the native Eloquent form, which takes NO reason
+ *                                and would otherwise be an unlogged way around
+ *                                the whole convention
+ *
+ * Catching only the first would close nothing while looking correct: anyone who
+ * did not know about the convention would reach for the framework method, and
+ * the inventory would stay reassuringly empty. This codebase has already
+ * produced two "one concept, two definitions" bugs found only by accident.
+ *
+ * There are currently ZERO bypasses in `app/`. Every future one is a deliberate
+ * act and must be added here with its justification — which is the point: the
+ * cost of adding a bypass includes explaining it to a reviewer.
+ *
+ * Note this is a TEXT scan, not static analysis. It cannot be defeated by
+ * accident, only on purpose (string concatenation, a variable method name). That
+ * is the correct threat model: the guard exists to stop a bypass being added
+ * without thought, not to stop a determined author.
+ */
+class WorkspaceScopeBypassGuardTest extends TestCase
+{
+    /**
+     * Every sanctioned bypass, as `relative/path.php` => why.
+     *
+     * Adding an entry here is the deliberate act. Reviewers should treat a diff
+     * that grows this list the way they would treat a new `@SuppressWarnings`.
+     *
+     * @var array<string, string>
+     */
+    private const SANCTIONED = [
+        // The definition itself, not a use of it.
+        'app/Models/Concerns/BelongsToWorkspace.php' => 'Defines the sanctioned bypass. The withoutGlobalScope() call here IS the implementation.',
+    ];
+
+    /** Both spellings. Neither alone is sufficient — see the class docblock. */
+    private const PATTERNS = ['withoutWorkspaceScope', 'withoutGlobalScope'];
+
+    #[Test]
+    public function every_workspace_scope_bypass_in_the_application_is_inventoried(): void
+    {
+        $found = $this->scan();
+
+        $undeclared = array_diff_key($found, self::SANCTIONED);
+
+        $this->assertSame([], $undeclared, implode("\n", [
+            '',
+            'An unlisted workspace-scope bypass appeared in app/.',
+            '',
+            ...array_map(
+                fn (string $path, array $hits) => "  {$path}\n".implode("\n", array_map(fn ($h) => "      line {$h['line']}: {$h['text']}", $hits)),
+                array_keys($undeclared),
+                $undeclared
+            ),
+            '',
+            'If the bypass is correct, add it to self::SANCTIONED with a one-line reason.',
+            'If it is not, scope the query instead — or use withoutWorkspaceScope(\'reason: …\'),',
+            'which at least forces the reason into the call site.',
+            '',
+            'A bypass nobody counts is a hole nobody revisits.',
+            '',
+        ]));
+    }
+
+    /**
+     * A stale entry is worse than none: it grants standing permission to a file
+     * that no longer needs it, and the next bypass added to that file inherits
+     * the exemption silently.
+     */
+    #[Test]
+    public function the_sanctioned_list_has_no_stale_entries(): void
+    {
+        $found = $this->scan();
+
+        $stale = array_keys(array_diff_key(self::SANCTIONED, $found));
+
+        $this->assertSame([], $stale,
+            'These files are sanctioned to bypass the workspace scope but no longer contain one. '
+            .'Remove them — a stale exemption silently covers the next bypass added to that file: '
+            .implode(', ', $stale));
+    }
+
+    /**
+     * Guards the guard. If someone narrows PATTERNS to the sanctioned spelling
+     * only, the inventory keeps passing while `withoutGlobalScope` becomes an
+     * unlogged way around the entire convention.
+     */
+    #[Test]
+    public function the_guard_watches_the_native_spelling_too_and_not_only_ours(): void
+    {
+        $this->assertContains('withoutGlobalScope', self::PATTERNS,
+            'The native Eloquent spelling must stay in the scan. It takes no reason argument, '
+            .'so it is the spelling a bypass would arrive under by default.');
+
+        $this->assertContains('withoutWorkspaceScope', self::PATTERNS);
+    }
+
+    /**
+     * @return array<string, list<array{line:int,text:string}>>
+     */
+    private function scan(): array
+    {
+        $results = [];
+        $root = base_path();
+
+        $files = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(app_path()));
+
+        foreach ($files as $file) {
+            if ($file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $path = str_replace($root.DIRECTORY_SEPARATOR, '', $file->getPathname());
+            $lines = file($file->getPathname(), FILE_IGNORE_NEW_LINES);
+
+            foreach ($lines as $i => $line) {
+                foreach (self::PATTERNS as $pattern) {
+                    if (str_contains($line, $pattern)) {
+                        $results[$path][] = ['line' => $i + 1, 'text' => trim($line)];
+
+                        continue 2;
+                    }
+                }
+            }
+        }
+
+        return $results;
+    }
+}
