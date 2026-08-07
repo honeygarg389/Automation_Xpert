@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Workspace;
 
+use Illuminate\Console\Command;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use PHPUnit\Framework\Attributes\Test;
 use RecursiveDirectoryIterator;
@@ -172,6 +173,101 @@ class JobWorkspaceContextGuardTest extends TestCase
             'These declare middleware() but are still listed as pending slice 4c. Move them '
             .'to REQUIRES_CONTEXT in the same commit: '.implode(', ', $done));
     }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    // Slice 4b — console commands
+    //
+    // Commands have no middleware pipeline, so there is nothing structural to
+    // assert. This checks each named command's SOURCE for one of the two
+    // mechanisms. Crude on purpose: the alternative was inventing an
+    // abstraction over three call sites that do not share a shape.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /**
+     * Commands that reach workspace-scoped data.
+     *
+     * Hand-maintained for the same reason the job list is: a grep for
+     * "mentions a scoped model" is not the same question as "reaches tenant
+     * data", and the difference is where the bugs live.
+     *
+     * @var array<class-string<Command>, string>
+     */
+    private const COMMANDS_REQUIRING_CONTEXT = [
+        'App\Console\Commands\SendWeeklyDigestCommand' => 'PER-TENANT, looping. SCHEDULED — without context it mails every customer a digest of zeroes, weekly, exiting 0.',
+        'App\Console\Commands\WhatsappWebhookRegisterCommand' => 'CROSS-TENANT. Registers the platform-wide Meta callback and subscribes every workspace\'s WABA.',
+        'App\Console\Commands\MessengerProfileTestCommand' => 'BOTH. crossTenant to discover the account, then for() around the diagnosis.',
+    ];
+
+    #[Test]
+    public function every_command_that_reaches_tenant_data_establishes_context(): void
+    {
+        $missing = [];
+
+        foreach (array_keys(self::COMMANDS_REQUIRING_CONTEXT) as $class) {
+            $source = file_get_contents((new ReflectionClass($class))->getFileName());
+
+            if (! str_contains($source, 'WorkspaceContext::for(') && ! str_contains($source, 'WorkspaceContext::crossTenant(')) {
+                $missing[] = $class;
+            }
+        }
+
+        $this->assertSame([], $missing, implode("\n", [
+            '',
+            'These commands reach workspace-scoped data but establish no context:',
+            implode("\n", array_map(fn ($c) => "  {$c} — ".self::COMMANDS_REQUIRING_CONTEXT[$c], $missing)),
+            '',
+            'A console command has no authenticated user. Under a fail-closed scope that means',
+            'every query returns nothing and the command exits 0 having done nothing.',
+            '',
+            'Wrap the per-tenant body in WorkspaceContext::for($id, …), or declare the command',
+            'cross-tenant with WorkspaceContext::crossTenant(\'reason: …\', …).',
+            '',
+        ]));
+    }
+
+    /**
+     * Catches a NEW command touching tenant data — the case nobody will be
+     * thinking about later. Any command naming a workspace-scoped model must be
+     * classified, one way or the other.
+     */
+    #[Test]
+    public function no_unclassified_command_queries_a_workspace_scoped_model(): void
+    {
+        $scopedModels = 'Campaign|EcommerceStore|EcommerceCart|EcommerceOrder|EcommerceProduct|LeadScrapeJob|Lead|Segment|ChannelAccount|Contact|ContactTag|Conversation|SocialPost|SocialAccount|AiKnowledgeBase|AiProviderConfig|AiChatbot|Automation|WhatsappWidget|WhatsappBusinessAccount|WhatsappTemplate|WhatsappAutoReply|CannedReply|InboxLabel|UsageMeter|SmsProviderConfig|WorkspaceSmtpConfig';
+
+        $unclassified = [];
+
+        foreach (glob(app_path('Console/Commands/*.php')) as $file) {
+            $class = 'App\\Console\\Commands\\'.basename($file, '.php');
+
+            if (array_key_exists($class, self::COMMANDS_REQUIRING_CONTEXT) || in_array($class, self::COMMANDS_NO_TENANT_DATA, true)) {
+                continue;
+            }
+
+            if (preg_match('/\\b('.$scopedModels.')::/', file_get_contents($file))) {
+                $unclassified[] = $class;
+            }
+        }
+
+        $this->assertSame([], $unclassified, implode("\n", [
+            '',
+            'A command queries a workspace-scoped model and is classified nowhere:',
+            implode("\n", array_map(fn ($c) => "  {$c}", $unclassified)),
+            '',
+            'Add it to COMMANDS_REQUIRING_CONTEXT (with the shape it is) or to',
+            'COMMANDS_NO_TENANT_DATA. Note this grep is a backstop, not the inventory —',
+            'a command reaching tenant data through a SERVICE will not appear here, which is',
+            'exactly why COMMANDS_REQUIRING_CONTEXT is maintained by hand.',
+            '',
+        ]));
+    }
+
+    /**
+     * Every other command, explicitly reviewed as touching no tenant data.
+     *
+     * @var list<class-string<Command>>
+     */
+    private const COMMANDS_NO_TENANT_DATA = [];
 
     /** @return list<class-string> */
     private function discoverJobs(): array

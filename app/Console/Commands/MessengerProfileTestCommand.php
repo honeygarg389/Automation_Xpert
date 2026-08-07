@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
+use App\Support\WorkspaceContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -28,15 +29,35 @@ class MessengerProfileTestCommand extends Command
 
     public function handle(): int
     {
-        $account = $this->option('account')
-            ? ChannelAccount::where('channel', 'messenger')->find($this->option('account'))
-            : ChannelAccount::where('channel', 'messenger')->orderByDesc('id')->first();
+        // Phase 0. TWO SHAPES IN ONE COMMAND, and they are different.
+        //
+        // Finding the account is cross-tenant: an operator runs this without
+        // naming a workspace, and ChannelAccount is scoped, so under a
+        // fail-closed scope an unscoped lookup would find nothing and the
+        // command would report "No Messenger channel account found" on a system
+        // that has several.
+        //
+        // Everything AFTER that is single-tenant — the Contact lookup below
+        // belongs to the account's workspace and must be scoped to it.
+        $account = WorkspaceContext::crossTenant(
+            'reason: an operator diagnosing a Messenger connection does not know which workspace it is in; discovering the account is the point of the command',
+            fn () => $this->option('account')
+                ? ChannelAccount::where('channel', 'messenger')->find($this->option('account'))
+                : ChannelAccount::where('channel', 'messenger')->orderByDesc('id')->first()
+        );
 
         if (! $account) {
             $this->error('No Messenger channel account found.');
 
             return self::FAILURE;
         }
+
+        return WorkspaceContext::for((int) $account->workspace_id, fn () => $this->diagnose($account));
+    }
+
+    /** Everything from here runs inside the account's workspace. */
+    private function diagnose(ChannelAccount $account): int
+    {
 
         $this->line('  <fg=cyan>ChannelAccount:</> '.$account->id.'  ('.$account->display_name.')');
         $this->line('  <fg=cyan>Workspace:</> '.$account->workspace_id);

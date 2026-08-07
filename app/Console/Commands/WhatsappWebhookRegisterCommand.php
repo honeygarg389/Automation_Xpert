@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Modules\Integrations\Services\CredentialResolver;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
+use App\Support\WorkspaceContext;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
@@ -21,24 +22,26 @@ class WhatsappWebhookRegisterCommand extends Command
 
         if (! $meta || ! $meta->appId() || ! $meta->appSecret()) {
             $this->error('Meta App credentials not configured. Go to Admin → Integrations → Meta App.');
+
             return self::FAILURE;
         }
 
-        $appId       = $meta->appId();
-        $appSecret   = $meta->appSecret();
-        $appToken    = $appId . '|' . $appSecret;
+        $appId = $meta->appId();
+        $appSecret = $meta->appSecret();
+        $appToken = $appId.'|'.$appSecret;
         $callbackUrl = route('webhooks.whatsapp.global.receive');
-        $verifyToken = hash('sha256', $appId . $appSecret . 'wh_global_verify');
+        $verifyToken = hash('sha256', $appId.$appSecret.'wh_global_verify');
 
         $this->info('');
-        $this->line('  <fg=cyan>App ID:</> ' . $appId);
-        $this->line('  <fg=cyan>Callback URL:</> ' . $callbackUrl);
-        $this->line('  <fg=cyan>Verify Token:</> ' . substr($verifyToken, 0, 16) . '…');
+        $this->line('  <fg=cyan>App ID:</> '.$appId);
+        $this->line('  <fg=cyan>Callback URL:</> '.$callbackUrl);
+        $this->line('  <fg=cyan>Verify Token:</> '.substr($verifyToken, 0, 16).'…');
         $this->info('');
 
         if ($this->option('dry-run')) {
-            $this->warn('[dry-run] Would POST to: https://graph.facebook.com/v20.0/' . $appId . '/subscriptions');
+            $this->warn('[dry-run] Would POST to: https://graph.facebook.com/v20.0/'.$appId.'/subscriptions');
             $this->warn('[dry-run] With fields: messages, message_template_status_update, phone_number_name_update, phone_number_quality_update, account_update');
+
             return self::SUCCESS;
         }
 
@@ -47,51 +50,68 @@ class WhatsappWebhookRegisterCommand extends Command
 
         $res = Http::post("https://graph.facebook.com/v20.0/{$appId}/subscriptions", [
             'access_token' => $appToken,
-            'object'       => 'whatsapp_business_account',
+            'object' => 'whatsapp_business_account',
             'callback_url' => $callbackUrl,
             'verify_token' => $verifyToken,
-            'fields'       => 'messages,message_template_status_update,phone_number_name_update,phone_number_quality_update,account_update',
+            'fields' => 'messages,message_template_status_update,phone_number_name_update,phone_number_quality_update,account_update',
         ]);
 
         if (! $res->successful()) {
-            $this->error('FAILED. Meta returned HTTP ' . $res->status());
-            $this->error('Response: ' . $res->body());
+            $this->error('FAILED. Meta returned HTTP '.$res->status());
+            $this->error('Response: '.$res->body());
             $this->info('');
             $this->line('<fg=yellow>Common causes:</>');
             $this->line('  • App is in Development mode and the WABA is not a test WABA');
             $this->line('  • App Secret is incorrect');
             $this->line('  • Callback URL is not publicly reachable by Meta');
-            $this->line('  • The verify token check at GET ' . $callbackUrl . ' returned non-200');
+            $this->line('  • The verify token check at GET '.$callbackUrl.' returned non-200');
             $this->info('');
-            $this->line('Test manually: curl "' . $callbackUrl . '?hub.mode=subscribe&hub.verify_token=' . $verifyToken . '&hub.challenge=TESTCHALLENGE"');
+            $this->line('Test manually: curl "'.$callbackUrl.'?hub.mode=subscribe&hub.verify_token='.$verifyToken.'&hub.challenge=TESTCHALLENGE"');
+
             return self::FAILURE;
         }
 
         $this->info('✓ Global callback URL registered with Meta.');
 
         // ── Step 2: Subscribe each WABA to the app ────────────────────────────
-        $query = WhatsappBusinessAccount::where('status', 'active');
-        if ($wabaId = $this->option('waba')) {
-            $query->where('waba_id', $wabaId);
-        }
+        // Phase 0. CROSS-TENANT BY DESIGN — a platform-operator command.
+        //
+        // It registers ONE global Meta callback URL for the whole application and
+        // then subscribes every connected WABA to it, across every workspace.
+        // Scoping it to a single tenant would leave every other tenant's WABA
+        // unsubscribed and their inbound messages silently undelivered.
+        //
+        // Declared rather than merely unscoped: with the scope failing closed,
+        // "no context" would find zero WABAs and report success.
+        $wabas = WorkspaceContext::crossTenant(
+            'reason: registers the platform-wide Meta webhook and subscribes every workspace\'s WABA to it; per-tenant scoping would leave the rest unsubscribed',
+            function () {
+                $query = WhatsappBusinessAccount::where('status', 'active');
+                if ($wabaId = $this->option('waba')) {
+                    $query->where('waba_id', $wabaId);
+                }
 
-        $wabas = $query->get();
+                return $query->get();
+            }
+        );
 
         if ($wabas->isEmpty()) {
             $this->warn('No active WABAs found in database. Connect a WABA first via Channel Setup.');
+
             return self::SUCCESS;
         }
 
         $this->line('');
-        $this->line('<fg=yellow>Step 2:</> Subscribing ' . $wabas->count() . ' WABA(s) to the app…');
+        $this->line('<fg=yellow>Step 2:</> Subscribing '.$wabas->count().' WABA(s) to the app…');
 
         foreach ($wabas as $waba) {
-            $this->line('  WABA ' . $waba->waba_id . '…');
+            $this->line('  WABA '.$waba->waba_id.'…');
 
             $token = $waba->accessToken() ?? $meta->systemUserToken();
 
             if (! $token) {
-                $this->warn('  ⚠ No access token for WABA ' . $waba->waba_id . ' — skipping subscribed_apps call');
+                $this->warn('  ⚠ No access token for WABA '.$waba->waba_id.' — skipping subscribed_apps call');
+
                 continue;
             }
 
@@ -107,9 +127,9 @@ class WhatsappWebhookRegisterCommand extends Command
             }
 
             if ($subRes->successful()) {
-                $this->info('  ✓ WABA ' . $waba->waba_id . ' subscribed.');
+                $this->info('  ✓ WABA '.$waba->waba_id.' subscribed.');
             } else {
-                $this->error('  ✗ WABA ' . $waba->waba_id . ' subscription failed: ' . $subRes->body());
+                $this->error('  ✗ WABA '.$waba->waba_id.' subscription failed: '.$subRes->body());
             }
         }
 
@@ -135,22 +155,22 @@ class WhatsappWebhookRegisterCommand extends Command
                     $fields = array_column($sub['fields'] ?? [], 'name');
                     $hasMessages = in_array('messages', $fields, true);
 
-                    $status = $active ? '<fg=green>active</>' : '<fg=red>' . ($sub['status'] ?? 'inactive') . '</>';
-                    $this->line('  Status: ' . $status);
-                    $this->line('  Callback: ' . ($sub['callback_url'] ?? 'unknown'));
-                    $this->line('  Fields: ' . implode(', ', $fields));
-                    $this->line('  Inbound (messages): ' . ($hasMessages
+                    $status = $active ? '<fg=green>active</>' : '<fg=red>'.($sub['status'] ?? 'inactive').'</>';
+                    $this->line('  Status: '.$status);
+                    $this->line('  Callback: '.($sub['callback_url'] ?? 'unknown'));
+                    $this->line('  Fields: '.implode(', ', $fields));
+                    $this->line('  Inbound (messages): '.($hasMessages
                         ? '<fg=green>subscribed</>'
                         : '<fg=red>MISSING — inbound webhooks will not arrive</>'));
                 }
             }
         } else {
-            $this->warn('  Could not verify subscription: ' . $checkRes->body());
+            $this->warn('  Could not verify subscription: '.$checkRes->body());
         }
 
         $this->info('');
         $this->info('Done. Test the endpoint:');
-        $this->line('  curl "' . $callbackUrl . '?hub.mode=subscribe&hub.verify_token=' . $verifyToken . '&hub.challenge=HELLO"');
+        $this->line('  curl "'.$callbackUrl.'?hub.mode=subscribe&hub.verify_token='.$verifyToken.'&hub.challenge=HELLO"');
         $this->line('  Expected response: HELLO');
 
         return self::SUCCESS;

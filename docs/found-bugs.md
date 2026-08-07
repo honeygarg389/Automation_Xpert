@@ -1237,3 +1237,38 @@ It never answers "was this the right id to ask about".**
   silent no-op the middleware exists to abolish. Declared cross-tenant work therefore has to
   actively suppress the scope (`WorkspaceContext::crossTenant()`), not merely decline to set
   one. Caught by a test, not by review.
+
+---
+
+## BUG-018 — the weekly digest window is a day short, from a Carbon mutation
+
+**Severity: Low — recorded 2026-08-08 while writing slice 4b's tests. Not fixed.**
+
+`SendWeeklyDigestCommand::handle()`:
+
+```php
+$from   = Carbon::now()->subWeek()->startOfDay();
+$to     = Carbon::now()->startOfDay();
+$period = $from->format('M j').'–'.$to->subDay()->format('M j, Y');   // <- mutates $to
+...
+$stats = $this->buildStats($workspace->id, $from, $to);               // <- gets the mutated $to
+```
+
+`Carbon` is **mutable**. `$to->subDay()` inside the label expression permanently moves `$to`
+back one day, and every `whereBetween('created_at', [$from, $to])` in `buildStats()` then runs
+against a **six-day** window ending yesterday, not the seven-day window the email claims.
+
+The label happens to be right; the numbers under it are computed over a different period than
+the one printed.
+
+**How it was found:** slice 4b's test seeded conversations at `now()` and got zero, which
+initially looked like the workspace scope failing closed — the exact symptom the test was
+written to detect. It was not. That is the trap worth recording: *a count of zero has more
+than one cause, and the new one will be blamed first.*
+
+**Not fixed here** because it is unrelated to Phase 0 and changing the reporting window
+changes numbers customers see. The fix is `$to->copy()->subDay()` (or `CarbonImmutable`).
+
+**Worth a wider look when it is fixed:** `Carbon::now()` is used throughout this codebase, and
+this is the failure mode that leaves no trace. Grepping for `->sub`/`->add` used inline inside
+a `format()` or a string concatenation would find any siblings.
