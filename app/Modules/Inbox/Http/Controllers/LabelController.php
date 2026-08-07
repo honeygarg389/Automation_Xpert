@@ -5,6 +5,7 @@ namespace App\Modules\Inbox\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Inbox\Models\InboxLabel;
 use App\Modules\Shared\Models\Conversation;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -16,7 +17,7 @@ class LabelController extends Controller
 {
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     public function index(Request $request): Response
