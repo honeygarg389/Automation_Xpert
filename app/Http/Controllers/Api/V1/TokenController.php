@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Support\ApiAbilities;
+use App\Support\ApiTokenLifetime;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,7 +27,13 @@ class TokenController extends Controller
         ]);
 
         $abilities = $validated['abilities'] ?? ['*'];
-        $expiresAt = isset($validated['expires_at']) ? Carbon::parse($validated['expires_at']) : null;
+
+        // SEC-006. A blank expiry used to mean "never". It now means the
+        // default; an explicit choice is kept, but capped — otherwise "never"
+        // is one date-picker away from coming back.
+        $expiresAt = ApiTokenLifetime::forApiToken(
+            isset($validated['expires_at']) ? Carbon::parse($validated['expires_at']) : null
+        );
 
         $token = $request->user()->createToken($validated['name'], $abilities, $expiresAt);
 

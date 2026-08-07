@@ -851,3 +851,134 @@ customers' working branding, and a tool that is dangerous to run will not be run
 
 The extension/content mismatch check is the part worth building: that one has no legitimate
 explanation.
+
+---
+
+## BUG-014 — Sanctum's own config comment is wrong about how `expiration` works
+
+**Severity: Low (documentation) — recorded during SEC-006. Will mislead someone.**
+
+Laravel ships this in `config/sanctum.php`:
+
+> This value controls the number of minutes until an issued token will be considered expired.
+> **This will override any values set in the token's "expires_at" attribute**, but first-party
+> sessions are not affected.
+
+The emphasised clause is **false**. `vendor/laravel/sanctum/src/Guard.php:128-129`:
+
+```php
+(! $this->expiration || $accessToken->created_at->gt(now()->subMinutes($this->expiration)))
+&& (! $accessToken->expires_at || ! $accessToken->expires_at->isPast())
+```
+
+The two checks are **ANDed**. Nothing overrides anything — **the stricter of the two wins**.
+A global value cannot extend a short per-token expiry, and a long per-token expiry cannot
+escape a global cap. Verified by test, not by reading:
+
+```
+per-token expires_at in the PAST, no global expiration        => 401
+expires_at = +1 year, created 2d ago, global expiration = 60m => 401
+```
+
+A second fact the comment omits: the global value is measured from **`created_at`, never
+`last_used_at`**. It is an absolute lifetime, not an idle timeout — an actively-used token
+dies on the same schedule as an abandoned one.
+
+Why this matters beyond pedantry: someone reading "override" will reasonably conclude that
+setting a global expiry is the complete answer and that per-token values are cosmetic. The
+opposite is true, and acting on the comment would silently truncate every long-lived
+integration token a customer had deliberately created.
+
+**Recorded, not fixed** — it is upstream's text and would reappear on any `config:publish`.
+A correction is appended beneath it in `config/sanctum.php` instead.
+
+## BUG-015 — `remember_token` on the impersonation path outlives the admin's session
+
+**Severity: Medium — recorded, not fixed. Found during the SEC-006 sibling sweep.**
+
+`ClientController::impersonate()` calls:
+
+```php
+Auth::guard('web')->login($targetUser, $request->boolean('remember', false));
+```
+
+With `remember = true` Laravel issues a **remember-me cookie for the impersonated customer
+account**. Laravel's remember tokens have **no expiry** — they are valid until the password
+changes.
+
+So an admin impersonating a client can end up with a persistent credential for that
+customer's account that outlives their own admin session, their own logout, and the
+revocation of their admin permissions. DEEP-03 has just made impersonation require a
+dedicated `impersonate_clients` permission — **revoking that permission does not invalidate a
+remember cookie already issued.**
+
+Not fixed here because SEC-006 is scoped to API tokens and this is the session guard. The
+likely fix is simply to never pass `remember` on the impersonation path — impersonation is
+by nature a short, deliberate act — but that is a behaviour change on a route that was
+touched last commit, and it deserves its own branch and its own test.
+
+## BUG-016 — webhook secrets never rotate and there is no rotation UI
+
+**Severity: Low — recorded, not fixed. Found during the SEC-006 sibling sweep.**
+
+Webhook signing secrets (`EcommerceStore`, `IntegrationConfig`, payment gateway configs) are
+generated or entered once and then live forever. There is no rotation endpoint, no UI
+control, and no expiry.
+
+They are handled correctly in every other respect — encrypted at rest via `encrypted:array`
+casts, verified with `hash_hmac` + `hash_equals`. This is a different family from bearer
+tokens: a shared secret, not a credential a user carries. But it has the same
+"issued once, lives forever" shape SEC-006 was about, and a leaked secret currently has no
+remedy short of deleting and recreating the integration.
+
+## 📌 Owed — decide whether mobile tokens still need `['*']`
+
+`MobileAuthController::login` issues `createToken($deviceName, ['*'], …)`. SEC-006 bounded
+the lifetime and left the abilities alone, deliberately, pending this decision.
+
+**The inventory (what the mobile app actually calls):**
+
+Every `/api/v1/mobile/*` route and every `/api/v1/auth/*` route — 20 endpoints across
+`MobileConversationController` and `MobileInboxController` — carries **no `api.ability`
+middleware at all**. Their stack is `auth:sanctum`, `user.active`, `throttle:api`, `demo`.
+
+So: **the mobile surface does not need `['*']`. It does not need any ability.** It would work
+identically with an empty ability list.
+
+What `['*']` actually buys is the **other** surface. `CheckApiAbility` short-circuits on a
+wildcard:
+
+```php
+if (in_array('*', (array) $token->abilities, true)) { return $next($request); }
+```
+
+so a mobile login token also unlocks the entire scoped business API — contacts, campaigns,
+messages, AI, automations, social, webhooks, analytics — every route the 12 named scopes were
+built to gate.
+
+**The consequence:** a phone, authenticated with an email and a password, holds strictly more
+authority than any token a customer can create for themselves in the UI, where they must pick
+scopes explicitly.
+
+Options, for the decision:
+
+1. Issue mobile tokens with a named `mobile` ability and add `api.ability:mobile` to the
+   mobile route groups. Cleanest; the mobile surface stops being a wildcard.
+2. Issue with the specific scopes the mobile app needs (`conversations:read`,
+   `messages:write`, `contacts:read`). More precise, but the mobile routes do not check
+   abilities, so it only constrains the /v1 surface.
+3. Keep `['*']` — defensible only if the mobile app is intended to be a full client.
+
+**Not chosen here.** It is a product question about what the mobile app is for.
+
+## 📌 Proposed — `sanctum:prune-expired` as scheduled housekeeping (NOT built)
+
+Sanctum ships `sanctum:prune-expired`. It is not scheduled, and nothing else prunes
+`personal_access_tokens`.
+
+Now that tokens carry an `expires_at`, expired rows will accumulate. This is **housekeeping,
+not security** — an expired token is already refused by the guard, so pruning removes clutter,
+not risk. Suggested: `Schedule::command('sanctum:prune-expired --hours=24')->daily()`.
+
+Deliberately not in the SEC-006 branch: mixing table maintenance into a security fix makes
+the security change harder to review, and there is currently nothing to prune.
