@@ -4,6 +4,7 @@ namespace App\Modules\Whatsapp\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Whatsapp\Models\WhatsappAutoReply;
+use App\Support\WorkspaceContext;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ class WhatsappAutoReplyController extends Controller
 {
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $rules = WhatsappAutoReply::where('workspace_id', $workspaceId)->orderBy('priority')->get();
 
         return Inertia::render('Whatsapp/AutoReplies/Index', ['rules' => $rules]);
@@ -22,7 +23,7 @@ class WhatsappAutoReplyController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $validated = $request->validate([
             'trigger_type' => ['required', 'in:keyword,welcome,away,out_of_hours'],
             'match_mode' => ['required', 'in:exact,contains,regex'],
@@ -86,7 +87,7 @@ class WhatsappAutoReplyController extends Controller
 
     private function authorise(Request $request, WhatsappAutoReply $rule): void
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless((int) $rule->workspace_id === (int) $workspaceId, 403);
     }
 }
