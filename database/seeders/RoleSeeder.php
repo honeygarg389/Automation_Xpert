@@ -14,7 +14,7 @@ class RoleSeeder extends Seeder
             ['key' => Role::KEY_SUPER_ADMIN],
             [
                 'name' => 'Super Admin',
-                'description' => 'Full system access',
+                'description' => 'Full system access. Receives every permission automatically, including impersonate_clients.',
                 'is_system' => true,
             ]
         );
@@ -23,7 +23,7 @@ class RoleSeeder extends Seeder
             ['key' => Role::KEY_ADMIN],
             [
                 'name' => 'Admin',
-                'description' => 'Administrative access',
+                'description' => 'Intended for staff administrators. Ships with NO permissions — grant explicitly.',
                 'is_system' => false,
             ]
         );
@@ -32,7 +32,14 @@ class RoleSeeder extends Seeder
             ['key' => Role::KEY_SUPPORT],
             [
                 'name' => 'Support',
-                'description' => 'View clients and subscriptions only',
+                // Was 'View clients and subscriptions only'. That was not merely
+                // inaccurate, it was the delivery mechanism for DEEP-03: an
+                // operator read it and granted view_clients believing it was
+                // read-only, which also granted impersonation and plan changes.
+                // A role ships with NO permissions; what it can do is whatever
+                // is granted to it, so the description must not promise limits
+                // it does not enforce.
+                'description' => 'Intended for support staff. Ships with NO permissions — grant explicitly. Note that granting view_clients does NOT grant impersonation, which needs impersonate_clients.',
                 'is_system' => false,
             ]
         );

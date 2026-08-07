@@ -32,13 +32,22 @@ class ClientPolicy
         return $user->hasPermissionTo('delete_clients');
     }
 
+    /** Assigning a plan changes billing, so it needs a write permission. */
     public function assignPlan(AdminUser $user, Client $client): bool
     {
-        return $user->hasPermissionTo('view_clients'); // or manage_subscriptions
+        return $user->hasPermissionTo('manage_subscriptions');
     }
 
+    /**
+     * Impersonation is a full login as the client's administrator, so it has
+     * its own dedicated permission rather than riding on a read grant.
+     *
+     * Both this policy AND the route middleware previously checked
+     * `view_clients`. Two layers checking the same read permission read as
+     * defence in depth and were not — see DEEP-03.
+     */
     public function impersonate(AdminUser $user, Client $client): bool
     {
-        return $user->hasPermissionTo('view_clients');
+        return $user->hasPermissionTo('impersonate_clients');
     }
 }

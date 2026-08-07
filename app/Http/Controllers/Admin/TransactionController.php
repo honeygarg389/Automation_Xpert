@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\PaymentTransaction;
+use App\Services\AuditLogService;
 use App\Services\Billing\BillingGatewayRegistry;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -13,7 +14,8 @@ use Inertia\Response;
 class TransactionController extends Controller
 {
     public function __construct(
-        private BillingGatewayRegistry $gateways
+        private BillingGatewayRegistry $gateways,
+        private AuditLogService $auditLog
     ) {}
 
     public function index(): Response
@@ -52,6 +54,18 @@ class TransactionController extends Controller
         if ($validated['reason'] ?? null) {
             $transaction->update(['refund_reason' => $validated['reason']]);
         }
+
+        // Money leaving the system was previously unrecorded: this controller
+        // had no audit logging at all, so "who authorised this refund" was
+        // unanswerable. Matches the shape used for impersonation.started and
+        // client.plan_assigned rather than inventing a new one.
+        $this->auditLog->logAdmin('payment.refunded', PaymentTransaction::class, (int) $transaction->id, [
+            'amount_cents' => $validated['amount_cents'] ?? $transaction->amount_cents,
+            'full_refund' => ($validated['amount_cents'] ?? null) === null,
+            'reason' => $validated['reason'] ?? null,
+            'gateway' => $transaction->gateway,
+            'gateway_result' => $result['id'] ?? ($result['reference'] ?? null),
+        ]);
 
         return back()->with('success', __('Refund processed.'));
     }

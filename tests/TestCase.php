@@ -60,6 +60,10 @@ abstract class TestCase extends BaseTestCase
         $permKeys = [
             'view_settings', 'manage_settings',
             'view_clients', 'manage_clients',
+            // DEEP-03: impersonation now has its own permission rather than
+            // riding on view_clients. A super admin holds every permission, so
+            // it belongs in this list.
+            'impersonate_clients',
             'view_plans', 'manage_plans', 'create_plans', 'delete_plans',
             'view_subscriptions', 'manage_subscriptions',
             'view_payment_gateways', 'manage_payment_gateways',
