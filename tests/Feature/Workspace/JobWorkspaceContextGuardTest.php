@@ -60,6 +60,16 @@ class JobWorkspaceContextGuardTest extends TestCase
         'App\Modules\Broadcasting\Jobs\LaunchScheduledCampaignsJob',
         'App\Modules\Social\Jobs\DispatchScheduledPostsJob',
         'App\Modules\Social\Jobs\RefreshSocialTokensJob',
+
+        // ── Group C (slice 4c): tenant data reached through a SERVICE ──
+        // The two inbound jobs are cross-tenant for a DIFFERENT reason from the
+        // schedulers: a scheduler SHOULD see every workspace; these CANNOT KNOW
+        // theirs, because one payload legitimately carries messages for several.
+        // Context is established per message inside the drivers.
+        'App\Modules\Whatsapp\Jobs\ProcessInboundMessageJob',
+        'App\Modules\Inbox\Jobs\ProcessInboundInboxMessageJob',
+        // Resolves through a relation: AutomationRun -> automations.workspace_id.
+        'App\Modules\Automation\Jobs\ExecuteAutomationRunJob',
     ];
 
     /**
@@ -76,9 +86,10 @@ class JobWorkspaceContextGuardTest extends TestCase
      * @var list<class-string>
      */
     private const PENDING_SLICE_4C = [
-        'App\Modules\Whatsapp\Jobs\ProcessInboundMessageJob',
-        'App\Modules\Inbox\Jobs\ProcessInboundInboxMessageJob',
-        'App\Modules\Automation\Jobs\ExecuteAutomationRunJob',
+        // Empty: slice 4c is done. Kept rather than deleted so the next author
+        // sees the shape — a job reaching tenant data through a SERVICE is
+        // invisible to a "mentions a scoped model" grep, which is why
+        // REQUIRES_CONTEXT is maintained by hand.
     ];
 
     /**

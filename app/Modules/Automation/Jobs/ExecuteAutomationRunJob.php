@@ -3,6 +3,8 @@
 namespace App\Modules\Automation\Jobs;
 
 use App\Events\AutomationFailed;
+use App\Jobs\Middleware\EstablishesWorkspaceContext;
+use App\Modules\Automation\Models\Automation;
 use App\Modules\Automation\Models\AutomationRun;
 use App\Modules\Automation\Services\AutomationEngine;
 use App\Support\Retry\Jitter;
@@ -30,6 +32,29 @@ class ExecuteAutomationRunJob implements ShouldQueue
     }
 
     public function __construct(public readonly int $runId) {}
+
+    /**
+     * Phase 0, slice 4c. AutomationRun is NOT workspace-owned — it carries
+     * automation_id and contact_id and no workspace_id — so its tenant comes
+     * from its parent Automation, which is.
+     *
+     * The chicken-and-egg is sharper here than elsewhere: handle()'s first
+     * statement is AutomationRun::with('automation'), and once Automation is
+     * scoped that eager load returns null. The engine would then run against a
+     * run with no automation — not an error, just nothing happening, while
+     * touching seven scoped models on the way.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [EstablishesWorkspaceContext::through(
+            AutomationRun::class,
+            $this->runId,
+            'automation_id',
+            Automation::class,
+        )];
+    }
 
     public function handle(AutomationEngine $engine): void
     {

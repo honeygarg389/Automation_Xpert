@@ -60,6 +60,15 @@ class WorkspaceScopeBypassGuardTest extends TestCase
         'app/Modules/Social/Jobs/DispatchScheduledPostsJob.php' => 'Scheduler: finds posts due to publish across all workspaces.',
         'app/Modules/Social/Jobs/RefreshSocialTokensJob.php' => 'Scheduler: refreshes expiring OAuth tokens across all workspaces.',
 
+        // ── Cross-tenant BY DESIGN: the inbound webhook jobs (slice 4c) ──
+        // A DIFFERENT reason from the schedulers. A scheduler is cross-tenant
+        // because it SHOULD see every workspace. These are cross-tenant because
+        // they CANNOT KNOW theirs: one payload legitimately carries messages for
+        // several tenants, so context is established per MESSAGE inside the
+        // driver, where the routing identifier first resolves to a workspace.
+        'app/Modules/Whatsapp/Jobs/ProcessInboundMessageJob.php' => 'One payload can carry messages for several WABAs; context is per message in WhatsappDriver.',
+        'app/Modules/Inbox/Jobs/ProcessInboundInboxMessageJob.php' => 'One Meta payload can carry events for several pages; webhooks/meta/{token} is a platform-global token, so the job has no tenant to resolve.',
+
         // ── Cross-tenant BY DESIGN: platform-operator commands (slice 4b) ──
         'app/Console/Commands/WhatsappWebhookRegisterCommand.php' => 'Registers the platform-wide Meta callback and subscribes EVERY workspace\'s WABA; scoping it would leave the rest silently unsubscribed.',
         'app/Console/Commands/MessengerProfileTestCommand.php' => 'Diagnostic: an operator does not know which workspace a broken Messenger connection is in, so discovering the account is the point. Only the discovery is cross-tenant — the rest runs inside for().',

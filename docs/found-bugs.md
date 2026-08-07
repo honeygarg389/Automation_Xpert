@@ -1382,3 +1382,53 @@ here; a deployed install must run the audit first.
 - **`ecommerce_stores.webhook_secret` is not unique**, which is fine: the store is identified
   by the route's uuid and the secret only verifies HMAC for that store. Recorded so the next
   sweep does not re-raise it.
+
+---
+
+## 📌 Correction — the BUG-009 orphan sweep had a blind spot (recorded 2026-08-08)
+
+In the Phase 0 STEP-1 inventory I reported: **"BUG-009 has exactly one sibling."** That was
+wrong, and the shape of the error matters more than the count.
+
+The sweep looked for tables with `client_id` or `user_id` and **no** `workspace_id`. Tables
+with **none of the three** were invisible to it — and child tables keyed only to a scoped
+parent are exactly that shape. Re-running properly finds **six**:
+
+| Table | Reaches its workspace via |
+|---|---|
+| `automation_runs` | `automation_id` → `automations` |
+| `ai_runs` | `conversation_id` → `conversations` |
+| `campaign_recipients` | `campaign_id` → `campaigns` |
+| `contact_tag_pivot` | `contact_id` → `contacts` |
+| `inbox_label_conversation` | `conversation_id` → `conversations` |
+| `segment_contact` | `contact_id` → `contacts` |
+
+So it was one sibling **of that shape**. These are a second shape the sweep could not see.
+
+**Four are pure pivots** (`contact_tag_pivot`, `inbox_label_conversation`, `segment_contact`,
+and effectively `campaign_recipients`) and are protected by their parent: they are only
+reachable through a row the scope already filtered.
+
+### Decision: `automation_runs` stays unscoped — recorded, not omitted
+
+Considered and rejected for Phase 0:
+
+- Its parent `Automation` **is** in the 27, so a run is only reachable through an
+  already-filtered automation.
+- Adding the column means a migration plus a backfill, on a table that will be large.
+- `SendWeeklyDigestCommand` already joins `ai_runs` and `campaign_recipients` **through their
+  parents**, which is the pattern that keeps working either way.
+
+`ExecuteAutomationRunJob` therefore resolves its tenant through the relation
+(`EstablishesWorkspaceContext::through(AutomationRun::class, $runId, 'automation_id',
+Automation::class)`) rather than from a column on the run itself.
+
+**Revisit if** a query ever needs to reach runs *without* going through their automation —
+a partner-level "all automation activity" report is the obvious candidate, and it is on the
+roadmap.
+
+### The lesson worth keeping
+
+A sweep is only as good as the shape it looks for. This one asked "which tables have a tenant
+key but the wrong one" and could not see "which tables have no tenant key at all". The second
+question needed a different query, and nothing about the first hinted that it was missing.

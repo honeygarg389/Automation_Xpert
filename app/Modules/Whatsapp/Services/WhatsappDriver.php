@@ -6,6 +6,7 @@ use App\Events\MessageReceived;
 use App\Events\MessageStatusUpdated;
 use App\Modules\Broadcasting\Models\CampaignRecipient;
 use App\Modules\Shared\Contracts\ChannelDriverInterface;
+use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
@@ -14,6 +15,7 @@ use App\Modules\Shared\Services\ContactService;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use App\Services\WebhookIdempotencyService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -249,6 +251,45 @@ class WhatsappDriver implements ChannelDriverInterface
 
         $workspaceId = (int) $channelAccount->workspace_id;
 
+        // Phase 0, slice 4c. Tenant context is established HERE, per message —
+        // not around the job.
+        //
+        // One webhook payload can carry messages for SEVERAL workspaces: the
+        // global callback URL is shared by every WABA (see
+        // WhatsappWebhookRegisterCommand), the controller dispatches the whole
+        // entry[] array in one job, and the phone_number_id that identifies the
+        // tenant lives per CHANGE inside it. There is no single correct answer
+        // at job level, which is why ProcessInboundMessageJob declares itself
+        // cross-tenant rather than resolving a workspace it cannot know.
+        //
+        // Nothing below moved or was reordered. $workspaceId was already
+        // computed at exactly this point and already passed explicitly to
+        // upsert() and firstOrCreate(); this wraps the same work so the rest of
+        // it — Message::create, the Conversation update, the MessageReceived
+        // listeners — runs inside the right tenant too. CLAUDE.md forbids a
+        // parallel inbound flow, and this is not one.
+        return WorkspaceContext::for($workspaceId, function () use ($workspaceId, $channelAccount, $fromPhone, $value, $msg) {
+            return $this->persistInboundMessage($workspaceId, $channelAccount, $fromPhone, $value, $msg);
+        });
+    }
+
+    /**
+     * The body of processInboundMessage(), running inside its workspace.
+     *
+     * Split out solely so the whole of it can be wrapped in
+     * WorkspaceContext::for() without reindenting sixty lines and burying the
+     * change in whitespace.
+     *
+     * @param  array<string, mixed>  $value
+     * @param  array<string, mixed>  $msg
+     */
+    private function persistInboundMessage(
+        int $workspaceId,
+        ChannelAccount $channelAccount,
+        string $fromPhone,
+        array $value,
+        array $msg,
+    ): Message {
         $contact = $this->contactService->upsert($workspaceId, [
             'phone_e164' => '+'.$fromPhone,
             'opt_in_whatsapp' => true,

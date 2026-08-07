@@ -2,6 +2,7 @@
 
 namespace App\Modules\Whatsapp\Jobs;
 
+use App\Jobs\Middleware\EstablishesWorkspaceContext;
 use App\Modules\Whatsapp\Services\WhatsappDriver;
 use App\Support\Retry\Jitter;
 use Illuminate\Bus\Queueable;
@@ -44,6 +45,28 @@ class ProcessInboundMessageJob implements ShouldQueue
         private readonly string $verifyToken,
     ) {}
 
+    /**
+     * CROSS-TENANT BY DESIGN — and for a different reason from the schedulers.
+     *
+     * A scheduler is cross-tenant because it SHOULD see every workspace.
+     * This job is cross-tenant because it CANNOT KNOW its workspace: one
+     * webhook payload legitimately carries messages for several tenants, so
+     * there is no single correct answer at job level.
+     *
+     * Context is established per message inside the driver, at the point the
+     * routing identifier resolves to a ChannelAccount. Declaring it here
+     * rather than leaving it unset matters: the scope fails closed, so 'no
+     * context' would give the driver nothing at all rather than everything.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [EstablishesWorkspaceContext::crossTenant(
+            'reason: ONE payload can carry messages for several workspaces — the global callback URL is shared by every WABA and the phone_number_id that identifies the tenant lives per change inside entry[]. Context is established PER MESSAGE inside WhatsappDriver, where the workspace is first knowable',
+        )];
+    }
+
     public function handle(WhatsappDriver $driver): void
     {
         $driver->processWebhookPayload($this->payload, $this->verifyToken);
@@ -52,9 +75,9 @@ class ProcessInboundMessageJob implements ShouldQueue
     public function failed(\Throwable $e): void
     {
         Log::error('ProcessInboundMessageJob failed permanently', [
-            'error'        => $e->getMessage(),
+            'error' => $e->getMessage(),
             'verify_token' => substr($this->verifyToken, 0, 8).'…',
-            'entry_ids'    => collect($this->payload['entry'] ?? [])->pluck('id')->all(),
+            'entry_ids' => collect($this->payload['entry'] ?? [])->pluck('id')->all(),
         ]);
     }
 }

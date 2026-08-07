@@ -61,6 +61,8 @@ final class EstablishesWorkspaceContext
         private readonly ?string $modelClass,
         private readonly int|string|null $key,
         private readonly ?string $crossTenantReason,
+        private readonly ?string $foreignKey = null,
+        private readonly ?string $parentClass = null,
     ) {}
 
     /**
@@ -89,6 +91,26 @@ final class EstablishesWorkspaceContext
      * cross-tenant job reads as a decision rather than as someone forgetting to
      * add context — which is exactly what it would otherwise look like.
      */
+    /**
+     * Derive the workspace by walking ONE relation.
+     *
+     * For jobs whose own model is not workspace-owned but whose parent is —
+     * `AutomationRun` carries `automation_id` and nothing else, and reaches its
+     * tenant through `automations.workspace_id`.
+     *
+     * Two hops, both deliberately unscoped, for the same reason as `from()`:
+     * the lookup that establishes context cannot itself require context. Worse
+     * here, in fact — `AutomationRun::with('automation')` would eager-load a
+     * SCOPED relation and hand the engine a run with a null automation.
+     *
+     * @param  class-string<Model>  $modelClass  the unscoped child (AutomationRun)
+     * @param  class-string<Model>  $parentClass  the workspace-owned parent (Automation)
+     */
+    public static function through(string $modelClass, int|string|null $key, string $foreignKey, string $parentClass): self
+    {
+        return new self($modelClass, $key, null, $foreignKey, $parentClass);
+    }
+
     public static function crossTenant(string $reason): self
     {
         if (trim($reason) === '') {
@@ -156,6 +178,26 @@ final class EstablishesWorkspaceContext
             // reason: resolving a queued job's tenant from its own payload. The
             // lookup that establishes context cannot itself require context.
             $query = $query->withoutGlobalScope(WorkspaceScope::class);
+        }
+
+        // One relation hop: read the parent's key off the child, then the
+        // workspace off the parent. Both unscoped, both one column wide.
+        if ($this->parentClass !== null && $this->foreignKey !== null) {
+            $parentKey = $query->whereKey($this->key)->value($this->foreignKey);
+
+            if ($parentKey === null) {
+                return null;
+            }
+
+            $parentQuery = $this->parentClass::query();
+
+            if (in_array(BelongsToWorkspace::class, class_uses_recursive($this->parentClass), true)) {
+                $parentQuery = $parentQuery->withoutGlobalScope(WorkspaceScope::class);
+            }
+
+            $workspaceId = $parentQuery->whereKey($parentKey)->value('workspace_id');
+
+            return $workspaceId === null ? null : (int) $workspaceId;
         }
 
         $workspaceId = $query->whereKey($this->key)->value('workspace_id');
