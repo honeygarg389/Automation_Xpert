@@ -7,6 +7,7 @@ use App\Modules\AI\Jobs\IndexDocumentJob;
 use App\Modules\AI\Models\AiKbDocument;
 use App\Modules\AI\Models\AiKnowledgeBase;
 use App\Services\StorageManager;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,7 +19,7 @@ class AiKnowledgeBaseController extends Controller
 
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $kbs = AiKnowledgeBase::where('workspace_id', $workspaceId)
             ->withCount('documents')
             ->latest()->get();
@@ -36,7 +37,7 @@ class AiKnowledgeBaseController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $validated = $request->validate(['name' => ['required', 'string', 'max:128']]);
         AiKnowledgeBase::create(array_merge($validated, ['workspace_id' => $workspaceId]));
 
@@ -108,7 +109,7 @@ class AiKnowledgeBaseController extends Controller
 
     private function authorise(Request $request, AiKnowledgeBase $kb): void
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless((int) $kb->workspace_id === (int) $workspaceId, 403);
     }
 }

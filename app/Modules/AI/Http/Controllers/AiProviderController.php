@@ -4,6 +4,7 @@ namespace App\Modules\AI\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\AI\Models\AiProviderConfig;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,7 +14,7 @@ class AiProviderController extends Controller
 {
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $configs = AiProviderConfig::where('workspace_id', $workspaceId)->get()->keyBy('provider');
 
         $providers = ['openai', 'anthropic', 'gemini'];
@@ -30,7 +31,7 @@ class AiProviderController extends Controller
     public function update(Request $request, string $provider): RedirectResponse
     {
         abort_unless(in_array($provider, ['openai', 'anthropic', 'gemini'], true), 404);
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $validated = $request->validate([
             'api_key' => ['nullable', 'string', 'max:512'],
