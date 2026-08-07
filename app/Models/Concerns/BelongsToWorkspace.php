@@ -15,12 +15,23 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * ⚠️ NEVER apply this to `User`, and never to `Workspace`.
  *
- * `User` is the only model with a NULLABLE `workspace_id`, and it is
- * infrastructure rather than tenant data: login, the workspace switcher and
- * `accessibleWorkspaces()` all query it. Worse, it would recurse —
- * `WorkspaceScope` calls `WorkspaceContext::id()`, which calls
- * `User::accessibleWorkspaces()`, which queries `Workspace`. Scoping either
- * model puts the scope inside its own resolution path.
+ * `User` is infrastructure, not tenant data, and it is the only table whose
+ * `workspace_id` is NULLABLE.
+ *
+ * The failure is immediate and total, and it was measured rather than reasoned
+ * about. With the trait on `User` and no authenticated context:
+ *
+ *     User::find($id)                    => null
+ *     User::where('email', $e)->first()  => null   <- LOGIN CANNOT FIND THE USER
+ *
+ * Because the scope fails closed, and a login lookup by definition happens
+ * before anyone is authenticated, scoping `User` locks every account out of the
+ * application. The workspace switcher and `accessibleWorkspaces()` go with it.
+ *
+ * (An earlier draft of this comment claimed the real danger was infinite
+ * recursion through `WorkspaceContext -> accessibleWorkspaces -> Workspace`.
+ * That was tested and is NOT what happens — the resolution path completes.
+ * The lockout above is the actual failure, and it is worse.)
  *
  * That is not left to this comment: `WorkspaceScopeTest` asserts `User` does not
  * use this trait, and explains why in the failure message.

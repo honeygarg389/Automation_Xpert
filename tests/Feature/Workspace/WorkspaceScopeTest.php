@@ -211,15 +211,20 @@ class WorkspaceScopeTest extends TestCase
     // ── User must never be scoped ──────────────────────────────────────────
 
     /**
-     * The recursion is the point, not tidiness. `WorkspaceScope` calls
-     * `WorkspaceContext::id()`, which calls `User::accessibleWorkspaces()`,
-     * which queries `Workspace`. Putting the scope on either model places it
-     * inside its own resolution path.
+     * MEASURED, not reasoned about. With the trait applied to `User` and no
+     * authenticated context:
      *
-     * `User` is also the only table whose `workspace_id` is nullable, and
-     * scoping it would break login and the workspace switcher outright.
+     *     User::find($id)                   => null
+     *     User::where('email', $e)->first() => null
      *
-     * A comment saying "don't do this" is not enforcement. This is.
+     * A login lookup happens before anyone is authenticated, so a fail-closed
+     * scope on `User` locks every account out of the application.
+     *
+     * I originally justified this rule by claiming infinite recursion through
+     * `WorkspaceContext -> accessibleWorkspaces -> Workspace`. That was wrong —
+     * the resolution path completes. The lockout is the real failure and it is
+     * worse than the one I predicted, which is the argument for testing the
+     * rule rather than documenting the theory.
      */
     #[Test]
     public function the_user_model_is_not_workspace_scoped_and_must_never_be(): void
@@ -227,10 +232,9 @@ class WorkspaceScopeTest extends TestCase
         $this->assertNotContains(
             BelongsToWorkspace::class,
             class_uses_recursive(User::class),
-            'User must NEVER use BelongsToWorkspace: WorkspaceScope resolves through '
-            .'WorkspaceContext -> User::accessibleWorkspaces() -> Workspace, so scoping User '
-            .'puts the scope inside its own resolution path. It would also break login and '
-            .'the workspace switcher — users.workspace_id is the only nullable one.'
+            'User must NEVER use BelongsToWorkspace. The scope fails closed, and a login '
+            .'lookup happens before anyone is authenticated — so User::where(email)->first() '
+            .'returns null and every account is locked out. Measured, not theorised.'
         );
 
         $this->assertArrayNotHasKey(
@@ -246,8 +250,9 @@ class WorkspaceScopeTest extends TestCase
         $this->assertNotContains(
             BelongsToWorkspace::class,
             class_uses_recursive(Workspace::class),
-            'Workspace must NEVER use BelongsToWorkspace — same recursion, and a workspace '
-            .'that can only be found from inside itself cannot be found at all.'
+            'Workspace must NEVER use BelongsToWorkspace — the scope resolves THROUGH '
+            .'Workspace (WorkspaceContext -> accessibleWorkspaces), so a workspace that can '
+            .'only be found from inside a workspace context cannot be found at all.'
         );
     }
 
