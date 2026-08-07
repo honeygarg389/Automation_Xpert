@@ -12,6 +12,7 @@ use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Services\AnalyticsService;
 use App\Services\OnboardingService;
+use App\Support\WorkspaceContext;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -58,7 +59,7 @@ class DashboardController extends Controller
 
         $workspacesCount = $user->accessibleWorkspaces()->count();
 
-        $onboardingProgress = $onboarding->getProgress($user);
+        $onboardingProgress = $onboarding->getProgress($user, WorkspaceContext::id() ?? $user->workspace_id);
 
         // ── Date window (current + previous for deltas) ──────────────────────────
         $wsId = $user->workspace_id;

@@ -310,7 +310,7 @@ class HandleInertiaRequests extends Middleware
         $onboardingSummary = null;
         if ($user && ! $isAdminRoute && ($request->routeIs('client.*') || $request->routeIs('reports.exports.*'))) {
             try {
-                $progress = app(OnboardingService::class)->getProgress($user);
+                $progress = app(OnboardingService::class)->getProgress($user, WorkspaceContext::id() ?? $user->workspace_id);
                 $onboardingSummary = [
                     'done' => $progress['done'],
                     'total' => $progress['total'],

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Services\OnboardingService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -15,7 +16,7 @@ class OnboardingController extends Controller
 
     public function show(Request $request): Response
     {
-        $progress = $this->onboarding->getProgress($request->user());
+        $progress = $this->onboarding->getProgress($request->user(), WorkspaceContext::id() ?? $request->user()->workspace_id);
 
         return Inertia::render('client/Onboarding/Wizard', [
             'progress' => $progress,
@@ -28,7 +29,12 @@ class OnboardingController extends Controller
             'step' => ['required', 'string', 'in:'.implode(',', array_keys(OnboardingService::STEPS))],
         ]);
 
-        $ok = $this->onboarding->markStep($request->user(), $validated['step'], false);
+        $ok = $this->onboarding->markStep(
+            $request->user(),
+            WorkspaceContext::id() ?? $request->user()->workspace_id,
+            $validated['step'],
+            false,
+        );
 
         return response()->json(['ok' => $ok]);
     }
