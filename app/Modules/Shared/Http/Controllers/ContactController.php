@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\Segment;
 use App\Modules\Shared\Services\ContactService;
 use App\Services\StorageManager;
 use App\Support\Demo;
+use App\Support\WorkspaceContext;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -27,7 +28,7 @@ class ContactController extends Controller
 
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $contacts = Contact::where('workspace_id', $workspaceId)
             ->with('tags')
@@ -63,7 +64,7 @@ class ContactController extends Controller
      */
     private function bulkImportProps(Request $request): array
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         return [
             'tags' => ContactTag::where('workspace_id', $workspaceId)->orderBy('name')->get(),
@@ -78,7 +79,7 @@ class ContactController extends Controller
     {
         $this->authoriseContact($request, $contact);
 
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $contact->load(['tags', 'segments', 'conversations' => fn ($q) => $q->with(['messages' => fn ($q) => $q->latest('sent_at')->limit(5)])->latest('last_message_at')->limit(10)]);
 
         $staticSegments = Segment::where('workspace_id', $workspaceId)->where('type', 'static')->orderBy('name')->get(['id', 'name']);
@@ -91,7 +92,7 @@ class ContactController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $validated = $request->validate([
             'phone_e164' => ['nullable', 'string', 'max:20'],
             'email' => ['nullable', 'email', 'max:191'],
@@ -122,7 +123,7 @@ class ContactController extends Controller
     public function update(Request $request, Contact $contact): RedirectResponse
     {
         $this->authoriseContact($request, $contact);
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $validated = $request->validate([
             'first_name' => ['nullable', 'string', 'max:128'],
             'last_name' => ['nullable', 'string', 'max:128'],
@@ -195,7 +196,7 @@ class ContactController extends Controller
 
     public function import(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $request->validate(['file' => ['required', 'file', 'mimes:csv,txt', 'max:10240']]);
 
         $path = $request->file('file')->getRealPath();
@@ -227,7 +228,7 @@ class ContactController extends Controller
 
     public function bulkStore(Request $request): Response
     {
-        $workspaceId = (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        $workspaceId = (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
 
         $validated = $request->validate([
             'rows' => ['required', 'array', 'max:500'],
@@ -268,7 +269,7 @@ class ContactController extends Controller
 
     public function bulkDestroy(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $validated = $request->validate([
             'uuids' => ['required', 'array', 'max:500'],
             'uuids.*' => ['string', 'uuid'],
@@ -283,7 +284,7 @@ class ContactController extends Controller
 
     public function export(Request $request): HttpResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $contacts = Contact::where('workspace_id', $workspaceId)
             ->with('tags')
@@ -321,7 +322,7 @@ class ContactController extends Controller
 
     private function authoriseContact(Request $request, Contact $contact): void
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless((int) $contact->workspace_id === (int) $workspaceId, 403);
     }
 }

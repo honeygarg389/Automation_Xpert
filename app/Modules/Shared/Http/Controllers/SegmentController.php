@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Segment;
 use App\Modules\Shared\Services\SegmentResolver;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -17,7 +18,7 @@ class SegmentController extends Controller
 
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $segments = Segment::where('workspace_id', $workspaceId)->latest()->get();
 
         return Inertia::render('Contacts/Segments', ['segments' => $segments]);
@@ -25,7 +26,7 @@ class SegmentController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:128'],
             'type' => ['required', 'in:static,dynamic'],
@@ -71,7 +72,7 @@ class SegmentController extends Controller
         $this->authorise($request, $segment);
         abort_if($segment->type !== 'static', 403, 'Only static segments support manual contact management.');
 
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $segmentContacts = $segment->contacts()
             ->orderBy('first_name')
@@ -126,7 +127,7 @@ class SegmentController extends Controller
 
     private function authorise(Request $request, Segment $segment): void
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless((int) $segment->workspace_id === (int) $workspaceId, 403);
     }
 }
