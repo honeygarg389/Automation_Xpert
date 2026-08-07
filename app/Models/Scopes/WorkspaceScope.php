@@ -75,6 +75,16 @@ class WorkspaceScope implements Scope
             return;
         }
 
+        // A deliberately cross-tenant operation — the schedulers, which must scan
+        // every workspace for due work. Declared per call via
+        // WorkspaceContext::crossTenant() and counted by the bypass inventory.
+        //
+        // This is NOT the same as "no context". No context fails closed and
+        // returns nothing; this returns everything, on purpose.
+        if (WorkspaceContext::isCrossTenant()) {
+            return;
+        }
+
         // The admin panel reads across tenants by design. See the class docblock:
         // this is a ruled exception with a named test, not an omission.
         if (Auth::guard('admin')->check()) {

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Ecommerce\Jobs;
 
+use App\Jobs\Middleware\EstablishesWorkspaceContext;
 use App\Modules\Ecommerce\Models\EcommerceStore;
 use App\Modules\Ecommerce\Services\Clients\StoreClientFactory;
 use App\Support\Retry\Jitter;
@@ -28,6 +29,21 @@ class RegisterStoreWebhooksJob implements ShouldQueue
     }
 
     public function __construct(public readonly int $storeId) {}
+
+    /**
+     * Phase 0: establish this job's tenant BEFORE handle() runs.
+     *
+     * handle()'s first statement loads a scoped model. Without context that
+     * lookup returns null and the early return below turns a tenant-blind job
+     * into a silent success. The middleware resolves the workspace with one
+     * deliberately unscoped column read, and throws if it cannot.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [EstablishesWorkspaceContext::from(EcommerceStore::class, $this->storeId)];
+    }
 
     public function handle(): void
     {

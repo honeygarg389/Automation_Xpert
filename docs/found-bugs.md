@@ -1181,3 +1181,59 @@ the other, with nothing to indicate it.
 
 Not decided here. Flagged so the choice is made deliberately at slice 5 rather than
 discovered at slice 12.
+
+---
+
+## ⚠️ The workspace scope does NOT protect against a WRONG dispatch — only a missing one
+
+**Recorded 2026-08-08, during Phase 0 slice 4. Not a bug — a limit, recorded because the
+sentence "we have a global scope now" will be read as covering it, and it does not.**
+
+`EstablishesWorkspaceContext` resolves a queued job's tenant with one deliberately unscoped
+lookup:
+
+```php
+$workspaceId = Campaign::withoutGlobalScope(WorkspaceScope::class)
+    ->whereKey($this->campaignId)->value('workspace_id');
+```
+
+**It trusts the key it was handed.** Dispatch `SendCampaignMessageJob` with another tenant's
+campaign id and the middleware will faithfully establish *that* tenant's context and do the
+work — correctly, scoped, and to the wrong customer.
+
+The same is true in the request path. The scope constrains what a query returns; it says
+nothing about which id reached the query. A controller that accepts `campaign_id` from the
+request and dispatches without checking ownership is exactly as wrong after Phase 0 as before.
+
+### What actually protects against a wrong id
+
+The **68 controller sites migrated in Phase 1c**, and route-model binding, which resolves
+through the scope and therefore 404s on another tenant's uuid. Those remain load-bearing.
+Phase 0 does not replace them; it removes a *different* failure — the query that silently
+returned everything because nobody remembered to filter it.
+
+### Why this is worth writing down
+
+There is a predictable reasoning error waiting here: "isolation is enforced by the database
+now, so the controller checks are redundant." They are not redundant, they defend a different
+boundary, and deleting one of them would reintroduce a cross-tenant write with a green suite
+and a global scope both saying everything is fine.
+
+The one-line version, for a reviewer: **the scope answers "whose rows may this query see".
+It never answers "was this the right id to ask about".**
+
+### Related, from the same slice
+
+- **`failed()` handlers run OUTSIDE job middleware.** Laravel invokes them from the worker's
+  exception path, so they have no workspace context and, under the scope, see nothing.
+  `ProcessEcommerceWebhookJob` and `ProcessInboundMessageJob` both define one; both only call
+  `Log::error()` with ids from their own payload, so neither is broken today. Anyone adding a
+  *query* to a `failed()` handler will get an empty result and no indication why. Pinned by
+  `failed_handlers_run_outside_the_middleware_and_therefore_have_no_context`.
+
+- **"No context" and "cross-tenant" are not the same thing**, and conflating them was a real
+  bug in the first draft of this slice. Because the scope fails closed, running a scheduler
+  with *no* context gives it **zero** due campaigns rather than every tenant's — the exact
+  silent no-op the middleware exists to abolish. Declared cross-tenant work therefore has to
+  actively suppress the scope (`WorkspaceContext::crossTenant()`), not merely decline to set
+  one. Caught by a test, not by review.

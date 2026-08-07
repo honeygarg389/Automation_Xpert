@@ -3,6 +3,8 @@
 namespace App\Modules\Broadcasting\Jobs;
 
 use App\Events\MessageSent;
+use App\Jobs\Middleware\EstablishesWorkspaceContext;
+use App\Models\SmtpConfiguration;
 use App\Modules\Broadcasting\Models\Campaign;
 use App\Modules\Broadcasting\Models\CampaignRecipient;
 use App\Modules\Broadcasting\Models\UsageMeter;
@@ -15,18 +17,18 @@ use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use App\Modules\Whatsapp\Services\CloudApiClient;
+use App\Services\Mail\MailService;
 use App\Support\Retry\Jitter;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Models\SmtpConfiguration;
-use App\Services\Mail\MailService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Str;
 
 class SendCampaignMessageJob implements ShouldQueue
@@ -62,6 +64,21 @@ class SendCampaignMessageJob implements ShouldQueue
         public readonly int $campaignId,
         public readonly int $contactId,
     ) {}
+
+    /**
+     * Phase 0: establish this job's tenant BEFORE handle() runs.
+     *
+     * handle()'s first statement loads a scoped model. Without context that
+     * lookup returns null and the early return below turns a tenant-blind job
+     * into a silent success. The middleware resolves the workspace with one
+     * deliberately unscoped column read, and throws if it cannot.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [EstablishesWorkspaceContext::from(Campaign::class, $this->campaignId)];
+    }
 
     public function handle(CampaignPersonalizer $personalizer): void
     {
@@ -413,7 +430,7 @@ class SendCampaignMessageJob implements ShouldQueue
         }
 
         $payload = $campaign->payload_json ?? [];
-        $trackOpens  = (bool) ($payload['track_opens'] ?? true);
+        $trackOpens = (bool) ($payload['track_opens'] ?? true);
         $trackClicks = (bool) ($payload['track_clicks'] ?? false);
 
         // Build the unsubscribe URL — required by CAN-SPAM / GDPR for every commercial email.
@@ -424,8 +441,8 @@ class SendCampaignMessageJob implements ShouldQueue
         // Render body with {{context.unsubscribe_url}} support so authors can place
         // the link themselves; we also inject a fallback footer below.
         $context = $unsubscribeUrl ? ['unsubscribe_url' => $unsubscribeUrl] : [];
-        $subject  = $personalizer->renderText($payload['subject'] ?? 'No subject', $contact);
-        $body     = $personalizer->renderText($payload['body'] ?? '', $contact, $context);
+        $subject = $personalizer->renderText($payload['subject'] ?? 'No subject', $contact);
+        $body = $personalizer->renderText($payload['body'] ?? '', $contact, $context);
 
         // ── Click tracking: wrap links with signed redirect URLs ──────────────
         if ($trackingToken !== null && $trackClicks) {
@@ -452,7 +469,7 @@ class SendCampaignMessageJob implements ShouldQueue
         // ── RFC 2369 / RFC 8058 List-Unsubscribe headers ──────────────────────
         $extraHeaders = [];
         if ($unsubscribeUrl) {
-            $extraHeaders['List-Unsubscribe']      = '<'.$unsubscribeUrl.'>, <mailto:'.($payload['reply_to'] ?? config('mail.from.address')).'?subject=unsubscribe>';
+            $extraHeaders['List-Unsubscribe'] = '<'.$unsubscribeUrl.'>, <mailto:'.($payload['reply_to'] ?? config('mail.from.address')).'?subject=unsubscribe>';
             $extraHeaders['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click';
         }
 
@@ -460,8 +477,8 @@ class SendCampaignMessageJob implements ShouldQueue
             ?? SmtpConfiguration::getActive();
 
         $fromEmail = filled($payload['from_email'] ?? '') ? $payload['from_email'] : null;
-        $fromName  = filled($payload['from_name']  ?? '') ? $payload['from_name']  : null;
-        $replyTo   = filled($payload['reply_to']   ?? '') ? $payload['reply_to']   : null;
+        $fromName = filled($payload['from_name'] ?? '') ? $payload['from_name'] : null;
+        $replyTo = filled($payload['reply_to'] ?? '') ? $payload['reply_to'] : null;
 
         if ($smtp) {
             $mailService = app(MailService::class);
@@ -484,9 +501,9 @@ class SendCampaignMessageJob implements ShouldQueue
         $id = 'email:'.uniqid();
 
         return [
-            'id'      => $id,
-            'body'    => $subject,
-            'type'    => 'text',
+            'id' => $id,
+            'body' => $subject,
+            'type' => 'text',
             'payload' => ['subject' => $subject, 'body' => $body],
         ];
     }
@@ -502,7 +519,7 @@ class SendCampaignMessageJob implements ShouldQueue
             '/<a(\s[^>]*?)href=["\']([^"\']+)["\']/i',
             function (array $matches) use ($token): string {
                 $attrs = $matches[1];
-                $url   = $matches[2];
+                $url = $matches[2];
 
                 // Skip mailto, tel, anchor, and already-tracked links.
                 if (
@@ -515,7 +532,7 @@ class SendCampaignMessageJob implements ShouldQueue
                 }
 
                 // Signed route: the signature covers token + url, preventing tampering.
-                $trackUrl = \Illuminate\Support\Facades\URL::signedRoute(
+                $trackUrl = URL::signedRoute(
                     'track.email.click',
                     ['token' => $token, 'url' => $url],
                     absolute: true,
@@ -631,7 +648,7 @@ class SendCampaignMessageJob implements ShouldQueue
      * placeholders substituted), falling back to the first body parameter, then
      * to a `[template: name]` label.
      *
-     * @param  array<int, mixed>       $components
+     * @param  array<int, mixed>  $components
      * @param  array<int, mixed>|null  $definition
      */
     private function summariseTemplateForInbox(string $templateName, array $components, ?array $definition = null): string

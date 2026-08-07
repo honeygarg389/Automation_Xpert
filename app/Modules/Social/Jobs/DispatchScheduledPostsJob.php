@@ -2,6 +2,7 @@
 
 namespace App\Modules\Social\Jobs;
 
+use App\Jobs\Middleware\EstablishesWorkspaceContext;
 use App\Modules\Social\Models\SocialPost;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -9,6 +10,23 @@ use Illuminate\Foundation\Queue\Queueable;
 class DispatchScheduledPostsJob implements ShouldQueue
 {
     use Queueable;
+
+    /**
+     * CROSS-TENANT BY DESIGN — a decision, not an omission.
+     *
+     * This job's entire function is to scan every workspace for due work.
+     * Giving it a tenant context would silently reduce it to one tenant's.
+     * Declared explicitly so it is counted rather than looking like a job
+     * somebody forgot to scope.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [EstablishesWorkspaceContext::crossTenant(
+            'reason: the scheduler scans EVERY workspace for posts due to publish; scoping it would silently stop publishing for all but one tenant',
+        )];
+    }
 
     public function handle(): void
     {

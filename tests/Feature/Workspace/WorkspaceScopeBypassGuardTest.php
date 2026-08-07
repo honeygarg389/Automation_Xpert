@@ -46,12 +46,31 @@ class WorkspaceScopeBypassGuardTest extends TestCase
      * @var array<string, string>
      */
     private const SANCTIONED = [
-        // The definition itself, not a use of it.
+        // ── Definitions, not uses of them ──
         'app/Models/Concerns/BelongsToWorkspace.php' => 'Defines the sanctioned bypass. The withoutGlobalScope() call here IS the implementation.',
+        'app/Support/WorkspaceContext.php' => 'Defines crossTenant(). The flag and its try/finally are the implementation.',
+        'app/Models/Scopes/WorkspaceScope.php' => 'The scope itself. It reads isCrossTenant() to honour the door; it does not open one.',
+        'app/Jobs/Middleware/EstablishesWorkspaceContext.php' => 'THE one job-context bypass: reads a single workspace_id column so a job can establish its own tenant. One query wide. Also routes declared cross-tenant jobs.',
+
+        // ── Cross-tenant BY DESIGN: the schedulers ──
+        // Each scans every workspace for due work. A per-tenant context would
+        // silently reduce them to one tenant's — which is why they must be
+        // counted here rather than merely commented at the call site.
+        'app/Modules/Broadcasting/Jobs/LaunchScheduledCampaignsJob.php' => 'Scheduler: finds campaigns due to send across all workspaces.',
+        'app/Modules/Social/Jobs/DispatchScheduledPostsJob.php' => 'Scheduler: finds posts due to publish across all workspaces.',
+        'app/Modules/Social/Jobs/RefreshSocialTokensJob.php' => 'Scheduler: refreshes expiring OAuth tokens across all workspaces.',
     ];
 
-    /** Both spellings. Neither alone is sufficient — see the class docblock. */
-    private const PATTERNS = ['withoutWorkspaceScope', 'withoutGlobalScope'];
+    /**
+     * Every spelling that takes a query out from under the workspace scope.
+     * No single one is sufficient — see the class docblock.
+     *
+     * `crossTenant` was added in slice 4. It is a scope bypass by another name:
+     * it suppresses filtering for the duration of a callable. Leaving it out
+     * would have let the three schedulers read every tenant's rows without
+     * appearing in any inventory — the same hole `withoutGlobalScope` would be.
+     */
+    private const PATTERNS = ['withoutWorkspaceScope', 'withoutGlobalScope', 'crossTenant'];
 
     #[Test]
     public function every_workspace_scope_bypass_in_the_application_is_inventoried(): void
@@ -110,6 +129,10 @@ class WorkspaceScopeBypassGuardTest extends TestCase
             .'so it is the spelling a bypass would arrive under by default.');
 
         $this->assertContains('withoutWorkspaceScope', self::PATTERNS);
+
+        $this->assertContains('crossTenant', self::PATTERNS,
+            'crossTenant() suppresses the scope for the duration of a callable. It is a bypass '
+            .'and must be counted as one, or the schedulers read every tenant unlisted.');
     }
 
     /**

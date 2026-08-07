@@ -45,6 +45,19 @@ class WorkspaceContext
     private static ?int $override = null;
 
     /**
+     * True while a deliberately cross-tenant operation is running.
+     *
+     * Phase 0, slice 4. The schedulers exist to scan EVERY workspace for due
+     * work, and the workspace scope fails closed — so "no context" gives them
+     * nothing, not everything. Skipping context establishment is not enough;
+     * the scope has to be told this is intentional.
+     *
+     * Set only by crossTenant(), which is time-bounded to one callable and
+     * counted by the bypass inventory. It is a door, not a default.
+     */
+    private static bool $crossTenant = false;
+
+    /**
      * Memoised resolution, keyed by user id, so a global scope calling id()
      * once per query does not re-run the membership check every time.
      *
@@ -73,6 +86,47 @@ class WorkspaceContext
         } finally {
             self::$override = $previous;
         }
+    }
+
+    /**
+     * Run a callback across ALL workspaces, with the scope suppressed.
+     *
+     * For operations whose correctness REQUIRES seeing every tenant: the
+     * campaign/post schedulers, and OAuth token refresh. Giving those a single
+     * workspace silently reduces them to one tenant's work; giving them no
+     * context at all gives them nothing, because the scope fails closed.
+     *
+     * The reason is required and is not decoration — `WorkspaceContext::crossTenant`
+     * is one of the spellings the bypass-inventory guard greps for, so every use
+     * is counted and reviewed.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public static function crossTenant(string $reason, callable $callback): mixed
+    {
+        if (trim($reason) === '') {
+            throw new \InvalidArgumentException(
+                'crossTenant() requires a reason: an unexplained cross-tenant read is indistinguishable from a leak.'
+            );
+        }
+
+        $previous = self::$crossTenant;
+        self::$crossTenant = true;
+
+        try {
+            return $callback();
+        } finally {
+            self::$crossTenant = $previous;
+        }
+    }
+
+    /** Whether a deliberately cross-tenant operation is in progress. */
+    public static function isCrossTenant(): bool
+    {
+        return self::$crossTenant;
     }
 
     /**
@@ -128,6 +182,7 @@ class WorkspaceContext
     {
         self::$override = null;
         self::$resolved = [];
+        self::$crossTenant = false;
     }
 
     private static function resolveForUser(User $user): ?int
