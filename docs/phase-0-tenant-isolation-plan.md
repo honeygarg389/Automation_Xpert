@@ -314,6 +314,68 @@ tests to match a prediction the code did not satisfy.
 `WorkspaceContext`, switching workspace must change what `/app/contacts` returns, and the new
 component must agree with production rather than disagree with it. If 1c completes and those
 tests still pass unchanged, 1c is not finished.
+
+### ⚠️ CORRECTION (2026-08-07): they do NOT flip together, and only one of them ever will
+
+The statement above — that all three flip at 1c completion — was wrong on both counts, and
+was corrected when 1c/shared landed.
+
+**One has already flipped, early.**
+`characterisation_switching_workspace_does_not_affect_controllers_today` flipped at
+**1c/shared**, not at 1c completion. It exercises `GET /app/contacts`, which is
+`ContactController::index` — one of the 14 sites that commit migrated. The moment that single
+site resolved through `WorkspaceContext`, the test's bug-documenting assertions became false
+and the whole suite went red. It was inverted in that same commit and renamed to
+**`switching_workspace_changes_which_contacts_the_list_returns`**, which is what it now
+proves. It is load-bearing: reverting `ContactController`'s resolution makes it fail.
+
+The lesson generalises — **a characterisation test flips when the specific route it exercises
+is migrated, not when its phase completes.** Any remaining one should be expected to go red
+mid-phase, and a red gate mid-1c is not automatically a regression.
+
+**The other two will never flip, and should not be waited on.** Neither is a controller test:
+
+| Test | What it asserts | Still true? |
+|---|---|---|
+| `characterisation_the_broken_expression_always_yields_the_home_workspace` | `$user->current_workspace_id ?? $user->workspace_id` yields the home workspace, because `current_workspace_id` is not a column, accessor or cast | **Yes, permanently.** It evaluates the expression directly in the test body. It would only become false if `current_workspace_id` were added to the schema — which is not planned and would be the wrong fix. |
+| `workspace_context_and_the_legacy_expression_currently_disagree` | `WorkspaceContext::id()` honours a switch while the legacy expression does not | **Yes, permanently**, for the same reason — it compares the component against the raw expression, not against a controller. |
+
+Both were confirmed still passing with `ContactController` reverted, which is the proof they
+do not depend on controller migration at all.
+
+**So "1c is done when all three invert" is not a usable definition of done.** The usable one
+is the site inventory: 1c is done when no `current_workspace_id ?? workspace_id` expression
+remains in a request-scoped call site. Track that, not the characterisation tests.
+
+### 📌 Not all remaining sites can take the 1c shape — Core needs a ruling
+
+Found while inventorying for 1c/shared, recorded here so it is not rediscovered later.
+
+Three Core sites resolve the workspace from a **`User` object, not a `Request`**:
+
+| File | Line(s) | Signature |
+|---|---|---|
+| `app/Services/WorkspaceExportService.php` | 24 | `generate(User $user)` |
+| `app/Services/OnboardingService.php` | 27, 118 | takes `User` |
+
+The 1c precedent — `WorkspaceContext::id() ?? $request->user()->workspace_id` — **cannot be
+applied to these**. `WorkspaceContext::id()` reads `Auth::user()`, which is null outside a
+request; these services can be invoked from a queued job or a console command, where the
+correct workspace is the one belonging to the passed `$user`, not the one belonging to
+whoever happens to be authenticated.
+
+Options, none chosen: pass an explicit `int $workspaceId` in; add a
+`WorkspaceContext::forUser(User $user)` resolver; or leave them, since
+`$user->current_workspace_id` is always null and the fallback to `$user->workspace_id` is
+already the intended behaviour for a user-scoped operation.
+
+**This is a design decision, deferred to whoever rules on Core. Do not swap them to the 1c
+shape on autopilot** — it would introduce an auth-context dependency where none exists today.
+
+Also in Core, for completeness: `WorkspaceController.php:60,87` write
+`session(['current_workspace_id' => …])`. Those are the **switcher itself** and must not be
+touched. `MobileAuthController.php:123` returns `$user->current_workspace_id` in an API
+payload, where it is always null — a separate small bug, not a 1c site.
 *This is not optional. The scope cannot be built on a broken resolver.*
 
 - **Create** `app/Support/WorkspaceContext.php`

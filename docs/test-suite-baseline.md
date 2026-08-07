@@ -196,11 +196,22 @@ coverage. Judge coverage by what the Feature suite exercises, never by this tota
 
 **Status of the workspace-context work on `master`.** The five completed 1c modules — Leads,
 Social, Automation, Client-controllers (CampaignReport) and Broadcasting — are merged and
-covered by 67 green isolation tests. **1c groups 6–12 remain unmigrated.** The three
-characterisation tests in `WorkspaceContextTest` still assert the **broken** behaviour by
-design (`Characterisation: switching workspace does not affect controllers today`); they pass
-because the bug is still exactly as documented, and they invert when 1c completes. Green on
-those three means "unchanged", not "fixed".
+covered by 67 green isolation tests.
+
+**Superseded 2026-08-07.** This paragraph previously said all three characterisation tests in
+`WorkspaceContextTest` assert broken behaviour and invert together when 1c completes. Both
+halves were wrong:
+
+- `characterisation_switching_workspace_does_not_affect_controllers_today` **flipped early**,
+  at 1c/shared, because it exercises `GET /app/contacts` — a route that commit migrated. It
+  was inverted and renamed `switching_workspace_changes_which_contacts_the_list_returns`, and
+  now proves the switcher works on that route.
+- The remaining two evaluate the legacy expression directly rather than through a controller,
+  so they **never flip** and are not a signal of 1c progress.
+
+A characterisation test flips when the route it exercises is migrated, not when its phase
+completes — so a mid-phase red gate here is expected, not a regression. See
+`docs/phase-0-tenant-isolation-plan.md` for the full correction.
 
 **The retry work is partial.** No test exercises `backoff()` on any job — 8 of the 16 jobs
 have no test reference at all, and the only occurrences of "backoff" in `tests/` are two

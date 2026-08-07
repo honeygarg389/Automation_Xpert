@@ -155,17 +155,33 @@ class WorkspaceContextTest extends TestCase
         $this->assertNull(WorkspaceContext::id(), 'and context must not leak past the callback');
     }
 
-    // ── Characterisation: the bug, asserted as it exists TODAY ───────────────
+    // ── Switcher behaviour, and what is still broken ─────────────────────────
     //
-    // These two tests describe CURRENT, BROKEN production behaviour. They pass
-    // now and are EXPECTED TO FAIL the moment commit 1b migrates the call sites.
+    // The first test below WAS a characterisation test asserting the bug. It was
+    // inverted when 1c/shared migrated ContactController: the route it exercises
+    // (/app/contacts) now honours the switcher, so the old assertions became
+    // false and the test was flipped to assert the correct behaviour instead.
     //
-    // When 1b lands, invert them: the assertions become "the switched workspace
-    // is honoured". A failure here after 1b is success, not a regression — check
-    // this comment before treating it as one.
+    // The two tests after it are NOT controller tests and did not flip. They
+    // evaluate the legacy expression directly, so they stay true for as long as
+    // that expression exists anywhere in the codebase.
 
+    /**
+     * Was `characterisation_switching_workspace_does_not_affect_controllers_today`,
+     * which asserted the OPPOSITE and passed until 2026-08-07.
+     *
+     * It flipped when 1c/shared migrated ContactController — not at 1b, and not
+     * at "1c completion" as the original comment predicted. The route it
+     * exercises, GET /app/contacts, is ContactController::index, one of that
+     * commit's 14 sites. The moment that site resolved through WorkspaceContext,
+     * the switched workspace's contact started showing and the bug-documenting
+     * assertions became false.
+     *
+     * It is now load-bearing in the ordinary way: reverting ContactController's
+     * resolution makes it fail.
+     */
     #[Test]
-    public function characterisation_switching_workspace_does_not_affect_controllers_today(): void
+    public function switching_workspace_changes_which_contacts_the_list_returns(): void
     {
         ['user' => $user, 'home' => $home, 'other' => $other] = $this->createTwoWorkspaceUser();
 
@@ -187,11 +203,12 @@ class WorkspaceContextTest extends TestCase
 
         $body = $response->getContent();
 
-        // TODAY: the session is ignored, so the HOME workspace's contact shows.
-        $this->assertStringContainsString('HomeOnly', $body,
-            'Documents the bug: controllers read the home workspace regardless of the session.');
-        $this->assertStringNotContainsString('OtherOnly', $body,
-            'Documents the bug: the switched-to workspace is not honoured. INVERT THIS AFTER 1b.');
+        // The switched-to workspace is honoured: its contact shows, the home
+        // workspace's does not.
+        $this->assertStringContainsString('OtherOnly', $body,
+            'The switched-to workspace must be honoured by the contact list.');
+        $this->assertStringNotContainsString('HomeOnly', $body,
+            'The home workspace must no longer leak in once a switch is active.');
     }
 
     #[Test]
