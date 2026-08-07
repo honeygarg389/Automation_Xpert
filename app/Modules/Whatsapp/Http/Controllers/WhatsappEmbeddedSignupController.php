@@ -8,6 +8,7 @@ use App\Modules\Whatsapp\Jobs\TemplateSyncJob;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Services\CloudApiClient;
 use App\Modules\Shared\Models\ChannelAccount;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -24,7 +25,7 @@ class WhatsappEmbeddedSignupController extends Controller
             'phone_number_id'  => ['nullable', 'string', 'max:64'],
         ]);
 
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $meta = CredentialResolver::system()->meta();
         if (! $meta || ! $meta->appId() || ! $meta->appSecret()) {
@@ -176,7 +177,7 @@ class WhatsappEmbeddedSignupController extends Controller
 
     public function reregisterWebhook(Request $request, \App\Modules\Whatsapp\Models\WhatsappBusinessAccount $waba): JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         if ($waba->workspace_id !== $workspaceId) {
             abort(403);
         }
