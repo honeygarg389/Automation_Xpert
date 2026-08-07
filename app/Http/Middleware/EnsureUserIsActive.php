@@ -33,11 +33,12 @@ class EnsureUserIsActive
     {
         $user = $request->user();
 
-        if ($user !== null && method_exists($user, 'isActive') && ! $user->isActive()) {
-            // Best-effort cleanup for tokens that predate the model hook. The
-            // request is refused either way — this is not the control.
-            $user->currentAccessToken()?->delete();
-
+        if ($user !== null && ! $user->isActive()) {
+            // Deliberately no token cleanup here. `currentAccessToken()` returns
+            // a TransientToken for a session-authenticated user, which has no
+            // delete() — so "tidying up" would fatal the moment this middleware
+            // were applied to a web route. Refusing is the whole job; deleting
+            // the row is User::booted()'s.
             return response()->json([
                 'error' => 'This account is no longer active.',
             ], 401);
