@@ -1272,3 +1272,113 @@ changes numbers customers see. The fix is `$to->copy()->subDay()` (or `CarbonImm
 **Worth a wider look when it is fixed:** `Carbon::now()` is used throughout this codebase, and
 this is the failure mode that leaves no trace. Grepping for `->sub`/`->add` used inline inside
 a `format()` or a string concatenation would find any siblings.
+## BUG-019 — a channel routing identifier claimed by two workspaces sent every message to the wrong tenant — ✅ FIXED
+
+**Severity: High. Found 2026-08-08 while planning Phase 0 slice 4c. Fixed on
+`fix/channel-routing-uniqueness`, ahead of the rest of Phase 0.**
+
+`channel_accounts.phone_number_id` had **no unique constraint** — the live schema carried only
+`PRIMARY` and a non-unique `workspace_id` index, and the single migration that creates the
+table never added one. Meanwhile the sibling tables *are* constrained
+(`whatsapp_phone_numbers.phone_number_id` UNIQUE, `whatsapp_business_accounts.waba_id`
+UNIQUE), which is what makes it read as an oversight rather than a decision.
+
+### How a duplicate was created — the application produced it
+
+```php
+$account = ChannelAccount::firstOrNew([
+    'workspace_id'    => $waba->workspace_id,   // ← keyed on the NEW workspace
+    'phone_number_id' => $phoneNumberId,
+]);
+```
+
+Keyed on **both** columns, a number already held by another workspace was a MISS, so a second
+row was INSERTED. The duplicate was not merely unprevented; it was the designed outcome of the
+query. All four attach sites had this shape.
+
+In the same method, `WhatsappPhoneNumber::updateOrCreate(['phone_number_id' => $id], …)` is
+keyed on the identifier **alone**, so that table *moved* while `channel_accounts` *forked* —
+the two tables then disagreed about who owned the number.
+
+### What it cost
+
+The inbound router called `->first()` on an unordered query, so it silently picked one row —
+in practice the oldest. **Every message for that number kept landing in the previous tenant's
+inbox, indefinitely, with no error.** The new tenant saw silence and assumed setup had failed.
+
+HMAC signature verification does **not** bound this. It proves the payload came from Meta; it
+says nothing about which workspace the identifier belongs to.
+
+### Accidental, not malicious — and routine under the roadmap
+
+Meta OAuth blocks the malicious path: you can only connect WABAs and Pages you own. The
+accidental path needs no attacker — a business leaving reseller A and re-onboarding under
+reseller B reconnects the same number. **The partner tier makes that a supported business
+event**, so this would have moved from edge case to normal operation.
+
+### The three shapes, and why the schema fixes only one
+
+| Channel | Identifier | Protection |
+|---|---|---|
+| WhatsApp | `phone_number_id` — a real column | **UNIQUE index** ✓ |
+| Messenger | `meta_json->page_id` — a JSON path | guard only |
+| Instagram | `meta_json->instagram_page_id` **OR** `instagram_account_id` | guard only |
+
+Three findings from the sweep that changed the design:
+
+1. **`webhooks/meta/{token}` validates a PLATFORM-GLOBAL verify token** — identical for every
+   tenant. So Messenger and Instagram carry **no per-tenant identifier in the URL at all**,
+   and routing rests entirely on the JSON match. WhatsApp at least has the per-WABA token
+   path, whose token is unique. **The Meta channels are the worse case, not the equal one.**
+2. **Instagram matches two keys with `orWhere`**, so uniqueness has to hold across the *set*.
+3. **A generated column + unique index was therefore rejected.** It would cover Messenger and
+   not Instagram, and a schema that protects two of three while appearing to protect all three
+   is worse than one that protects one and says so.
+
+**`ChannelAccountRouting` is the load-bearing control. The index is a backstop.** That is
+stated in the service, in the migration, and in the guard test — because anyone reading the
+unique index will otherwise assume the database handles this.
+
+### Ownership on conflict: REFUSE. Ruled 2026-08-08.
+
+Zero customers today, no legitimate reconnect flow exists, and refusing fails closed. A real
+customer blocked by this opens a support ticket — that is a person noticing. A silent reassign
+is visible to nobody, and if it is wrong one company reads another's conversations.
+
+**Deferred design, to build when the partner tier makes moving a channel a real event:**
+deactivate the old row, write an audit entry, notify both workspaces, and require an explicit
+confirmation naming the losing workspace. That is a feature, not a constraint change.
+
+### Ambiguity is visible without reading logs
+
+If two rows ever exist anyway — legacy data, a race, a bug — the router **refuses** rather than
+guessing, and writes an `audit_logs` row (`channel.routing_ambiguous`) surfaced at
+`/admin/audit-log`, plus `report()` for Sentry when configured.
+
+It does **not** fail the job. The drivers' per-message `try/catch` is a decision already made
+correctly: one poisoned identifier must not stop the other messages in the same payload.
+A counter-then-throw was considered and rejected — it would retry the whole payload forever
+and make "some messages were ambiguous" indistinguishable from "this job is broken".
+
+### Detection before the index
+
+`ALTER TABLE … ADD UNIQUE` fails naming exactly **one** arbitrary offending value, which is
+useless for planning. The migration therefore **pre-flights** and aborts with the complete
+list, and `php artisan channels:audit-routing` reports all three channels.
+
+**Report only, no `--fix`, and there will not be one:** which workspace legitimately owns a
+number is a business fact. The newest row may be a genuine migration between agencies or a
+mis-onboarding, and choosing wrong causes the exact failure this branch prevents. Same
+reasoning as the SEC-004 storage inventory.
+
+Verified on this machine: `channel_accounts` **0 rows**, 0 duplicates. Nothing to reconcile
+here; a deployed install must run the audit first.
+
+### Recorded, not fixed
+
+- **`campaign_recipients.provider_message_id` is not unique.** SMS delivery-status callbacks
+  match on it. Lower severity — a status update, not message content, and provider SIDs are
+  globally unique in practice — but it is the same shape and nothing enforces it.
+- **`ecommerce_stores.webhook_secret` is not unique**, which is fine: the store is identified
+  by the route's uuid and the secret only verifies HMAC for that store. Recorded so the next
+  sweep does not re-raise it.

@@ -6,10 +6,10 @@ use App\Events\MessageReceived;
 use App\Events\MessageStatusUpdated;
 use App\Modules\Broadcasting\Models\CampaignRecipient;
 use App\Modules\Shared\Contracts\ChannelDriverInterface;
-use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
+use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
@@ -224,9 +224,15 @@ class WhatsappDriver implements ChannelDriverInterface
         $phoneId = $value['metadata']['phone_number_id'] ?? '';
         $fromPhone = $msg['from'] ?? '';
 
-        $channelAccount = ChannelAccount::where('phone_number_id', $phoneId)
-            ->where('channel', 'whatsapp')
-            ->first();
+        // BUG-019. Was ->first() on an unordered query: if two workspaces held
+        // the same phone_number_id, one was picked arbitrarily — in practice the
+        // oldest — and every message kept landing in the previous tenant's
+        // inbox, silently, forever. findForInbound() throws on ambiguity and
+        // records an audit_logs row so an operator sees it without reading logs.
+        $channelAccount = app(ChannelAccountRouting::class)->findForInbound(
+            'whatsapp',
+            ['phone_number_id' => $phoneId],
+        );
 
         if (! $channelAccount) {
             Log::warning('WhatsApp inbound dropped — no channel_account match', [

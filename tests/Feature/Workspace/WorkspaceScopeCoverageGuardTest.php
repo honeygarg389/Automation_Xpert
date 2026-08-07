@@ -58,7 +58,44 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
         // ── slice 5 — the canary ──
         'App\Modules\Leads\Models\Lead',
 
-        // ── slice 6 — Contact and the Shared models (the hard case) ──
+        // ═══ slice 6 — Contact and the Shared models (the hard case) ═══
+        //
+        // ⚠️ TWO OF THESE HAVE PREREQUISITES. Applying the trait without doing
+        // the work below does not produce an error — it produces a SILENTLY
+        // EMPTY result on paths that carry customer messages. Read both notes
+        // before touching this group.
+        //
+        // ── ChannelAccount ──────────────────────────────────────────────────
+        //
+        // `App\Modules\Shared\Services\ChannelAccountRouting` (added by
+        // BUG-019) queries ChannelAccount with Eloquent in BOTH its methods, and
+        // both need a ONE-QUERY bypass the moment the trait lands:
+        //
+        //   findForInbound()    routes every inbound WhatsApp/Messenger/Instagram
+        //                       message. It runs with no authenticated user and
+        //                       the workspace is the ANSWER it is looking for.
+        //                       Scoped, it returns null for EVERY message and
+        //                       each driver's "no channel_account match" branch
+        //                       silently drops the lot. Hazard H-3.
+        //
+        //   resolveForAttach()  detects a routing identifier already claimed by
+        //                       ANOTHER workspace. Seeing across workspaces is
+        //                       the entire point; scoped, it sees nothing,
+        //                       refuses nothing, and BUG-019 quietly returns.
+        //
+        // You must ALSO add that service to WorkspaceScopeBypassGuardTest's
+        // SANCTIONED list, or the bypass inventory goes red.
+        //
+        // ── Contact ─────────────────────────────────────────────────────────
+        //
+        // `App\Http\Controllers\Webhooks\AutomationWebhookController` resolves a
+        // contact from an inbound webhook payload with no authenticated user
+        // (`webhooks/automation/{trigger_token}`). Scoped with a null context it
+        // returns null, `$contactId` stays null, and the automation fires
+        // WITHOUT its contact — no exception, no failed job. It is a controller,
+        // so neither the job guard nor the command guard covers it.
+        //
+        // ────────────────────────────────────────────────────────────────────
         'App\Modules\Shared\Models\Contact',
         'App\Modules\Shared\Models\Conversation',
         'App\Modules\Shared\Models\Segment',
