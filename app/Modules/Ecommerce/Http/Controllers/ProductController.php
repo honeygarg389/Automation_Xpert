@@ -5,6 +5,7 @@ namespace App\Modules\Ecommerce\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Ecommerce\Models\EcommerceProduct;
 use App\Modules\Ecommerce\Models\EcommerceStore;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -106,6 +107,6 @@ class ProductController extends Controller
 
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 }

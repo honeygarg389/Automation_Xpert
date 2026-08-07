@@ -10,6 +10,7 @@ use App\Modules\Ecommerce\Services\ContactEnricher;
 use App\Modules\Ecommerce\Services\PayloadNormalizer;
 use App\Modules\Shared\Services\ContactService;
 use App\Support\Demo;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -196,6 +197,6 @@ class OrderController extends Controller
 
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 }

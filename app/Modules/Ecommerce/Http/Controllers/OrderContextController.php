@@ -5,6 +5,7 @@ namespace App\Modules\Ecommerce\Http\Controllers;
 use App\Http\Controllers\Controller;
 use App\Modules\Ecommerce\Models\EcommerceOrder;
 use App\Modules\Shared\Models\Contact;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -15,7 +16,7 @@ class OrderContextController extends Controller
      */
     public function index(Request $request, Contact $contact): JsonResponse
     {
-        $workspaceId = (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        $workspaceId = (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
         abort_unless($contact->workspace_id === $workspaceId, 403);
 
         $orders = EcommerceOrder::where('workspace_id', $workspaceId)
