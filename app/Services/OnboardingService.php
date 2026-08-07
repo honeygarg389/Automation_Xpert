@@ -22,9 +22,15 @@ class OnboardingService
         'connect_first_social_account' => 'Connect a social media account',
     ];
 
-    public function getProgress(User $user): array
+    /**
+     * @param  ?int  $workspaceId  The workspace to report progress for. Passed
+     *                             explicitly rather than derived from $user: a
+     *                             user has a home workspace but not a current
+     *                             one, so deriving it reported home progress to
+     *                             a user working in another workspace.
+     */
+    public function getProgress(User $user, ?int $workspaceId): array
     {
-        $workspaceId = $user->current_workspace_id ?? $user->workspace_id;
 
         $completed = OnboardingStep::where('user_id', $user->id)
             ->where('completed', true)
@@ -42,7 +48,7 @@ class OnboardingService
 
             // Persist auto-detected completions so they survive future checks
             if ($isCompleted && ! in_array($key, $completed, true)) {
-                $this->complete($user, $key);
+                $this->complete($user, $workspaceId, $key);
                 $completed[] = $key;
             }
         }
@@ -109,13 +115,12 @@ class OnboardingService
      * condition confirms it is actually done — preventing a user from spoofing
      * progress by calling this endpoint with an arbitrary step key.
      */
-    public function markStep(User $user, string $step, bool $verify = true): bool
+    /** @param  ?int  $workspaceId  See getProgress(); passed explicitly. */
+    public function markStep(User $user, ?int $workspaceId, string $step, bool $verify = true): bool
     {
         if (! array_key_exists($step, self::STEPS)) {
             return false;
         }
-
-        $workspaceId = $user->current_workspace_id ?? $user->workspace_id;
 
         if ($verify && ! $this->isCompleted($user, $workspaceId, $step, [])) {
             return false;
@@ -129,9 +134,15 @@ class OnboardingService
         return true;
     }
 
-    /** @deprecated Use markStep() */
-    public function complete(User $user, string $step): void
+    /**
+     * @deprecated Use markStep(), which takes the workspace explicitly.
+     *
+     * Kept for signature compatibility; it has no callers. The workspace is
+     * passed through so this shim cannot become a second way to resolve one —
+     * that is the "one concept, two definitions" trap CLAUDE.md warns about.
+     */
+    public function complete(User $user, ?int $workspaceId, string $step): void
     {
-        $this->markStep($user, $step, false);
+        $this->markStep($user, $workspaceId, $step, false);
     }
 }

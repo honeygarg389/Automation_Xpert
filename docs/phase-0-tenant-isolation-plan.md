@@ -302,6 +302,14 @@ is also fixing rate limits.
 
 `MissingWorkspaceContextException` is deferred to whichever commit first throws it.
 
+> **✅ LANDED 2026-08-07** on `fix/workspace-export-wrong-workspace`, in
+> `app/Exceptions/MissingWorkspaceContextException.php`. The commit that first needed it was
+> the BUG-008 fix: `GenerateWorkspaceExportJob` had been producing the wrong workspace's GDPR
+> export because it fell back to the user's home workspace when it could not resolve one. It
+> now throws instead. §B.3's reasoning held exactly — a failed job is loud, retryable and
+> visible, whereas silently wrong data reached a signed download URL and, potentially, a
+> regulator. See BUG-008 in `docs/found-bugs.md`.
+
 **The characterisation tests flip in 1c, not 1b.** The three tests added in 1a
 (`characterisation_switching_workspace_does_not_affect_controllers_today`,
 `characterisation_the_broken_expression_always_yields_the_home_workspace`,

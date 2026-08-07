@@ -18,10 +18,14 @@ class WorkspaceExportService
     /**
      * Build the export ZIP and return the relative storage path.
      * Stored under `exports/{workspaceId}/export_{timestamp}.zip`.
+     *
+     * The workspace is an explicit parameter, not derived from $user. A user
+     * has a HOME workspace but not a current one, so deriving it here produced
+     * the wrong workspace's data whenever the requester had switched — see
+     * BUG-008. The caller knows which workspace was asked for; it must say so.
      */
-    public function generate(User $user): string
+    public function generate(User $user, int $workspaceId): string
     {
-        $workspaceId = $user->current_workspace_id ?? $user->workspace_id;
 
         $tmpDir = sys_get_temp_dir().'/ws_export_'.$workspaceId.'_'.time();
         mkdir($tmpDir, 0755, true);

@@ -526,6 +526,139 @@ anything was scrubbed. Un-skip it when this feature is built.
 
 ---
 
+## BUG-008 — the GDPR data export shipped the WRONG workspace's data — ✅ FIXED
+
+**Severity:** Critical — user-facing, in a regulatory feature
+**Found:** 2026-08-07, during the 1c Core analysis. **Fixed:** same day, branch
+`fix/workspace-export-wrong-workspace`.
+
+A user switched into workspace B who requested a data export received workspace **A's**
+data — contacts, conversations and messages from their HOME workspace, packaged as "your
+export" and delivered by email as a 72-hour signed URL.
+
+Not a cross-tenant leak: the requester is a member of both workspaces, so they received data
+they were entitled to. But it was **the wrong workspace's data, silently**, in the one feature
+whose entire purpose is regulatory correctness. Export workspace B to answer a GDPR request
+and you hand the regulator A's records.
+
+### Why it was invisible
+
+The workspace was known at dispatch and **thrown away**:
+
+```php
+// DataExportController::store — before
+GenerateWorkspaceExportJob::dispatch($request->user()->id);   // just the id
+
+// GenerateWorkspaceExportJob::handle — before
+$user = User::findOrFail($this->userId);                      // fresh, no auth context
+$exportService->generate($user);
+
+// WorkspaceExportService::generate — before
+$workspaceId = $user->current_workspace_id ?? $user->workspace_id;   // always HOME
+```
+
+Neither half looked wrong on its own. The controller appeared to pass "the user"; the service
+appeared to derive "the user's workspace". The defect only existed in the seam — and
+`current_workspace_id` does not exist on `User`, so the fallback was unconditional.
+
+**A queued job cannot recover this.** There is no authenticated user, so
+`WorkspaceContext::id()` is null; and a `User` carries a **home** workspace but not a
+**current** one. The information was destroyed at dispatch.
+
+### The fix, and the precedent it sets
+
+The workspace is **captured where it is known and carried to where it is used**:
+
+| | after |
+|---|---|
+| `WorkspaceExportService::generate` | `(User $user, int $workspaceId)` |
+| `OnboardingService::getProgress` | `(User $user, ?int $workspaceId)` |
+| `OnboardingService::markStep` | `(User $user, ?int $workspaceId, string $step, bool $verify)` |
+| `GenerateWorkspaceExportJob::__construct` | `(int $userId, ?int $workspaceId)` |
+
+**Rejected alternatives, recorded so they are not revisited:**
+
+1. *Resolve via `WorkspaceContext::id()` inside the services.* Returns null in a queued job, so
+   it converts a wrong answer into **the same wrong answer**, now dressed as migrated.
+2. *Add `WorkspaceContext::forUser(User $user)`.* Cannot help — the question is not "which
+   workspace does this user belong to" but "which workspace were they **in**", which a `User`
+   cannot answer. It would also be a second resolver with subtly different semantics from
+   `id()`: the "one concept, two definitions" trap that has already bitten this codebase twice
+   (`accessibleWorkspaces` / `isAccessibleBy`, and the two webhook dedupe layers).
+
+### Fails loudly
+
+`app/Exceptions/MissingWorkspaceContextException.php` **lands with this fix**. The plan
+(§B.3) specified it and deferred it "to whichever commit first throws it" — this is that
+commit. A queued export that cannot establish a workspace **throws** rather than guessing.
+
+`workspaceId` is nullable on the job **only** so that jobs already queued when this shipped
+fail loudly instead of silently exporting home data.
+
+The rule, which generalises beyond these three sites and is the reason this shape was chosen:
+**a workspace is captured where it is known and carried to where it is used; code that cannot
+establish one says so rather than guessing.** That holds for the `BelongsToWorkspace` global
+scope, for Smart QR scan processing, and for every webhook — all of which arrive with no
+session and a tenant that must come from the payload or the bound record. The alternatives all
+encoded "when in doubt, use home", which is the assumption 1c spent eight branches removing.
+
+### Regression cover
+
+`tests/Feature/Workspace/WorkspaceExportScopingTest.php` — 8 tests asserting on the **content
+of the generated archive**, not on the job being dispatched. That distinction is the whole
+point: a dispatch assertion passed throughout the life of the bug, because the dispatch was
+fine and the payload was wrong.
+
+Stash-checked: reverting the service to derive from `$user` makes the bug test fail **by
+producing `HomeContact` in an export requested for the other workspace** — the original defect
+reproduced exactly, not an unrelated error. Reverting the job's guard to fall back to home
+makes the loud-failure test fail by **writing an archive** instead of throwing.
+
+---
+
+## BUG-009 — onboarding completions are stored per USER, not per workspace
+
+**Severity:** Medium — wrong progress display, no data exposure
+**Found:** 2026-08-07, while writing the BUG-008 regression tests. **Not fixed** — needs a
+schema change.
+
+`onboarding_steps` has columns `id, user_id, step, completed, completed_at, created_at,
+updated_at` — **no `workspace_id`**. And `markStep()` persists on that key:
+
+```php
+OnboardingStep::updateOrCreate(
+    ['user_id' => $user->id, 'step' => $step],
+    ['completed' => true, 'completed_at' => now()]
+);
+```
+
+`isCompleted()` short-circuits on a persisted row before any workspace query runs:
+
+```php
+if (in_array($step, $manuallyCompleted, true)) { return true; }
+```
+
+So once a user completes "import your first contacts" in workspace A, it reads as complete in
+workspace B too — even though B has no contacts. The onboarding checklist for a brand-new
+workspace can show as finished before anything has been set up in it.
+
+**BUG-008's fix does not close this.** That fix corrected which workspace is **queried**;
+this is about what is **persisted**. Both were needed and only one was in scope.
+
+**How it was found, and why it matters as a pattern:** the first draft of the onboarding test
+checked the home workspace first, then the switched one — and passed. It passed because the
+first call *persisted* the completion, so the second call short-circuited on the row rather
+than querying the switched workspace. The test was asserting the bug. It now checks the
+switched workspace **first**, and the ordering requirement is recorded in the test docblock so
+it is not "tidied" back.
+
+**Fix when scoped:** add `workspace_id` to `onboarding_steps`, include it in the
+`updateOrCreate` key and in the `OnboardingStep::where(...)` lookup in `getProgress()`. A data
+migration must decide what existing rows mean — most plausibly, backfill them to each user's
+home workspace, since that is the only workspace they could have been recorded against.
+
+---
+
 ## 📌 Status note — retry work (Group D), as of 2026-08-06
 
 Not a bug. Recorded here because it corrects a **pushed, immutable** commit message, and
