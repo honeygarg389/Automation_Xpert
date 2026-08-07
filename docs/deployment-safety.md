@@ -8,8 +8,15 @@
 >
 > 1. ☑ `db:backup` is fixed (SEC-003 — closed 2026-08-07, see below)
 > 2. ☑ `db:restore` exists and works — round-trip tested (backup → destroy → restore → verify)
-> 3. ☐ The owner has **personally practised a restore**, with their own hands
+> 3. ☑ The owner has **personally practised a restore**, with their own hands —
+>        **done 2026-08-07.** Run by hand against `whatsmine_test`: backup, `--dry-run`, then
+>        the real restore — database name typed to confirm, the pre-restore **safety backup
+>        fired as designed**, finished with `✅ Restore finished.` The guards were exercised by
+>        the person who will need them at 3am, which is the only test of them that counts.
 > 4. ☐ Production runs on a **fresh, clean VPS** — not the testing box promoted in place
+>        — **the only open item, and it is a deploy-day action, not a code change.**
+>        **Nothing further is blocked on development.** When this box is ticked the gate
+>        opens; there is no engineering work left standing between here and a first customer.
 >
 > **Security** — added 2026-08-04
 >
@@ -36,8 +43,10 @@
 >
 > **All seven. Not six. Not "mostly done."**
 >
-> **Boxes 1, 2, 5, 6, 7 are closed. Boxes 3 and 4 are the owner's, and both are still open —
-> so the answer to "can we onboard a customer yet?" is still no.**
+> **Six of seven are closed. Box 4 — a fresh, clean VPS — is the only one left, and it is a
+> deploy-day action rather than development work.** Until it is ticked the answer to "can we
+> onboard a customer yet?" is still **no**. But nothing is waiting on code: every
+> recoverability and security condition is met and tested.
 >
 > A note worth keeping: **all three security findings differed from how they were recorded** —
 > one was four bugs, one named the wrong defect and the wrong severity, one described half of
@@ -397,11 +406,13 @@ Guards 2 and 3 are the non-negotiable pair.
 
 **What I would propose building (not built yet):**
 
-1. Fix `db:backup` (SEC-003) — under a day
-2. Add `php artisan db:restore --file=<backup>` with a confirmation prompt — 1–2 days
-3. Schedule daily automatic backups — a few hours
-4. **Practise a restore into staging, on a calm afternoon, before you ever need it.** An
-   untested backup is a guess.
+1. ☑ Fix `db:backup` (SEC-003) — **done 2026-08-07**
+2. ☑ Add `php artisan db:restore --file=<backup>` with a confirmation prompt —
+   **done 2026-08-07**, with seven guards
+3. ☐ Schedule daily automatic backups — a few hours. **Still outstanding:** `db:backup` works
+   but is **not** in `routes/console.php`, so nothing runs it unattended.
+4. ☑ **Practise a restore into staging, on a calm afternoon, before you ever need it.** An
+   untested backup is a guess. — **done 2026-08-07, by hand.**
 
 Step 4 is the one people skip and the one that matters.
 
@@ -562,10 +573,12 @@ the code and these documents — is already backed up on GitHub.
 
 ### Do before the first real customer — non-negotiable
 
-3. **Fix `db:backup` (SEC-003) and build `db:restore`**
-4. **Practise a restore** into a scratch database, on a calm afternoon
-5. **Provision a fresh production VPS** — clean, never the testing box
-6. **Adopt the pre-deploy checklist** as routine
+3. ☑ **Fix `db:backup` (SEC-003) and build `db:restore`** — done 2026-08-07
+4. ☑ **Practise a restore** into a scratch database, on a calm afternoon — done 2026-08-07
+5. ☐ **Provision a fresh production VPS** — clean, never the testing box.
+   **The last hard-gate item.**
+6. ☐ **Adopt the pre-deploy checklist** as routine
+7. ☐ **Schedule `db:backup`** — it is built and hardened but nothing runs it on a timer yet
 
 ### Do when it starts paying for itself
 
