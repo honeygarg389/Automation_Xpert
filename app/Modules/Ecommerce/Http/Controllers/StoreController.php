@@ -10,6 +10,7 @@ use App\Modules\Ecommerce\Services\Clients\StoreClientFactory;
 use App\Modules\Ecommerce\Services\StoreConnectionTester;
 use App\Modules\Ecommerce\Services\StoreConnector;
 use App\Modules\Integrations\Models\IntegrationConfig;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -150,7 +151,7 @@ class StoreController extends Controller
 
     private function workspaceId(Request $request): int
     {
-        return (int) ($request->user()->current_workspace_id ?? $request->user()->workspace_id);
+        return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
     private function webhookUrl(EcommerceStore $store): string
