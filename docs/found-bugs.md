@@ -982,3 +982,99 @@ not risk. Suggested: `Schedule::command('sanctum:prune-expired --hours=24')->dai
 
 Deliberately not in the SEC-006 branch: mixing table maintenance into a security fix makes
 the security change harder to review, and there is currently nothing to prune.
+
+---
+
+## 📌 BelongsToWorkspace — four hazards found during the STEP 1 inventory (2026-08-07)
+
+Recorded **before slice 1 is written**, deliberately: each of these is a place the global
+scope would **change behaviour rather than enforce it**, and each is invisible at the point
+of failure. Discovering them mid-slice would mean discovering them as a red test with no
+context.
+
+None is a bug today. All four become one the moment the trait reaches the relevant model.
+
+### H-1 — `Admin\DashboardController` returns platform-wide counts with no `where`
+
+```php
+// app/Http/Controllers/Admin/DashboardController.php:79-80
+'contacts_total'      => Contact::count(),
+'conversations_total' => Conversation::count(),
+```
+
+Under the scope these become *some* number — plausibly 0, plausibly one tenant's. **No error,
+no exception, no failing test: a wrong figure on the admin dashboard.**
+
+This is the archetype for the whole change. The ruled null-behaviour (match nothing, with an
+explicit admin-guard exception inside the scope) is what protects it, which makes the admin
+exception load-bearing rather than convenient — hence its own named test in slice 1.
+
+**Action when `Contact`/`Conversation` take the trait (slices 6/7):** verify these two counts
+against a seeded multi-tenant fixture, not against "the page still loads".
+
+### H-2 — `AnalyticsService` already filters by `workspace_id` in 9 places
+
+Lines 288, 294, 336, 475, 495, 746, 766, 796, 836 all read
+`Model::where('workspace_id', $wsId)`. With the scope active the SQL becomes
+`WHERE workspace_id = ? AND workspace_id = ?`.
+
+Harmless **when the two agree**. Silently **empty** when they do not — e.g. an admin viewing a
+client's report, where the explicit `$wsId` is the client's and the scope resolves to null or
+to a different workspace. An empty analytics panel reads as "no activity", not as "broken".
+
+**Action:** these 9 sites must be read individually, not bulk-edited. The question at each is
+*where does `$wsId` come from* — if it is `WorkspaceContext`, the explicit filter is now
+redundant; if it is a route parameter or an admin's selection, the explicit filter is the
+correct one and the scope must be bypassed.
+
+### H-3 — the webhook lookup cannot be scoped, structurally
+
+```php
+// app/Modules/Whatsapp/Http/Controllers/WhatsappWebhookController.php:101,117
+$waba = WhatsappBusinessAccount::findByWebhookToken($token);
+```
+
+This query **must cross workspaces in order to discover which workspace it is**. There is no
+authenticated user, and the workspace is the *answer*, not an input. A scope that needs the
+answer to run the query is incapable of running it.
+
+This is the most dangerous bypass in the codebase: it is on the inbound message path, it runs
+unauthenticated, and CLAUDE.md's standing rule is that the webhook flow must never be
+duplicated or worked around.
+
+**Action:** an explicit `withoutWorkspaceScope('reason: …')` with a test proving the token
+lookup resolves the correct workspace **and** that everything downstream of it is scoped to
+that workspace via `WorkspaceContext::for()`. The bypass must be one query wide, not one
+request wide.
+
+### H-4 — the test and factory surface is larger than the app surface
+
+**242 model call sites across 61 test files. Only 6 of 17 factories set `workspace_id`.**
+
+Tests create models with no authenticated user, so under the scope they create rows the
+subsequent assertion cannot read back. This is the single most likely cause of "the slice was
+a day of work and three days of test repair".
+
+The ruling that **the trait filters reads only and never writes `workspace_id` on create**
+(2026-08-07) narrows this considerably — a factory that sets the column explicitly keeps
+working — but it does not remove it: a factory that does *not* set the column produces a row
+with `workspace_id = 0`/null that no scoped query will return.
+
+**Action:** before slice 5, audit the 11 factories that do not set `workspace_id` and decide
+per factory whether it should. That is a prerequisite of the canary, not a consequence of it.
+
+### Recorded ruling — auto-fill on create is NOT in scope, and here is why
+
+Considered and **deliberately rejected for now** (2026-08-07):
+
+- 11 of 17 factories do not set `workspace_id`;
+- jobs and webhooks have no workspace context at create time;
+- 68 controller sites already write it explicitly — auto-fill would either **conflict** with
+  those or make them **redundant, invisibly**.
+
+**Read filtering is enforcement. Write auto-fill is a behaviour change.** This phase ships
+enforcement only.
+
+A later slice may add auto-fill, and if it does it must be its own slice with its own
+stash-check, because its failure mode — rows silently written to the wrong workspace — is
+worse than the one it prevents.
