@@ -18,6 +18,7 @@ use App\Modules\Whatsapp\Services\CloudApiClient;
 use App\Notifications\ConversationHandoverNotification;
 use App\Services\StorageManager;
 use App\Support\Demo;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -37,7 +38,7 @@ class InboxController extends Controller
 
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $userId = $request->user()->id;
 
         $conversations = Conversation::where('workspace_id', $workspaceId)
@@ -85,7 +86,7 @@ class InboxController extends Controller
             $conversation->channelAccount?->channel !== 'whatsapp' || $conversation->isWhatsappWindowOpen(),
         );
 
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $userId = $request->user()->id;
         $allLabels = InboxLabel::where('workspace_id', $workspaceId)->orderBy('name')->get(['id', 'name', 'color']);
 
@@ -280,7 +281,7 @@ class InboxController extends Controller
         $this->authorise($request, $conversation);
 
         $validated = $request->validate(['product_id' => ['required', 'integer']]);
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         // Join the store for its currency (external_meta) and domain (URL building),
         // still without importing the Ecommerce model so the Inbox stays decoupled.
@@ -518,7 +519,7 @@ class InboxController extends Controller
             abort(404, 'No media available.');
         }
 
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $client = CloudApiClient::forWorkspace($workspaceId);
 
         if (! $client) {
@@ -554,7 +555,7 @@ class InboxController extends Controller
 
         $file = $request->file('file');
         $mimeType = $file->getMimeType() ?? 'application/octet-stream';
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $client = CloudApiClient::forWorkspace($workspaceId);
         if (! $client) {
@@ -578,7 +579,7 @@ class InboxController extends Controller
     /** Return approved WhatsApp templates for the workspace (JSON) */
     public function templates(Request $request): JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $templates = WhatsappTemplate::where('workspace_id', $workspaceId)
             ->where('status', 'APPROVED')
@@ -591,7 +592,7 @@ class InboxController extends Controller
     /** Search contacts for the new-conversation modal (JSON) */
     public function contactSearch(Request $request): JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $q = $request->input('q', '');
 
         $contacts = Contact::where('workspace_id', $workspaceId)
@@ -614,7 +615,7 @@ class InboxController extends Controller
     /** Return active channel accounts for the workspace (JSON) */
     public function channelAccounts(Request $request): JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $accounts = ChannelAccount::where('workspace_id', $workspaceId)
             ->where('status', 'active')
@@ -626,7 +627,7 @@ class InboxController extends Controller
     /** Find or create a conversation, then redirect to it */
     public function startConversation(Request $request): RedirectResponse|JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $validated = $request->validate([
             'contact_id' => ['required', 'integer'],
@@ -694,7 +695,7 @@ class InboxController extends Controller
 
     private function authorise(Request $request, Conversation $conversation): void
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless((int) $conversation->workspace_id === (int) $workspaceId, 403);
     }
 }

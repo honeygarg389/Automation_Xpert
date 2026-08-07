@@ -7,6 +7,7 @@ use App\Models\InternalNote;
 use App\Models\User;
 use App\Modules\Shared\Models\Conversation;
 use App\Notifications\MentionedInNoteNotification;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Notification;
@@ -66,7 +67,7 @@ class InternalNoteController extends Controller
 
     private function authorise(Request $request, Conversation $conversation): void
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless((int) $conversation->workspace_id === (int) $workspaceId, 403);
     }
 }
