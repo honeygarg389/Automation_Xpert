@@ -6,6 +6,7 @@ use App\Mail\WeeklyDigestMail;
 use App\Models\Scopes\WorkspaceScope;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Modules\Integrations\Models\IntegrationConfig;
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
@@ -182,31 +184,64 @@ class ConsoleWorkspaceContextTest extends TestCase
      * one tenant, every other tenant's inbound messages stop arriving and the
      * command still reports success.
      *
-     * The command exits early without Meta credentials, so this asserts the
-     * mechanism directly rather than driving the HTTP path.
+     * Driven END TO END — the command really runs, with Meta credentials seeded
+     * and Meta's HTTP faked. An earlier version asserted the mechanism directly
+     * instead, and the stash-check exposed it: removing crossTenant() from the
+     * command failed only the coverage guard, never a behavioural test.
      */
     #[Test]
-    public function the_whatsapp_webhook_registration_sees_wabas_in_every_workspace(): void
+    public function the_whatsapp_webhook_registration_subscribes_wabas_in_every_workspace(): void
     {
-        $this->simulateScopeOn(WhatsappBusinessAccount::class);
+        IntegrationConfig::updateOrCreate(
+            ['provider' => 'meta_app'],
+            ['label' => 'Meta', 'enabled' => true, 'credentials' => ['app_id' => '111', 'app_secret' => 'secret']]
+        );
 
         DB::table('whatsapp_business_accounts')->insert([
             ['workspace_id' => 501, 'waba_id' => 'w-501', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
             ['workspace_id' => 502, 'waba_id' => 'w-502', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
-        $withoutContext = WhatsappBusinessAccount::where('status', 'active')->count();
+        $this->simulateScopeOn(WhatsappBusinessAccount::class);
 
-        $crossTenant = WorkspaceContext::crossTenant(
-            'reason: mirrors what the command does',
-            fn () => WhatsappBusinessAccount::where('status', 'active')->count()
-        );
+        Http::fake(['graph.facebook.com/*' => Http::response(['success' => true], 200)]);
 
-        $this->assertSame(0, $withoutContext,
-            'Baseline: an unscoped console command finds NOTHING under a fail-closed scope. '
-            .'This is what the command did before slice 4b, and why "no context" is not the '
-            .'same as "cross-tenant".');
-        $this->assertSame(2, $crossTenant, 'Declared cross-tenant must see every workspace.');
+        Artisan::call('whatsapp:register-webhook');
+        $output = Artisan::output();
+
+        $this->assertStringContainsString('Subscribing 2 WABA(s)', $output,
+            'The command must find WABAs in EVERY workspace. "0 WABA(s)" here means it ran '
+            .'unscoped under a fail-closed scope — every tenant but one silently unsubscribed, '
+            .'and the command still exits 0.');
+
+        // Both WABAs are iterated. They stop short of the subscribed_apps call
+        // because neither has an access token and no system user token is
+        // configured — which is the command's own behaviour, not the scope's.
+        $this->assertStringContainsString('w-501', $output);
+        $this->assertStringContainsString('w-502', $output,
+            'The second workspace\'s WABA was never reached.');
+    }
+
+    /**
+     * POSITIVE CONTROL. Proves the assertion above can fail: with NO context and
+     * no cross-tenant declaration, the same query really does find nothing.
+     */
+    #[Test]
+    public function an_unscoped_console_query_finds_nothing_under_a_fail_closed_scope(): void
+    {
+        DB::table('whatsapp_business_accounts')->insert([
+            ['workspace_id' => 501, 'waba_id' => 'w-501', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $this->simulateScopeOn(WhatsappBusinessAccount::class);
+
+        $this->assertSame(0, WhatsappBusinessAccount::count(),
+            '"No context" is not the same as "cross-tenant" — this is the difference.');
+
+        $this->assertSame(1, WorkspaceContext::crossTenant(
+            'reason: proving the door works',
+            fn () => WhatsappBusinessAccount::count()
+        ));
     }
 
     // ── MessengerProfileTestCommand — both shapes ──────────────────────────
