@@ -94,7 +94,7 @@ tier, a generic add-on/entitlement layer, and a Smart QR module.
 ```bash
 php artisan test                      # full suite
 php artisan test --filter=<Name>      # single test
-./vendor/bin/phpstan analyse          # must pass at level 6
+./vendor/bin/phpstan analyse          # NOT clean — see below
 ./vendor/bin/pint --dirty             # CHANGED FILES ONLY — see below
 npm run lint                          # JS/JSX lint
 npx vitest run                        # React tests
@@ -102,6 +102,22 @@ php artisan migrate --pretend         # inspect SQL before running
 ```
 
 Run tests + PHPStan + Pint before declaring any task complete.
+
+**PHPStan does NOT pass at level 6 and never has.** `master` reports **733 errors**, on top of
+a **1,213-entry `phpstan-baseline.neon`**. Both were inherited from the initial WhatsMine
+import (`4ec7e3e`); `phpstan.neon` has never been modified since.
+
+So a repo-wide run tells you nothing, and treating it as a gate trains you to ignore its
+output — which is exactly how the one error that *is* yours gets lost among 733 that are not.
+
+**Run it on the files you changed and diff the count against `master`:**
+
+```bash
+php -d memory_limit=2G vendor/phpstan/phpstan/phpstan.phar analyse <your files> --level=6
+```
+
+That is how the SEC-006 `TransientToken` fatal was caught — a real bug in new code, visible
+only because the run was scoped to five files. See BUG-017 in `docs/found-bugs.md`.
 
 **Pint is scoped to changed files only (`--dirty`). Never run it repo-wide** — the codebase
 has never been Pint-formatted, so a full run produces a ~694-file reformat diff that buries
@@ -243,6 +259,30 @@ Rules:
   something *after* the merge staged it, without re-running `git add`, commits the unresolved
   version while the working tree looks correct. Check the committed tree
   (`git show <ref>:<path>`), not the working file.
+- **A stash-check you did not confirm reverted is not a stash-check.** Three incidents, and
+  the third was the worst kind: it made a verification step *pass* when it should have failed.
+
+  | # | What happened | Cost |
+  |---|---|---|
+  | 1 | `git checkout -- app/` wiped an uncommitted fix (gemini branch) | fix lost, rewritten |
+  | 2 | same, on the places branch | fix lost, rewritten |
+  | 3 | `git checkout --` **errored** on an untracked test file, the error scrolled past, and the previous check's mutation was still in the file | a stash-check **passed that should have failed**, and was nearly reported as green |
+
+  Incidents 1 and 2 cost time. Incident 3 cost *truth* — the entire value of a stash-check is
+  that its failure is informative, so one that silently cannot fail is worse than not running
+  it.
+
+  The procedure, in order:
+
+  1. **Commit first.** Not just the production fix — the **tests too**. `git checkout --` on a
+     path git has never seen exits non-zero and changes nothing, and a new test file is
+     untracked by definition.
+  2. **Confirm the restore actually happened** before the next check: `git status --porcelain`
+     must be empty, and for a targeted revert, grep back the line you removed.
+  3. **Never chain stash-checks without a clean tree between them.** Check N's mutation
+     surviving into check N+1 is how a green result becomes meaningless.
+  4. `git checkout` cannot restore an untracked file at all. There is no undo.
+
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
   asking.
