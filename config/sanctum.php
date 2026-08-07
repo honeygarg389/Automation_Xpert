@@ -1,5 +1,8 @@
 <?php
 
+use Illuminate\Cookie\Middleware\EncryptCookies;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 use Laravel\Sanctum\Sanctum;
 
 return [
@@ -45,6 +48,26 @@ return [
     | considered expired. This will override any values set in the token's
     | "expires_at" attribute, but first-party sessions are not affected.
     |
+    | ⚠️ SEC-006 — THE PARAGRAPH ABOVE IS LARAVEL'S AND IT IS WRONG.
+    |
+    | This value does NOT override a token's `expires_at`. Sanctum's Guard ANDs
+    | the two checks (vendor/laravel/sanctum/src/Guard.php:128-129), so the
+    | STRICTER of the two wins: a global value cannot extend a short per-token
+    | expiry, and a long per-token expiry cannot escape a global cap. Verified
+    | by test, not by reading. The paragraph is left intact because it is
+    | upstream's text and will reappear on any `config:publish`.
+    |
+    | It is also measured from `created_at`, never `last_used_at` — an absolute
+    | lifetime, not an idle timeout.
+    |
+    | It stays null DELIBERATELY. A global cap would silently truncate the
+    | long-lived integration tokens customers can legitimately create in the UI,
+    | surfacing months later as "integrations broke for no reason". Expiry is
+    | set per token at the point of issue instead, where the difference between
+    | a phone and a server integration is actually known.
+    |
+    | See App\Support\ApiTokenLifetime and docs/found-bugs.md.
+    |
     */
 
     'expiration' => null,
@@ -76,9 +99,9 @@ return [
     */
 
     'middleware' => [
-        'authenticate_session' => Laravel\Sanctum\Http\Middleware\AuthenticateSession::class,
-        'encrypt_cookies' => Illuminate\Cookie\Middleware\EncryptCookies::class,
-        'validate_csrf_token' => Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+        'authenticate_session' => AuthenticateSession::class,
+        'encrypt_cookies' => EncryptCookies::class,
+        'validate_csrf_token' => ValidateCsrfToken::class,
     ],
 
 ];

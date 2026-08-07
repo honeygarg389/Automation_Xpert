@@ -37,7 +37,7 @@ Route::prefix('v1/auth')->middleware(['throttle:10,1'])->group(function () {
     Route::post('/login', [MobileAuthController::class, 'login']);
 });
 
-Route::prefix('v1/auth')->middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+Route::prefix('v1/auth')->middleware(['auth:sanctum', 'user.active', 'throttle:api'])->group(function () {
     Route::post('/logout', [MobileAuthController::class, 'logout']);
     Route::get('/me', [MobileAuthController::class, 'me']);
     Route::post('/profile', [MobileAuthController::class, 'updateProfile'])->middleware('demo');
@@ -46,7 +46,7 @@ Route::prefix('v1/auth')->middleware(['auth:sanctum', 'throttle:api'])->group(fu
 // ─── Mobile Inbox API (agent-facing: full conversation + inbox actions) ───────
 // `demo` blocks writes (POST/PATCH/DELETE) in demo mode while GET reads pass,
 // keeping the mobile app a consistent read-only showcase like the web app.
-Route::prefix('v1/mobile')->middleware(['auth:sanctum', 'throttle:api', 'demo'])->group(function () {
+Route::prefix('v1/mobile')->middleware(['auth:sanctum', 'user.active', 'throttle:api', 'demo'])->group(function () {
     // Conversations
     Route::get('/conversations', [MobileConversationController::class, 'index']);
     Route::get('/conversations/{uuid}', [MobileConversationController::class, 'show']);
@@ -77,7 +77,7 @@ Route::prefix('v1/mobile')->middleware(['auth:sanctum', 'throttle:api', 'demo'])
     Route::get('/contacts/{id}', [MobileInboxController::class, 'contact']);
 });
 
-Route::prefix('v1')->middleware(['auth:sanctum', 'throttle:api', 'demo'])->group(function () {
+Route::prefix('v1')->middleware(['auth:sanctum', 'user.active', 'throttle:api', 'demo'])->group(function () {
 
     // ─── Account ─────────────────────────────────────────────────────────────
     Route::get('/me', [MeController::class, 'show']);

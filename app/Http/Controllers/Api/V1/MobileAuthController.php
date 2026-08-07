@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\StorageManager;
+use App\Support\ApiTokenLifetime;
 use App\Support\Demo;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -40,7 +41,12 @@ class MobileAuthController extends Controller
         }
 
         $deviceName = $request->device_name ?? 'ChatAgent Mobile';
-        $token = $user->createToken($deviceName, ['*'])->plainTextToken;
+
+        // SEC-006. Mobile tokens used to be issued with NO expiry at all: one
+        // login produced a credential valid forever. The abilities are still
+        // ['*'] — that is recorded separately, pending a decision on what the
+        // mobile app genuinely needs.
+        $token = $user->createToken($deviceName, ['*'], ApiTokenLifetime::forMobile())->plainTextToken;
 
         return response()->json([
             'token' => $token,

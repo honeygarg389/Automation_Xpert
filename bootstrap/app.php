@@ -11,6 +11,7 @@ use App\Http\Middleware\EnsureClientScope;
 use App\Http\Middleware\EnsureInstalled;
 use App\Http\Middleware\EnsureNotDemoMode;
 use App\Http\Middleware\EnsureSuperAdmin;
+use App\Http\Middleware\EnsureUserIsActive;
 use App\Http\Middleware\EnsureUserRole;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RedirectIfAdminAuthenticated;
@@ -23,6 +24,7 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Route;
 use Sentry\Laravel\Integration;
@@ -111,6 +113,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'client.scope' => EnsureClientScope::class,
             'limit' => EnforceLimit::class,
             'api.ability' => CheckApiAbility::class,
+            // SEC-006: refuse any token whose user has been deactivated.
+            'user.active' => EnsureUserIsActive::class,
         ]);
         // Shared middleware stack for all client module routes (mirrors routes/client.php).
         $middleware->appendToGroup('client-app', [
@@ -124,10 +128,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // In production, restrict to your actual load balancer IPs via TRUSTED_PROXIES env var.
         $middleware->trustProxies(
             at: env('TRUSTED_PROXIES', '*'),
-            headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR
-                | \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST
-                | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT
-                | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO,
+            headers: Request::HEADER_X_FORWARDED_FOR
+                | Request::HEADER_X_FORWARDED_HOST
+                | Request::HEADER_X_FORWARDED_PORT
+                | Request::HEADER_X_FORWARDED_PROTO,
         );
 
         $middleware->validateCsrfTokens(except: [

@@ -34,6 +34,30 @@ class User extends Authenticatable implements MustVerifyEmail
             }
             app(ClientWorkspaceService::class)->syncClientUser($user);
         });
+
+        // SEC-006. Revoke every API token when the credential behind it changes
+        // meaning: a new password, or the account being deactivated.
+        //
+        // This lives on the model rather than in the controllers on purpose.
+        // The sweep found FIVE places that write `users.password` or
+        // `users.status` — ProfileController's password form, the password
+        // RESET flow (which uses forceFill, not update), the admin's client-user
+        // editor, and the client's own team editor, which can change both in one
+        // request. A hook in each is a rule that depends on remembering to add
+        // the sixth, and CLAUDE.md is explicit that those are not rules.
+        //
+        // Deactivation is ALSO enforced per request by EnsureUserIsActive,
+        // because a token minted before this hook existed, or a status written
+        // by a future path that bypasses Eloquent, must still be refused.
+        // Revocation here is the cleanup; the middleware is the guarantee.
+        static::updated(function (User $user) {
+            $passwordChanged = $user->wasChanged('password');
+            $deactivated = $user->wasChanged('status') && ! $user->isActive();
+
+            if ($passwordChanged || $deactivated) {
+                $user->tokens()->delete();
+            }
+        });
     }
 
     public const CLIENT_ROLE_ADMINISTRATOR = 'administrator';
