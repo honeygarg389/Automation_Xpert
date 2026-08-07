@@ -59,6 +59,10 @@ class WorkspaceScopeBypassGuardTest extends TestCase
         'app/Modules/Broadcasting/Jobs/LaunchScheduledCampaignsJob.php' => 'Scheduler: finds campaigns due to send across all workspaces.',
         'app/Modules/Social/Jobs/DispatchScheduledPostsJob.php' => 'Scheduler: finds posts due to publish across all workspaces.',
         'app/Modules/Social/Jobs/RefreshSocialTokensJob.php' => 'Scheduler: refreshes expiring OAuth tokens across all workspaces.',
+
+        // ── Cross-tenant BY DESIGN: platform-operator commands (slice 4b) ──
+        'app/Console/Commands/WhatsappWebhookRegisterCommand.php' => 'Registers the platform-wide Meta callback and subscribes EVERY workspace\'s WABA; scoping it would leave the rest silently unsubscribed.',
+        'app/Console/Commands/MessengerProfileTestCommand.php' => 'Diagnostic: an operator does not know which workspace a broken Messenger connection is in, so discovering the account is the point. Only the discovery is cross-tenant — the rest runs inside for().',
     ];
 
     /**
