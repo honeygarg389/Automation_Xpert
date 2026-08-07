@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Services\ChannelAccountRouting;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -276,5 +277,70 @@ class ChannelRoutingUniquenessTest extends TestCase
         $this->assertNotNull($entry, 'An ambiguous route left no trace outside the logs.');
         $this->assertSame('messenger', $entry->meta['channel'] ?? null);
         $this->assertSame([10, 20], array_map('intval', $entry->meta['claimed_by_workspaces'] ?? []));
+    }
+
+    // ══ The migration pre-flight ═══════════════════════════════════════════
+
+    /**
+     * `ALTER TABLE … ADD UNIQUE` fails with ERROR 1062 naming exactly ONE
+     * arbitrary offending value, which is useless for planning: an operator
+     * needs to know how many collisions exist and which workspaces are involved
+     * before deciding anything.
+     *
+     * The pre-flight aborts with the complete list instead.
+     */
+    #[Test]
+    public function the_migration_aborts_with_the_full_duplicate_list_rather_than_letting_mysql_pick_one(): void
+    {
+        // The index has to come off first, or the duplicates cannot be created —
+        // which is itself the index working.
+        Schema::table('channel_accounts', function ($table) {
+            $table->dropUnique('channel_accounts_phone_number_id_unique');
+        });
+
+        \DB::table('channel_accounts')->insert([
+            ['workspace_id' => 10, 'channel' => 'whatsapp', 'display_name' => 'A', 'phone_number_id' => 'PN-1', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['workspace_id' => 20, 'channel' => 'whatsapp', 'display_name' => 'B', 'phone_number_id' => 'PN-1', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['workspace_id' => 30, 'channel' => 'whatsapp', 'display_name' => 'C', 'phone_number_id' => 'PN-2', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+            ['workspace_id' => 40, 'channel' => 'whatsapp', 'display_name' => 'D', 'phone_number_id' => 'PN-2', 'status' => 'active', 'created_at' => now(), 'updated_at' => now()],
+        ]);
+
+        $migration = require base_path('database/migrations/2026_08_08_100000_add_unique_index_to_channel_accounts_phone_number_id.php');
+
+        try {
+            $migration->up();
+            $this->fail('The migration ran against duplicate data instead of aborting.');
+        } catch (\RuntimeException $e) {
+            $message = $e->getMessage();
+
+            // BOTH duplicates, not just the one MySQL would have named.
+            $this->assertStringContainsString('PN-1', $message);
+            $this->assertStringContainsString('PN-2', $message,
+                'Only the first duplicate was reported — an operator cannot plan from that.');
+            $this->assertStringContainsString('Total: 2', $message);
+            // And the workspaces involved, which is what makes it actionable.
+            $this->assertStringContainsString('10,20', $message);
+            $this->assertStringContainsString('30,40', $message);
+        }
+    }
+
+    /** POSITIVE CONTROL: with clean data the migration applies. */
+    #[Test]
+    public function the_migration_applies_cleanly_when_there_are_no_duplicates(): void
+    {
+        Schema::table('channel_accounts', function ($table) {
+            $table->dropUnique('channel_accounts_phone_number_id_unique');
+        });
+
+        $this->account(10, 'whatsapp', ['phone_number_id' => 'PN-1']);
+        $this->account(20, 'whatsapp', ['phone_number_id' => 'PN-2']);
+
+        $migration = require base_path('database/migrations/2026_08_08_100000_add_unique_index_to_channel_accounts_phone_number_id.php');
+        $migration->up();
+
+        $indexes = collect(\DB::select('SHOW INDEX FROM channel_accounts'))
+            ->pluck('Key_name')->unique()->all();
+
+        $this->assertContains('channel_accounts_phone_number_id_unique', $indexes);
     }
 }
