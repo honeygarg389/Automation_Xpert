@@ -5,10 +5,15 @@ namespace Tests\Feature\Workspace;
 use App\Exceptions\MissingWorkspaceContextException;
 use App\Jobs\Middleware\EstablishesWorkspaceContext;
 use App\Support\WorkspaceContext;
+use Illuminate\Bus\Queueable;
+use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\Test;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\BufferedOutput;
 use Tests\TestCase;
 
 /**
@@ -152,6 +157,79 @@ class JobWorkspaceContextTest extends TestCase
             'A job that threw left its workspace context set for the next job.');
     }
 
+    // ── The flush is actually WIRED, not merely available ──────────────────
+
+    /**
+     * ⚠️ ADDED AFTER A STASH-CHECK PASSED THAT SHOULD HAVE FAILED.
+     *
+     * `context_does_not_survive_...` above calls `WorkspaceContext::flush()`
+     * itself, so it proves the flush WORKS. It does not prove anything CALLS
+     * it — commenting out `Queue::before($flush)` in AppServiceProvider left
+     * the whole file green.
+     *
+     * These two exercise the registration. The memo is poisoned by resolving
+     * context and THEN changing the underlying row: a stale memo returns the
+     * old workspace, a flushed one re-resolves to the new. Nothing here calls
+     * flush() directly, so only the listener can make it pass.
+     */
+    #[Test]
+    public function the_queue_worker_flush_is_registered_and_clears_the_memo(): void
+    {
+        ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
+        $this->actingAs($user);
+
+        $this->assertSame((int) $workspace->id, WorkspaceContext::id(), 'memoised');
+
+        // Change the answer underneath the memo. The refresh() matters: actingAs()
+        // hands the guard THIS instance, so without it re-resolution would read a
+        // stale in-memory workspace_id and the test would fail for a reason that
+        // has nothing to do with the flush.
+        DB::table('users')->where('id', $user->id)->update(['workspace_id' => 777]);
+        $user->refresh();
+
+        // A real dispatch on the sync connection, which fires Queue::before.
+        MemoProbeJob::$seen = null;
+        dispatch_sync(new MemoProbeJob);
+
+        $this->assertSame(777, MemoProbeJob::$seen,
+            'The job saw the pre-dispatch memo. Queue::before is not flushing WorkspaceContext, '
+            .'so a worker handling tenant A then tenant B would give B tenant A\'s context.');
+    }
+
+    /**
+     * The console half of the same registration.
+     *
+     * ⚠️ This dispatches `CommandStarting` DIRECTLY, and the reason is worth
+     * knowing: `Artisan::call()` does NOT fire it — measured, the listener count
+     * was 0 across a call. The event is fired by the console Kernel on a real
+     * `php artisan …` invocation, which a feature test cannot produce.
+     *
+     * So this proves what is ours to prove — that our listener is registered
+     * against the event and flushes when it arrives. Whether Laravel fires the
+     * event on a real CLI run is Laravel's contract, not ours.
+     */
+    #[Test]
+    public function the_console_flush_is_registered_and_clears_the_memo(): void
+    {
+        ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
+        $this->actingAs($user);
+
+        $this->assertSame((int) $workspace->id, WorkspaceContext::id(), 'memoised');
+
+        DB::table('users')->where('id', $user->id)->update(['workspace_id' => 888]);
+        $user->refresh();
+
+        event(new CommandStarting(
+            'anything',
+            new ArrayInput([]),
+            new BufferedOutput
+        ));
+
+        $this->assertSame(888, WorkspaceContext::id(),
+            'schedule:run and every artisan command share a process with whatever ran before '
+            .'them; without this listener the first command\'s tenant would be reused.');
+    }
+
     // ── Fail loudly ────────────────────────────────────────────────────────
 
     #[Test]
@@ -293,6 +371,19 @@ class ThrowingJob
     public function failed(\Throwable $e): void
     {
         $this->contextInsideFailed = WorkspaceContext::id();
+    }
+}
+
+/** Dispatched for real, on the sync connection, so Queue::before fires. */
+class MemoProbeJob implements ShouldQueue
+{
+    use \Illuminate\Foundation\Bus\Dispatchable, \Illuminate\Queue\InteractsWithQueue, Queueable;
+
+    public static ?int $seen = null;
+
+    public function handle(): void
+    {
+        self::$seen = WorkspaceContext::id();
     }
 }
 
