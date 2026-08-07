@@ -48,7 +48,7 @@ class OnboardingService
 
             // Persist auto-detected completions so they survive future checks
             if ($isCompleted && ! in_array($key, $completed, true)) {
-                $this->complete($user, $key);
+                $this->complete($user, $workspaceId, $key);
                 $completed[] = $key;
             }
         }
@@ -134,9 +134,15 @@ class OnboardingService
         return true;
     }
 
-    /** @deprecated Use markStep() */
-    public function complete(User $user, string $step): void
+    /**
+     * @deprecated Use markStep(), which takes the workspace explicitly.
+     *
+     * Kept for signature compatibility; it has no callers. The workspace is
+     * passed through so this shim cannot become a second way to resolve one —
+     * that is the "one concept, two definitions" trap CLAUDE.md warns about.
+     */
+    public function complete(User $user, ?int $workspaceId, string $step): void
     {
-        $this->markStep($user, $step, false);
+        $this->markStep($user, $workspaceId, $step, false);
     }
 }
