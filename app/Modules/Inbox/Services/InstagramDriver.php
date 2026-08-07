@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
+use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
 use App\Services\WebhookIdempotencyService;
 use Illuminate\Http\Request;
@@ -213,12 +214,17 @@ class InstagramDriver implements ChannelDriverInterface
         // key we persist (instagram_page_id holds the IG account id for embedded-signup
         // connections; instagram_account_id is the explicit copy) so the account is
         // found regardless of which shape it was stored in.
-        $channelAccount = ChannelAccount::where('channel', 'instagram')
-            ->where(function ($q) use ($pageId) {
-                $q->whereJsonContains('meta_json->instagram_page_id', $pageId)
-                    ->orWhereJsonContains('meta_json->instagram_account_id', $pageId);
-            })
-            ->first();
+        // BUG-019. TWO keys, matched with OR — which is why a single unique
+        // index (or one generated column) cannot express this channel's
+        // uniqueness rule, and why the connect-time guard is load-bearing here
+        // rather than the schema.
+        $channelAccount = app(ChannelAccountRouting::class)->findForInbound(
+            'instagram',
+            [
+                'meta_json->instagram_page_id' => $pageId,
+                'meta_json->instagram_account_id' => $pageId,
+            ],
+        );
 
         if (! $channelAccount) {
             Log::warning('Instagram webhook: no channel account matched — message dropped', [
@@ -294,12 +300,17 @@ class InstagramDriver implements ChannelDriverInterface
             return null;
         }
 
-        $channelAccount = ChannelAccount::where('channel', 'instagram')
-            ->where(function ($q) use ($pageId) {
-                $q->whereJsonContains('meta_json->instagram_page_id', $pageId)
-                    ->orWhereJsonContains('meta_json->instagram_account_id', $pageId);
-            })
-            ->first();
+        // BUG-019. TWO keys, matched with OR — which is why a single unique
+        // index (or one generated column) cannot express this channel's
+        // uniqueness rule, and why the connect-time guard is load-bearing here
+        // rather than the schema.
+        $channelAccount = app(ChannelAccountRouting::class)->findForInbound(
+            'instagram',
+            [
+                'meta_json->instagram_page_id' => $pageId,
+                'meta_json->instagram_account_id' => $pageId,
+            ],
+        );
 
         if (! $channelAccount) {
             Log::warning('Instagram webhook: echo — no channel account matched, dropped', [

@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
+use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
 use App\Services\WebhookIdempotencyService;
 use Illuminate\Http\Request;
@@ -158,9 +159,13 @@ class MessengerDriver implements ChannelDriverInterface
 
         // The webhook entry.id is the Facebook Page id. Match it against the page_id
         // we persist when the page was connected (InboxSetupController).
-        $channelAccount = ChannelAccount::where('channel', 'messenger')
-            ->whereJsonContains('meta_json->page_id', $pageId)
-            ->first();
+        // BUG-019 — see ChannelAccountRouting. No unique index protects this
+        // one: it is a JSON path, and the guard at connect time is the only
+        // thing preventing two workspaces claiming the same page.
+        $channelAccount = app(ChannelAccountRouting::class)->findForInbound(
+            'messenger',
+            ['meta_json->page_id' => $pageId],
+        );
 
         // No matching page → the message belonged to a page that isn't connected to
         // any workspace. Drop it (and log) instead of silently writing it to
