@@ -1078,3 +1078,106 @@ enforcement only.
 A later slice may add auto-fill, and if it does it must be its own slice with its own
 stash-check, because its failure mode — rows silently written to the wrong workspace — is
 worse than the one it prevents.
+
+---
+
+## BUG-017 — "PHPStan must pass at level 6" is false, and has never been true
+
+**Severity: Medium (false assurance) — recorded 2026-08-07, not fixed.**
+
+`CLAUDE.md` lists under Commands:
+
+```
+./vendor/bin/phpstan analyse          # must pass at level 6
+```
+
+and instructs "Run tests + PHPStan + Pint before declaring any task complete."
+
+**Measured on `master` @ `c77b95d`: 733 errors.** Not 10, which is what BUG-002 implies by
+naming only the `app/Modules/Social` `property.notFound` cluster.
+
+### Inherited, not broken by us
+
+Checked, because "did we do this" is the first question:
+
+- `phpstan.neon` was added in **`4ec7e3e` "Development whatsmine" (2026-08-03)** — the initial
+  import of the WhatsMine codebase — and **has never been modified since**
+  (`git log -- phpstan.neon` returns exactly one commit).
+- It has **always** included `phpstan-baseline.neon`, which carries **1,213 suppressed
+  entries**.
+
+So the position is: the project shipped with a 1,213-entry baseline **and** 733 errors on top
+of it, and the config has not been touched. **"Must pass at level 6" was aspirational from the
+start.** We did not break it and we have not made it worse.
+
+### Why this is worth recording rather than shrugging at
+
+`CLAUDE.md` is read at the start of every session. A line saying PHPStan must pass is
+currently an instruction to run a command that always fails — which trains the reader to
+ignore its output. That is how the one error that *is* yours gets lost in 733 that are not.
+
+The working practice that has actually held all week is the honest version: **run PHPStan on
+the files you changed and compare against master.** That is how the SEC-006 `TransientToken`
+fatal was caught — a real bug in new code, found because the comparison was scoped to 5 files
+rather than drowned in a repo-wide run.
+
+### The 734th error is mine, and it is temporary
+
+`feature/workspace-isolation-scope` reports 734. The addition is:
+
+```
+app/Models/Concerns/BelongsToWorkspace.php:38: Trait ... is used zero times and is not analysed. [trait.unused]
+```
+
+Accurate: `phpstan.neon` analyses `app/` only, and in slice 1 the trait's sole user is a
+fixture model defined inside the test file. **It clears the moment slice 5 applies the trait
+to `Lead`.** Recorded here so it is not mistaken for a regression in the meantime.
+
+### Options, not chosen
+
+1. Regenerate the baseline to absorb all 733, making the command genuinely pass — cheap, and
+   makes the assurance real, but converts 733 unexamined errors into 733 permanently
+   invisible ones.
+2. Correct `CLAUDE.md` to say what is true: "PHPStan is not currently clean; run it on changed
+   files and compare against master."
+3. Fix the 733 — not a Phase 0 activity.
+
+**Option 2 is the honest minimum** and costs one line. Not done here because editing
+`CLAUDE.md`'s stated workflow is the project owner's call, not a side effect of a scope commit.
+
+## 📌 Slice-5 decision — `BelongsToWorkspace::workspace()` collides with three existing definitions
+
+The trait defines a `workspace()` relation. PHP resolves **class-over-trait silently** — no
+error, no warning — so a model with its own `workspace()` keeps its own and a model without
+one gets the trait's.
+
+This is the **"one concept, two definitions"** shape that has already bitten this codebase
+twice (`User::accessibleWorkspaces()` vs `Workspace::isAccessibleBy()`; the two WhatsApp
+webhook dedupe layers). Both times it was found only because a test failed for an unexpected
+reason.
+
+**Models that already define `workspace()`:**
+
+| Model | Definition |
+|---|---|
+| `App\Modules\Inbox\Models\InboxLabel` | `belongsTo(Workspace::class)` |
+| `App\Modules\Inbox\Models\CannedReply` | `belongsTo(Workspace::class)` |
+| `App\Models\User` | `belongsTo(Workspace::class, 'workspace_id')` — **never takes the trait**, so not a collision, listed for completeness |
+
+The two real ones are **semantically identical** to the trait's version today, so nothing is
+broken. The risk is entirely future: the moment one of them diverges — a different FK, a
+`withDefault()`, a filtered relation — half the scoped models will resolve one way and half
+the other, with nothing to indicate it.
+
+**Decide at slice 5, three options:**
+
+1. **Remove `workspace()` from the trait.** The trait's job is the scope; the relation is a
+   separate concern that happens to travel with it. Cleanest separation, but 25 models then
+   lack the relation entirely unless each declares it.
+2. **Keep it in the trait and delete the two duplicates.** One definition, enforced by the
+   trait. Requires touching two Inbox models in a slice that is otherwise about Shared.
+3. **Keep both and add a guard test** asserting no scoped model overrides `workspace()`.
+   Matches how every other "two definitions" trap in this codebase is now handled.
+
+Not decided here. Flagged so the choice is made deliberately at slice 5 rather than
+discovered at slice 12.
