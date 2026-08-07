@@ -6,8 +6,8 @@
 >
 > **Recoverability** — added 2026-08-03
 >
-> 1. ☐ `db:backup` is fixed (SEC-003 — the credential leak is closed)
-> 2. ☐ `db:restore` exists and works
+> 1. ☑ `db:backup` is fixed (SEC-003 — closed 2026-08-07, see below)
+> 2. ☑ `db:restore` exists and works — round-trip tested (backup → destroy → restore → verify)
 > 3. ☐ The owner has **personally practised a restore**, with their own hands
 > 4. ☐ Production runs on a **fresh, clean VPS** — not the testing box promoted in place
 >
@@ -185,10 +185,37 @@ to reach a wiki, and if this file is only on the server you cannot read it at al
 
 **Two things to know before relying on anything here.**
 
-1. `db:backup` carries the security flaw recorded as **SEC-003**: it puts the database
-   password directly into a shell command, where any other user on the server can read it
-   from the process list. It also does not escape values, so a password containing certain
-   punctuation could break it or run unintended commands. **It should be fixed before you
+1. ~~`db:backup` carries the security flaw recorded as **SEC-003**~~ — **FIXED 2026-08-07.**
+
+   **The original description was partly wrong, and testing rather than trusting it is how
+   that surfaced.** It asserted the password was readable "from the process list". That
+   specific claim does not hold: `exec("MYSQL_PWD=… mysqldump …")` puts the value in the
+   child's *environment*, not its argv, so `ps -o command` never showed it. Verified with an
+   isolated probe: 0 matches in argv.
+
+   What was actually true:
+
+   - **Command injection — confirmed, not theoretical.** The password was interpolated into a
+     shell string unescaped. A password of `x; touch /tmp/pwned; echo` executed the injected
+     command; proven by observing the file appear.
+   - **Environment exposure — confirmed.** The value was visible via `ps -E`, and on Linux —
+     which production runs on — is readable from `/proc/<pid>/environ` by the same user or
+     root.
+   - `escapeshellarg()` was applied to the temp path (harmless) and to none of the password,
+     host, port, user or database name.
+
+   **The fix.** `mysqldump`/`mysql` are now invoked through `Symfony\Component\Process` with an
+   **argument array**, so no shell parses anything and injection is structurally impossible
+   rather than merely escaped. The password travels in a **0600 `--defaults-extra-file`**
+   deleted in a `finally` — chosen over `MYSQL_PWD` precisely because of the `/proc` exposure
+   above. Gzip moved into PHP; a shell pipe would have reintroduced a shell.
+
+   Also fixed while in here: the dump now passes `--single-transaction --routines --triggers`.
+   Routines and triggers were being silently omitted, which is a restore that quietly loses
+   things. And backup filenames gained a random suffix — second precision alone meant a safety
+   backup taken in the same second as another backup **silently overwrote it**.
+
+   ~~**It should be fixed before you
    depend on it.** Small job — under a day.
 2. **There is no restore command.** A backup you cannot restore is not a backup. Restoring
    currently means typing MySQL commands by hand. This is the single biggest gap.
@@ -300,8 +327,36 @@ days.
 
 ### The honest position today
 
-- `php artisan db:backup` exists, uploads to a storage disk, but has the **SEC-003** flaw.
-- **No restore command exists.** Restoring means hand-typing MySQL commands.
+**Updated 2026-08-07.**
+
+- `php artisan db:backup` exists, uploads to a storage disk, and **SEC-003 is closed**.
+- **`php artisan db:restore` now exists**, with seven guards, and is round-trip tested.
+
+### `db:restore` — the guards, and why each exists
+
+This is the most dangerous command in the codebase: it overwrites a database. Each guard is
+tested, and each was stash-checked — removed, and its test shown to fail.
+
+| # | Guard | Why |
+|---|---|---|
+| 1 | Refuses in production unless `--force` **and** confirmed | Laravel's `ConfirmableTrait`, the house pattern |
+| 2 | **Requires typing the database name** | A y/n prompt is muscle memory; typing `whatsmine` is a deliberate act. `--force` does NOT bypass this |
+| 3 | **Takes a safety backup first, and aborts if it fails** | This is what makes a mistake recoverable rather than terminal |
+| 4 | Verifies the archive before touching the DB | Rejects corrupt/truncated gzip, archives with no `CREATE TABLE`, and archives taken from a *different* database |
+| 5 | `--dry-run` | Reports target, archive, table count and size; changes nothing |
+| 6 | Never guesses the target | There is deliberately no `--database` option; the target is always the configured connection |
+| 7 | Refuses a non-`_test` target without `--force` | The bootstrap guardrail protects the suite; this puts the same rule *inside the command*, so it does not depend on the caller remembering |
+
+Guards 2 and 3 are the non-negotiable pair.
+
+### Still owed — recorded, not fixed
+
+- **Backups land inside the repo tree** (`storage/app/private/backups/` via the `local` disk).
+  This contradicts "keep the backup off the server" above: a backup on the same box dies with
+  the box. Needs an off-server disk (S3 or equivalent) before production.
+- **`db:backup` reads the whole dump into memory** when uploading
+  (`file_get_contents($tmpPath)`). Irrelevant at 0.12 MB, not irrelevant on a real production
+  database. The dump itself is streamed; only the upload is not.
 
 **What I would propose building (not built yet):**
 
