@@ -65,6 +65,16 @@ class WorkspaceScope implements Scope
 
     public function apply(Builder $builder, Model $model): void
     {
+        // The emergency brake. Server config only — see config/workspace.php for
+        // why it is deliberately unreachable from the admin panel.
+        //
+        // Read at query time rather than captured at boot, so clearing the config
+        // cache is enough to take effect. Defaults to ON: a brake whose default
+        // is "off" is an isolation feature that ships disabled.
+        if (! config('workspace.enforce_scope', true)) {
+            return;
+        }
+
         // The admin panel reads across tenants by design. See the class docblock:
         // this is a ruled exception with a named test, not an omission.
         if (Auth::guard('admin')->check()) {
