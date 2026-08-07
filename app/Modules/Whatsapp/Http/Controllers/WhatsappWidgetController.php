@@ -4,6 +4,7 @@ namespace App\Modules\Whatsapp\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Modules\Whatsapp\Models\WhatsappWidget;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,7 +14,7 @@ class WhatsappWidgetController extends Controller
 {
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $widgets = WhatsappWidget::where('workspace_id', $workspaceId)->latest()->get();
 
         return Inertia::render('Whatsapp/Widget/Index', ['widgets' => $widgets]);
@@ -26,14 +27,14 @@ class WhatsappWidgetController extends Controller
 
     public function edit(Request $request, WhatsappWidget $widget): Response
     {
-        abort_unless($widget->workspace_id === ($request->user()->current_workspace_id ?? $request->user()->workspace_id), 403);
+        abort_unless($widget->workspace_id === (WorkspaceContext::id() ?? $request->user()->workspace_id), 403);
 
         return Inertia::render('Whatsapp/Widget/Edit', ['widget' => $widget]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $validated = $request->validate([
             'name'              => ['nullable', 'string', 'max:128'],
             'display_phone'     => ['required', 'string', 'max:32'],
@@ -54,7 +55,7 @@ class WhatsappWidgetController extends Controller
 
     public function update(Request $request, WhatsappWidget $widget): RedirectResponse
     {
-        abort_unless($widget->workspace_id === ($request->user()->current_workspace_id ?? $request->user()->workspace_id), 403);
+        abort_unless($widget->workspace_id === (WorkspaceContext::id() ?? $request->user()->workspace_id), 403);
 
         $validated = $request->validate([
             'name'              => ['nullable', 'string', 'max:128'],
@@ -76,7 +77,7 @@ class WhatsappWidgetController extends Controller
 
     public function destroy(Request $request, WhatsappWidget $widget): RedirectResponse
     {
-        abort_unless($widget->workspace_id === ($request->user()->current_workspace_id ?? $request->user()->workspace_id), 403);
+        abort_unless($widget->workspace_id === (WorkspaceContext::id() ?? $request->user()->workspace_id), 403);
         $widget->delete();
 
         return back()->with('success', 'Widget deleted.');

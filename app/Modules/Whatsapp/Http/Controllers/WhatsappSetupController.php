@@ -8,6 +8,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Services\CloudApiClient;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\Client\ConnectionException as HttpConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -18,7 +19,7 @@ class WhatsappSetupController extends Controller
 {
     public function syncPhoneNumbers(Request $request, WhatsappBusinessAccount $waba): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $this->authorizeWaba($waba, $workspaceId);
 
         try {
@@ -56,7 +57,7 @@ class WhatsappSetupController extends Controller
 
     public function destroy(Request $request, WhatsappBusinessAccount $waba): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $this->authorizeWaba($waba, $workspaceId);
 
         ChannelAccount::where('workspace_id', $workspaceId)
@@ -73,7 +74,7 @@ class WhatsappSetupController extends Controller
 
     public function refreshPhoneStatus(Request $request, WhatsappBusinessAccount $waba, string $phoneNumberId): JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $this->authorizeWaba($waba, $workspaceId);
 
         $token = $this->metaAccessToken($waba);
@@ -110,7 +111,7 @@ class WhatsappSetupController extends Controller
 
     public function changeDisplayName(Request $request, WhatsappBusinessAccount $waba, string $phoneNumberId): JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $this->authorizeWaba($waba, $workspaceId);
 
         $validated = $request->validate([
