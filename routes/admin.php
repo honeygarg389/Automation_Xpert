@@ -48,8 +48,8 @@ Route::get('/clients/{client}/users', [ClientController::class, 'users'])->name(
 Route::post('/clients/{client}/users', [ClientController::class, 'storeUser'])->name('clients.users.store')->middleware('permission:update_clients');
 Route::put('/clients/{client}/users/{user}', [ClientController::class, 'updateUser'])->name('clients.users.update')->middleware('permission:update_clients');
 Route::delete('/clients/{client}/users/{user}', [ClientController::class, 'destroyUser'])->name('clients.users.destroy')->middleware('permission:update_clients');
-Route::post('/clients/{client}/assign-plan', [ClientController::class, 'assignPlan'])->name('clients.assign-plan')->middleware('permission:view_clients');
-Route::post('/clients/{client}/impersonate', [ClientController::class, 'impersonate'])->name('clients.impersonate')->middleware('permission:view_clients');
+Route::post('/clients/{client}/assign-plan', [ClientController::class, 'assignPlan'])->name('clients.assign-plan')->middleware('permission:manage_subscriptions');
+Route::post('/clients/{client}/impersonate', [ClientController::class, 'impersonate'])->name('clients.impersonate')->middleware('permission:impersonate_clients');
 Route::post('/clients/{client}/branding', [ClientBrandingController::class, 'update'])->name('clients.branding')->middleware('permission:update_clients');
 
 // Plans
@@ -67,7 +67,7 @@ Route::get('/subscriptions/export', [SubscriptionController::class, 'export'])->
 Route::get('/subscriptions/user-search', [SubscriptionController::class, 'userSearch'])->name('subscriptions.user-search')->middleware('permission:manage_subscriptions');
 Route::post('/subscriptions', [SubscriptionController::class, 'store'])->name('subscriptions.store')->middleware('permission:manage_subscriptions');
 Route::get('/payments', [PaymentController::class, 'index'])->name('payments.index')->middleware('permission:view_payment_gateways');
-Route::post('/payments/{transaction}/refund', [TransactionController::class, 'refund'])->name('payments.refund')->middleware('permission:view_payment_gateways');
+Route::post('/payments/{transaction}/refund', [TransactionController::class, 'refund'])->name('payments.refund')->middleware('permission:manage_payment_gateways');
 Route::get('/payment-gateways', [PaymentGatewayConfigController::class, 'index'])->name('payment-gateways.index')->middleware('permission:view_payment_gateways');
 Route::get('/payment-gateways/{gateway}', [PaymentGatewayConfigController::class, 'show'])->name('payment-gateways.show')->middleware('permission:manage_payment_gateways');
 Route::put('/payment-gateways/{gateway}', [PaymentGatewayConfigController::class, 'update'])->name('payment-gateways.update')->middleware('permission:manage_payment_gateways');
@@ -148,7 +148,7 @@ Route::get('/support', [SupportTicketController::class, 'index'])->name('support
 Route::get('/support/create', [SupportTicketController::class, 'create'])->name('support.create')->middleware('permission:manage_settings');
 Route::post('/support', [SupportTicketController::class, 'store'])->name('support.store')->middleware('permission:manage_settings');
 Route::get('/support/{supportTicket}', [SupportTicketController::class, 'show'])->name('support.show')->middleware('permission:view_settings');
-Route::post('/support/{supportTicket}/reply', [SupportTicketController::class, 'reply'])->name('support.reply')->middleware('permission:view_settings');
+Route::post('/support/{supportTicket}/reply', [SupportTicketController::class, 'reply'])->name('support.reply')->middleware('permission:manage_settings');
 Route::post('/support/{supportTicket}/status', [SupportTicketController::class, 'updateStatus'])->name('support.status')->middleware('permission:manage_settings');
 
 // Cron / Scheduler setup guide
