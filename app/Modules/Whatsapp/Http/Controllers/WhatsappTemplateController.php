@@ -9,6 +9,7 @@ use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use App\Modules\Whatsapp\Services\CloudApiClient;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\Client\ConnectionException as HttpConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,7 @@ class WhatsappTemplateController extends Controller
 {
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         // Collect phone numbers for the workspace to power the phone-number filter
         $wabaIds = WhatsappBusinessAccount::where('workspace_id', $workspaceId)->pluck('waba_id');
@@ -57,7 +58,7 @@ class WhatsappTemplateController extends Controller
 
     public function create(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         $wabaIdMap = WhatsappBusinessAccount::where('workspace_id', $workspaceId)->pluck('waba_id', 'id');
 
@@ -78,7 +79,7 @@ class WhatsappTemplateController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         // If a specific phone number was selected, resolve its WABA; otherwise fall back to first WABA
         $waba = null;
@@ -142,7 +143,7 @@ class WhatsappTemplateController extends Controller
 
     public function edit(Request $request, WhatsappTemplate $template): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless($template->workspace_id === $workspaceId, 403);
 
         $wabaIdMap = WhatsappBusinessAccount::where('workspace_id', $workspaceId)->pluck('waba_id', 'id');
@@ -164,7 +165,7 @@ class WhatsappTemplateController extends Controller
 
     public function update(Request $request, WhatsappTemplate $template): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless($template->workspace_id === $workspaceId, 403);
 
         // Name and language are immutable on Meta once a template exists — keep the originals.
@@ -219,7 +220,7 @@ class WhatsappTemplateController extends Controller
 
     public function destroy(Request $request, WhatsappTemplate $template): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless($template->workspace_id === $workspaceId, 403);
 
         $metaWarning = null;
@@ -263,7 +264,7 @@ class WhatsappTemplateController extends Controller
      */
     public function uploadMedia(Request $request): JsonResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $waba = WhatsappBusinessAccount::where('workspace_id', $workspaceId)->firstOrFail();
 
         $request->validate([
@@ -312,7 +313,7 @@ class WhatsappTemplateController extends Controller
 
     public function sync(Request $request): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         $waba = WhatsappBusinessAccount::where('workspace_id', $workspaceId)->first();
 
         if (! $waba) {
