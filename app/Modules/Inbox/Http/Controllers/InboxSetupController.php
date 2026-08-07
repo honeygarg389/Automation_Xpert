@@ -7,6 +7,7 @@ use App\Modules\AI\Models\AiChatbot;
 use App\Modules\Integrations\Services\CredentialResolver;
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -19,7 +20,7 @@ class InboxSetupController extends Controller
 {
     public function index(Request $request): Response
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         // WhatsApp WABAs
         $wabas = WhatsappBusinessAccount::where('workspace_id', $workspaceId)
@@ -90,7 +91,7 @@ class InboxSetupController extends Controller
             'code' => ['required', 'string', 'max:2048'],
         ]);
 
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         if (! CredentialResolver::system()->meta()?->appId()) {
             return response()->json(['message' => 'Meta App credentials are not configured. Please ask your administrator to configure them in Admin → Integrations → Meta App.'], 422);
@@ -221,7 +222,7 @@ class InboxSetupController extends Controller
             'code' => ['required', 'string', 'max:2048'],
         ]);
 
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         if (! CredentialResolver::system()->meta()?->appId()) {
             return response()->json(['message' => 'Meta App credentials are not configured. Please ask your administrator to configure them in Admin → Integrations → Meta App.'], 422);
@@ -620,7 +621,7 @@ class InboxSetupController extends Controller
 
     public function assignChatbot(Request $request, ChannelAccount $channelAccount): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
         abort_unless((int) $channelAccount->workspace_id === (int) $workspaceId, 403);
 
         $validated = $request->validate([
@@ -652,7 +653,7 @@ class InboxSetupController extends Controller
 
     public function destroy(Request $request, ChannelAccount $channelAccount): RedirectResponse
     {
-        $workspaceId = $request->user()->current_workspace_id ?? $request->user()->workspace_id;
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
 
         abort_unless((int) $channelAccount->workspace_id === (int) $workspaceId, 403);
         abort_unless(in_array($channelAccount->channel, ['instagram', 'messenger'], true), 403);
