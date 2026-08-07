@@ -2,7 +2,7 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **625 tests, 37,925 assertions, 0 failures.**
+> The suite passes: **819 tests, 38,597 assertions, 0 failures, 1 documented skip.**
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
 > failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
@@ -10,17 +10,27 @@
 >
 > **But read the caveat below before treating green as assurance.**
 
-**Current number recorded:** 2026-08-06, on `master` at `7a2fb01`, after the BUG-005 and
-Group D merges. Every figure here is measured, not carried forward.
+**Current number recorded:** 2026-08-07, on `master` at `473d583`, after the three hard-gate
+security merges. Every figure here is measured, not carried forward.
 
-**How it reached 625 from the 591 recorded earlier the same day** — two `--no-ff` merges,
-each with its own suite run, and the total is exactly the sum because both branches added
-only new test files and touched disjoint source files:
+**The 1 skip is documented and deliberate**, not a silent hole:
+`CredentialNotInExceptionMessageTest::test_the_places_scraper_does_not_persist_the_key_to_the_job_error_column`
+is skipped with the reason *"Owed until BUG-007 is fixed: `GooglePlacesScraper::run()` dies at
+line 29 on an undefined `CredentialResolver::generic()`, so no HTTP request is ever made and
+this assertion would pass vacuously."* It is skipped **precisely because it would pass
+vacuously** — see "Zero is a floor" below. It un-skips when BUG-007 is built.
+
+**How it reached 819 from the 625 recorded on 2026-08-06** — every step is a `--no-ff` merge
+with its own full-suite run:
 
 | Merge | Adds | Running total |
 |---|---|---|
 | `b4b0520` — BUG-005, Gemini key removed from URLs | 9 security tests | 600 |
-| `7a2fb01` — Group D, retry wiring at 6 AI HTTP sites | 25 wiring tests | **625** |
+| `7a2fb01` — Group D, retry wiring at 6 AI HTTP sites | 25 wiring tests | 625 |
+| 1c workspace-context modules + SEC-003 `db:backup` / `db:restore` | — | 782 |
+| `a6c888b` — **DEEP-03** + 3 sibling read-permission gates | 10 privileged-action tests | 792 |
+| `637de50` — **SEC-004** upload extension spoofing | 13 upload tests | 805 |
+| `473d583` — **SEC-006** token expiry + revocation | 14 token-lifecycle tests | **819** |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
@@ -35,22 +45,26 @@ php -d memory_limit=2G vendor/phpunit/phpunit/phpunit --no-coverage
 `-d memory_limit`, so it dies at the 128 MB default. `vendor/bin/phpunit` is not executable
 in this working copy (flattened symlinks).
 
-## Result — current (2026-08-06, `master` @ `7a2fb01`)
+## Result — current (2026-08-07, `master` @ `473d583`)
 
 | Metric | Value |
 |---|---|
-| Tests | **625** |
-| Assertions | 37,925 |
+| Tests | **819** |
+| Assertions | 38,597 |
 | **Failures** | **0** |
 | Errors | **0** |
-| Skipped | **0** |
+| Skipped | **1** (documented — BUG-007, see above) |
 | Risky / Incomplete | **0** |
-| Time | 18.8 s |
-| Peak memory | 151 MB |
+| Time | 51.2 s |
+| Peak memory | 173 MB |
 | Connection | `mysql` → **`whatsmine_test`** ✅ (working DB untouched) |
 
-The two `S` markers recorded in the original baseline (DNS-dependent cases in
-`PublicHttpUrlTest`) are gone; nothing is skipped.
+The two `S` markers in the original baseline (DNS-dependent cases in `PublicHttpUrlTest`) are
+gone. The single remaining skip is a different one, added deliberately and with a reason
+string — see above.
+
+**A skip count above 1 is a regression** on the same terms as a failure. The one permitted
+skip is named; any other means a test stopped running and nobody said why.
 
 ### Original baseline for comparison (2026-08-03, after §0.0)
 
@@ -135,6 +149,10 @@ lands — but it must be re-derived against tests that actually exercise the pat
 | 2026-08-06 | Phase 0 merges landed on `master` (`310580e`, `49a3b92`) | 591 | **0** | +145 tests, zero regressions |
 | 2026-08-06 | BUG-005 merged (`b4b0520`) — Gemini key out of URLs | 600 | **0** | +9 security tests |
 | 2026-08-06 | Group D merged (`7a2fb01`) — retry wiring at 6 AI HTTP sites | 625 | **0** | +25 wiring tests |
+| 2026-08-07 | 1c workspace-context modules + SEC-003 (`db:backup` hardened, `db:restore` built) | 782 | **0** | +157, zero regressions |
+| 2026-08-07 | **DEEP-03** merged (`a6c888b`) — 4 privileged actions off read permissions | 792 | **0** | +10 privileged-action tests |
+| 2026-08-07 | **SEC-004** merged (`637de50`) — upload extension spoofing | 805 | **0** | +13 upload tests |
+| 2026-08-07 | **SEC-006** merged (`473d583`) — token expiry + revocation | 819 | **0** | +14 token-lifecycle tests |
 
 **TASK 1 detail.** Both causes were test defects; neither touched production code.
 
@@ -193,6 +211,19 @@ The Unit suite accounts for 36,711 assertions across just 104 tests; the Feature
 tenant isolation is actually proven — carries only 1,174 across 487 tests. The jump from 1,041
 to 37,925 assertions therefore reflects one loop-heavy unit test, **not** a 36× increase in
 coverage. Judge coverage by what the Feature suite exercises, never by this total.
+
+> **Addendum 2026-08-07 — the paragraph above is kept verbatim and its reasoning is
+> unchanged.** The total is now 38,597. The +672 since 2026-08-06 came from 37 new **Feature**
+> tests (DEEP-03, SEC-004, SEC-006), so the ratio moved the right way — but the conclusion
+> stands exactly as written: `JitterTest` still dominates the total, and the total is still
+> not a coverage measure.
+>
+> **The three security branches are the worked example of why.** Across them, six tests were
+> caught proving nothing: two branding tests that passed on a **permission-denial redirect**
+> without ever reaching the controller, and a four-part token probe where the guard cached a
+> resolved user across requests and returned `200` for a check that should have been `401`.
+> Both were found by a **positive control** and by **re-running in isolation** — not by the
+> suite being green.
 
 **Status of the workspace-context work on `master`.** The five completed 1c modules — Leads,
 Social, Automation, Client-controllers (CampaignReport) and Broadcasting — are merged and

@@ -13,18 +13,43 @@
 >
 > **Security** — added 2026-08-04
 >
-> 5. ☐ **DEEP-03** — impersonation is gated by a dedicated permission, not read-only
->        `view_clients`. **Also a white-label blocker — see below.**
-> 6. ☐ **SEC-004** — SVG removed from logo/favicon upload (stored XSS), or sanitised and
->        served as an attachment
-> 7. ☐ **SEC-006** — Sanctum tokens have a finite expiry (`sanctum.expiration` is currently
->        `null` across 71 API routes)
+> 5. ☑ **DEEP-03** — impersonation is gated by a dedicated permission — **closed 2026-08-07.**
+>        Shipped `impersonate_clients` (SUPER_ADMIN only, by migration so existing installs
+>        get it). *Differed from the write-up:* the sweep of all 74 non-GET admin routes found
+>        **four** actions gated by read permissions, not one — assign-plan, refund and
+>        support-reply too — and the `SUPPORT` role description ("View clients and
+>        subscriptions only") was the delivery mechanism, not a cosmetic issue.
+> 6. ☑ **SEC-004** — stored-XSS upload path closed — **closed 2026-08-07.**
+>        *The write-up was half wrong:* the **logo** rule already rejected SVG (Laravel 12's
+>        `image` rule dropped svg unless passed `allow_svg`) — only the favicon accepted it.
+>        The real defect was the stored **filename**: `mimes:` validates sniffed content while
+>        every site built the path from `getClientOriginalExtension()`, so a GIF-magic polyglot
+>        named `payload.html` was stored as `.html` and served as text/html from this origin.
+>        **Tenant-reachable via `POST /media`, not admin-only.** Fixed at all four sites.
+> 7. ☑ **SEC-006** — tokens now expire, and are revoked — **closed 2026-08-07.**
+>        Mobile 30 days, API tokens 90 days by default, an explicit choice capped at 1 year.
+>        *The write-up understated it:* nothing **revoked** tokens either — a token survived
+>        deactivation of its own user and survived a password change, both proven. Revocation
+>        now lives on the `User` model (five writers of `status`/`password` were found,
+>        including two admin paths that change someone else's password) with
+>        `EnsureUserIsActive` re-checking every API request.
 >
 > **All seven. Not six. Not "mostly done."**
+>
+> **Boxes 1, 2, 5, 6, 7 are closed. Boxes 3 and 4 are the owner's, and both are still open —
+> so the answer to "can we onboard a customer yet?" is still no.**
+>
+> A note worth keeping: **all three security findings differed from how they were recorded** —
+> one was four bugs, one named the wrong defect and the wrong severity, one described half of
+> its own problem. Every difference was found by opening the file rather than trusting the
+> document. Treat the remaining entries in `project-security-findings.md` and
+> `project-security-deep-dive.md` the same way.
 >
 > Gate-optional but belongs in the same pass: **DEEP-05** — `assignPlan` gated by the
 > read-only `view_clients` permission. A billing-integrity bug: a read permission can change
 > what a customer is paying for. Fix it while the others are open.
+> **☑ Closed 2026-08-07**, in the DEEP-03 branch — it was one of the four sites the sweep
+> found. Now `manage_subscriptions`.
 >
 > This is a rule, not a recommendation. It exists because the predictable failure mode is
 > deferring these once the structural work starts feeling good — which is precisely when the
@@ -36,12 +61,19 @@
 >
 > ---
 >
-> ### ⛔ DEEP-03 is a white-label blocker, not just an admin-panel issue
+> ### ✅ DEEP-03 was a white-label blocker, not just an admin-panel issue — CLOSED 2026-08-07
 >
-> Today: an admin granted only **`view_clients`** — the permission you would give a read-only
-> support or analyst role — can fully impersonate **any client's administrator** and perform
-> every action that user can. `ClientPolicy::impersonate()` returns
-> `hasPermissionTo('view_clients')`, identical to `view()`.
+> **Fixed.** Kept in full because the reasoning is why the partner tier can now proceed, and
+> because the same shape will recur the moment a new privileged admin action is added.
+>
+> ~~Today~~ **Until 2026-08-07**: an admin granted only **`view_clients`** — the permission you
+> would give a read-only support or analyst role — could fully impersonate **any client's
+> administrator** and perform every action that user can. `ClientPolicy::impersonate()`
+> returned `hasPermissionTo('view_clients')`, identical to `view()`.
+>
+> It now requires **`impersonate_clients`**, held by SUPER_ADMIN only. Both layers were
+> changed — the policy and the route middleware were checking the same `view_clients`, which
+> reads as defence in depth and was not.
 >
 > **Under the partner model this gets materially worse.** The attacker is no longer only a
 > platform employee: it is **a partner's staff account**. If a partner's low-privilege user
@@ -49,8 +81,13 @@
 > boundary the white-label tier exists to guarantee.
 >
 > A reseller platform whose read-only role confers cross-tenant impersonation is not sellable.
-> **This must be fixed before the partner tier ships, independently of the customer-data
-> gate.**
+> ~~**This must be fixed before the partner tier ships, independently of the customer-data
+> gate.**~~ **Done — the partner tier is no longer blocked on this.**
+>
+> Still true, and the reason to keep reading this: the partner model raises the stakes of
+> *every* permission mistake, because the attacker becomes a partner's staff account and the
+> blast radius becomes other partners' customers. `BUG-010` in `docs/found-bugs.md` records
+> the next instance — `client_role` (`administrator`/`staff`) is gated by **nothing**.
 
 
 
