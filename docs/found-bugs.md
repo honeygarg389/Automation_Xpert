@@ -659,6 +659,74 @@ home workspace, since that is the only workspace they could have been recorded a
 
 ---
 
+## BUG-010 — `client_role` looks like an authorization mechanism and is not one
+
+**Severity:** Unknown until investigated — potentially Critical
+**Found:** 2026-08-07, while sweeping for DEEP-03 siblings. **Not fixed.**
+
+`User::client_role` holds `administrator` or `staff`, is set at registration, invitation and
+social/Firebase login, and is displayed in the team UI. It reads like a permission tier.
+
+**No route, middleware or policy gates on it.** Grepping every use outside the admin panel
+finds only assignment at signup and `orderByRaw` for display ordering. Every client route uses
+`['web', 'client-app']`; there is no `permission:`/`can:`/`role:` middleware anywhere in
+`routes/client.php` or the ten module route files.
+
+**So a `staff` user appears to have the same route-level access as an `administrator`** —
+including, on the evidence of the 1c work, deleting contacts, deleting stores, changing
+billing-adjacent settings and managing team members. Workspace scoping (Phase 0 / 1c) confines
+them to their own workspace; nothing confines them *within* it.
+
+This was noticed because DEEP-03's fix asked the same question of the admin panel — which
+*does* have a real RBAC layer — and the client side turned out to have none.
+
+**Not investigated further**, deliberately: it is a different class from DEEP-03 and needs its
+own pass. What that pass should answer: is `staff` meant to be restricted, and if so, which of
+the ~200 client routes should it lose? That is a product decision before it is a code one.
+
+---
+
+## BUG-011 — coupons and tax rates ride on the plans permissions
+
+**Severity:** Low — sloppy modelling, not a privilege escalation
+**Found:** 2026-08-07, during the DEEP-03 route sweep. **Not fixed.**
+
+| Route | Gate |
+|---|---|
+| `POST /coupons`, `PUT /coupons/{coupon}` | `create_plans` |
+| `DELETE /coupons/{coupon}` | `delete_plans` |
+| `POST /tax-rates`, `PUT /tax-rates/{taxRate}` | `create_plans` |
+| `DELETE /tax-rates/{taxRate}` | `delete_plans` |
+
+Write actions gated by write permissions, so this is **not** the DEEP-03 defect class and is
+not an escalation. But it means "can manage plans" silently also means "can manage coupons and
+tax rates", and an operator granting `create_plans` has no way to know that from the
+permission's name or description.
+
+**Fix when scoped:** `create_coupons`/`delete_coupons` and `manage_tax_rates`, or an explicit
+note in the `create_plans` description saying what else it carries. The second is cheaper and
+honest; the first is correct.
+
+---
+
+## 📌 Owed — better modelling for support-ticket permissions
+
+Recorded so the choice reads as deliberate rather than an oversight.
+
+`POST /support/{supportTicket}/reply` was gated by `view_settings` (a read permission — part of
+the DEEP-03 cluster) and is now gated by **`manage_settings`**.
+
+`manage_settings` is the honest counterpart of the permission it replaced and closes the
+read-gates-write hole, but it is a **poor conceptual fit**: replying to a customer support
+ticket is not a settings operation. There is no Support permission category at all.
+
+`manage_support` was deliberately **not** created. Inventing a permission category for a single
+route is a product decision, not a security fix, and mixing one into a security branch would
+have widened its blast radius. When support grows its own surface, it should get its own
+category — `view_support` / `manage_support` — and this route should move to it.
+
+---
+
 ## 📌 Status note — retry work (Group D), as of 2026-08-06
 
 Not a bug. Recorded here because it corrects a **pushed, immutable** commit message, and
