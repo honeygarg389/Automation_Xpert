@@ -755,3 +755,99 @@ the suite, which was true when MySQL access was broken on the dev machine and is
 
 It is **left unedited on purpose** — it is pushed history and an accurate record of what was
 known at that commit. This note supersedes it. Read them together, not separately.
+
+---
+
+## BUG-012 — the CSP is not a mitigating control for any XSS in this application
+
+**Severity: Medium — recorded, not fixed. Found while fixing SEC-004.**
+
+`SecureHeaders::buildCsp()` emits `script-src 'self' 'unsafe-inline'`.
+
+Both halves defeat the purpose independently:
+
+- `'self'` — stored XSS is BY DEFINITION same-origin. An uploaded file served from
+  `/storage/...` is `'self'`.
+- `'unsafe-inline'` — the payload in a stored-XSS file is an inline `<script>` or an
+  `onload=` attribute. Allowed.
+
+So the SEC-004 payload would have executed with the CSP fully applied. And it was not
+applied at all: uploads on the `public` disk are served by the **web server**, so the
+request never enters PHP and no middleware runs on it.
+
+This matters beyond SEC-004. Any future review that reasons "we have a CSP, so XSS is
+contained" is reasoning from a header that permits exactly the thing it appears to prevent.
+
+**Not fixed here** because removing `'unsafe-inline'` requires nonces or hashes on every
+inline script, which touches `app.blade.php`, the Inertia bootstrap and the Vite output —
+a change of a completely different size and risk from a validation fix, and one that breaks
+the app visibly if it is wrong.
+
+## BUG-013 — `media.mime_type` disagrees with the file it describes
+
+**Severity: Low — recorded, not fixed. Found while fixing SEC-004.**
+
+`MediaService::store()` writes `mime_type` from `$file->getMimeType()` — the **sniffed**
+value — while, before SEC-004, `path` took its extension from the **client filename**.
+
+For the polyglot that means the row said `image/gif` for a file the browser rendered as
+HTML. The two columns describe different realities and always have.
+
+SEC-004 makes them agree going forward: the stored extension is now derived from the same
+sniffed value as `mime_type`. **Rows written before the fix keep the mismatch.**
+
+The trap for later: `mime_type` looks like the authoritative answer to "what is this file"
+and is the obvious column for a future safety check to read. It is not authoritative about
+how the file will be **served** — the extension is, because that is what the web server
+reads.
+
+## 📌 Note — cloud storage disks change the origin picture
+
+Recorded during SEC-004.
+
+Today `StorageManager::diskName()` falls back to the local `public` disk, so uploads are
+served from the application's own origin and stored XSS is same-origin.
+
+On S3 / DigitalOcean Spaces the files sit on a **different** origin, which reduces (does not
+remove) the impact of an executable upload.
+
+**The white-label roadmap reverses that.** Custom partner domains fronting a bucket put
+uploads back on an origin the customer's session trusts. Anyone reasoning "we're on S3, so
+this is contained" must re-check whether a custom domain has since been pointed at it.
+
+The SEC-004 fix is disk-independent — it constrains what is written, not where — which is
+why it does not need revisiting when the storage backend changes.
+
+## 📌 Note — the `local` disk has `'serve' => true`
+
+`config/filesystems.php` sets `'serve' => true` on the `local` disk, which registers
+Laravel's own file-serving route.
+
+`StorageManager` never returns `local` — it returns `public` or a cloud disk — so this is
+**not live**. Recorded because it is a second file-serving path with different header
+behaviour from the web-server-served `/storage` path, and any future reasoning about how
+uploads reach a browser has to account for both.
+
+## 📌 Proposed — a `storage:inventory --dry-run` command (NOT built)
+
+SEC-004 fixed what gets written. **It cleaned nothing that is already stored.**
+
+Verified on this machine: `storage/app/public` holds 3 `.png` files, the `media` table is
+empty, no client has a `logo_path`, and there are no branding settings rows. So there is
+nothing to clean **here**. On any deployed install that is unknown and must be checked.
+
+Proposed shape:
+
+- Walk every configured disk plus the `media` table.
+- Report files whose extension is in the SEC-004 denylist (`html`, `htm`, `xhtml`, `shtml`,
+  `svg`, `xml`), and — separately — files whose extension **disagrees with their sniffed
+  content**, which is the polyglot signature and the more interesting signal.
+- `--dry-run` by default. Report only. No deletion flag in the first version.
+
+**Why it must not delete.** A legitimately-uploaded `.svg` logo and an attack SVG are
+byte-for-byte indistinguishable in kind — both are valid SVG served from the public disk.
+Only a human who knows the tenant can say which is which. An automatic delete would remove
+customers' working branding, and a tool that is dangerous to run will not be run.
+
+The extension/content mismatch check is the part worth building: that one has no legitimate
+explanation.

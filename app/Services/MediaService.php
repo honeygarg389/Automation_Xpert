@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Models\Media;
+use App\Models\User;
+use App\Support\Files\SafeUploadExtension;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -18,7 +20,12 @@ class MediaService
         string $collection = 'default',
         ?string $disk = null
     ): Media {
-        $ext = $file->getClientOriginalExtension();
+        // SEC-004. The STORED extension comes from the file's contents; the
+        // client's filename is kept only as a display label. This is the
+        // tenant-reachable site — POST /media — so it is the one that mattered:
+        // a GIF-magic polyglot named `payload.html` passed `mimes:…,gif,…` and
+        // was stored as `<uuid>.html`, served as text/html from the app origin.
+        $ext = SafeUploadExtension::for($file);
         $filename = $file->getClientOriginalName();
 
         // Resolve disk from StorageManager unless caller explicitly passes one
@@ -43,7 +50,7 @@ class MediaService
     /**
      * Get total storage used by owner in bytes.
      */
-    public function usedBytes(Model $owner, string $collection = null): int
+    public function usedBytes(Model $owner, ?string $collection = null): int
     {
         $query = Media::where('mediable_type', get_class($owner))
             ->where('mediable_id', $owner->getKey());
@@ -58,7 +65,7 @@ class MediaService
     /**
      * Get storage quota in bytes from plan limits (storage_gb).
      */
-    public function quotaBytes(\App\Models\User $user): int
+    public function quotaBytes(User $user): int
     {
         $plan = $user->effectiveSubscription()?->plan;
         $gb = $plan?->limitValue('storage_gb') ?? 1;

@@ -47,6 +47,13 @@ class MediaController extends Controller
         $validated = $request->validate([
             // Allow-list of safe media types only. HTML/SVG/scripts are excluded
             // to prevent stored-XSS via files served from the app origin.
+            //
+            // SEC-004: this allow-list alone did NOT achieve that. It validates
+            // the SNIFFED type, while the stored filename used to take the
+            // client's extension — so GIF bytes named `payload.html` passed
+            // here and landed as `.html`. MediaService now derives the stored
+            // extension from content (SafeUploadExtension); this list is the
+            // first of two layers, not the whole control.
             'file' => [
                 'required', 'file', 'max:51200', // 50 MB max per file
                 'mimes:jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,ppt,pptx,csv,txt,mp3,wav,ogg,m4a,mp4,webm,mov',

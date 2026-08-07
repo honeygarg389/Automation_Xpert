@@ -127,10 +127,13 @@ function GeneralTab({ general, flash }) {
                         </div>
                     </div>
 
+                    {/* SEC-004: no image/svg+xml in either accept list below. The
+                        server rejects SVG; this keeps the file picker from
+                        offering a file that will be refused. */}
                     <ImageUploadWidget
                         label={t('settings.app_logo')}
                         description={t('settings.app_logo_desc')}
-                        accept="image/png,image/jpeg,image/gif,image/svg+xml,image/webp"
+                        accept="image/png,image/jpeg,image/gif,image/webp"
                         currentUrl={general?.logo_url}
                         uploadRoute="admin.settings.logo.upload"
                         deleteRoute="admin.settings.logo.delete"
@@ -141,7 +144,7 @@ function GeneralTab({ general, flash }) {
                         <ImageUploadWidget
                             label={t('settings.favicon')}
                             description={t('settings.favicon_desc')}
-                            accept="image/x-icon,image/vnd.microsoft.icon,image/png,image/svg+xml,image/gif,image/webp"
+                            accept="image/x-icon,image/vnd.microsoft.icon,image/png,image/gif,image/webp"
                             currentUrl={general?.favicon_url}
                             uploadRoute="admin.settings.favicon.upload"
                             deleteRoute="admin.settings.favicon.delete"
