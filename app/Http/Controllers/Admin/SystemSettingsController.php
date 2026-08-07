@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\SystemSetting;
 use App\Services\StorageManager;
+use App\Support\Files\SafeUploadExtension;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -23,15 +24,15 @@ class SystemSettingsController extends Controller
             $general[$key] = SystemSetting::get($key, '');
         }
 
-        $logoPath    = SystemSetting::get('app_logo_path');
+        $logoPath = SystemSetting::get('app_logo_path');
         $faviconPath = SystemSetting::get('app_favicon_path');
 
-        $logoDisk    = SystemSetting::get('app_logo_disk', 'public');
+        $logoDisk = SystemSetting::get('app_logo_disk', 'public');
         $faviconDisk = SystemSetting::get('app_favicon_disk', 'public');
         $sm = app(StorageManager::class);
         $sm->ensureDiskReady($logoDisk);
         $sm->ensureDiskReady($faviconDisk);
-        $general['logo_url']    = $logoPath    ? Storage::disk($logoDisk)->url($logoPath)       : null;
+        $general['logo_url'] = $logoPath ? Storage::disk($logoDisk)->url($logoPath) : null;
         $general['favicon_url'] = $faviconPath ? Storage::disk($faviconDisk)->url($faviconPath) : null;
 
         $advanced = SystemSetting::orderBy('group')
@@ -39,37 +40,37 @@ class SystemSettingsController extends Controller
             ->whereNotIn('key', array_merge($generalKeys, ['app_logo_path', 'app_favicon_path']))
             ->get()
             ->map(fn ($s) => [
-                'id'        => $s->id,
-                'key'       => $s->key,
-                'value'     => $s->is_secret
+                'id' => $s->id,
+                'key' => $s->key,
+                'value' => $s->is_secret
                     ? (strlen($s->attributes['value'] ?? '') > 0 ? '••••••••' : '')
                     : ($s->attributes['value'] ?? ''),
                 'is_secret' => $s->is_secret,
-                'group'     => $s->group,
+                'group' => $s->group,
             ]);
 
         $byGroup = $advanced->groupBy('group')->map->values();
 
         $firebase = [
-            'enabled'    => SystemSetting::get('firebase_enabled', 'false') === 'true',
-            'apiKey'     => SystemSetting::get('firebase_api_key', ''),
+            'enabled' => SystemSetting::get('firebase_enabled', 'false') === 'true',
+            'apiKey' => SystemSetting::get('firebase_api_key', ''),
             'authDomain' => SystemSetting::get('firebase_auth_domain', ''),
-            'projectId'  => SystemSetting::get('firebase_project_id', ''),
-            'appId'      => SystemSetting::get('firebase_app_id', ''),
+            'projectId' => SystemSetting::get('firebase_project_id', ''),
+            'appId' => SystemSetting::get('firebase_app_id', ''),
         ];
 
         return Inertia::render('Admin/Settings/Index', [
-            'general'         => $general,
+            'general' => $general,
             'settingsByGroup' => $byGroup,
-            'firebase'        => $firebase,
+            'firebase' => $firebase,
         ]);
     }
 
     public function updateGeneral(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'app_name'      => ['nullable', 'string', 'max:128'],
-            'app_tagline'   => ['nullable', 'string', 'max:255'],
+            'app_name' => ['nullable', 'string', 'max:128'],
+            'app_tagline' => ['nullable', 'string', 'max:255'],
             'support_email' => ['nullable', 'email', 'max:255'],
             'primary_color' => ['nullable', 'regex:/^#[0-9A-Fa-f]{6}$/'],
         ]);
@@ -84,15 +85,27 @@ class SystemSettingsController extends Controller
     public function uploadLogo(Request $request): RedirectResponse
     {
         $request->validate([
-            'logo' => ['required', 'image', 'mimes:png,jpg,jpeg,gif,svg,webp', 'max:2048'],
+            // SEC-004. `svg` is deliberately absent. It USED to be listed here
+            // and was harmless only by accident: Laravel 12's `image` rule
+            // hardcodes jpg/jpeg/png/gif/bmp/webp and adds svg only when passed
+            // `allow_svg`, so `image` overrode the `mimes` list. That is a
+            // framework-version-dependent non-exploit, not a fix — on Laravel
+            // <=10 the same two lines accepted SVG.
+            //
+            // Do NOT "restore" svg here, and do NOT add `allow_svg`. An SVG is
+            // an executable document: served from the public disk it runs
+            // script on this application's origin. UploadExtensionSpoofingTest
+            // pins this so a framework change breaks a test, not the app.
+            'logo' => ['required', 'image', 'mimes:png,jpg,jpeg,gif,webp', 'max:2048'],
         ]);
 
         $this->deleteFile('app_logo_path', 'app_logo_disk');
 
-        $sm   = app(StorageManager::class);
+        $sm = app(StorageManager::class);
         $disk = $sm->diskName();
         $file = $request->file('logo');
-        $path = $sm->prefixedPath('branding/logo-'.Str::uuid().'.'.$file->getClientOriginalExtension());
+        // SEC-004: extension from sniffed content, never from the client filename.
+        $path = $sm->prefixedPath('branding/logo-'.Str::uuid().'.'.SafeUploadExtension::for($file));
         $sm->disk()->putFileAs(dirname($path), $file, basename($path));
 
         SystemSetting::set('app_logo_path', $path, false, 'general');
@@ -112,15 +125,20 @@ class SystemSettingsController extends Controller
     public function uploadFavicon(Request $request): RedirectResponse
     {
         $request->validate([
-            'favicon' => ['required', 'file', 'mimes:png,jpg,jpeg,gif,ico,svg,webp', 'max:512'],
+            // SEC-004. `svg` removed — and unlike the logo rule above, it was
+            // genuinely reachable here: this rule uses `file`, not `image`, so
+            // nothing overrode the `mimes` list and an SVG carrying <script>
+            // was accepted and served from the app origin.
+            'favicon' => ['required', 'file', 'mimes:png,jpg,jpeg,gif,ico,webp', 'max:512'],
         ]);
 
         $this->deleteFile('app_favicon_path', 'app_favicon_disk');
 
-        $sm   = app(StorageManager::class);
+        $sm = app(StorageManager::class);
         $disk = $sm->diskName();
         $file = $request->file('favicon');
-        $path = $sm->prefixedPath('branding/favicon-'.Str::uuid().'.'.$file->getClientOriginalExtension());
+        // SEC-004: extension from sniffed content, never from the client filename.
+        $path = $sm->prefixedPath('branding/favicon-'.Str::uuid().'.'.SafeUploadExtension::for($file));
         $sm->disk()->putFileAs(dirname($path), $file, basename($path));
 
         SystemSetting::set('app_favicon_path', $path, false, 'general');
@@ -140,11 +158,11 @@ class SystemSettingsController extends Controller
     public function updateFirebase(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'firebase_enabled'     => ['required', 'in:true,false'],
-            'firebase_api_key'     => ['nullable', 'string', 'max:255'],
+            'firebase_enabled' => ['required', 'in:true,false'],
+            'firebase_api_key' => ['nullable', 'string', 'max:255'],
             'firebase_auth_domain' => ['nullable', 'string', 'max:255'],
-            'firebase_project_id'  => ['nullable', 'string', 'max:128'],
-            'firebase_app_id'      => ['nullable', 'string', 'max:255'],
+            'firebase_project_id' => ['nullable', 'string', 'max:128'],
+            'firebase_app_id' => ['nullable', 'string', 'max:255'],
         ]);
 
         foreach ($validated as $key => $value) {
@@ -157,18 +175,18 @@ class SystemSettingsController extends Controller
     public function update(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'settings'             => ['required', 'array'],
-            'settings.*.key'       => ['required', 'string', 'max:128'],
-            'settings.*.value'     => ['nullable', 'string'],
+            'settings' => ['required', 'array'],
+            'settings.*.key' => ['required', 'string', 'max:128'],
+            'settings.*.value' => ['nullable', 'string'],
             'settings.*.is_secret' => ['boolean'],
-            'settings.*.group'     => ['nullable', 'string', 'max:64'],
+            'settings.*.group' => ['nullable', 'string', 'max:64'],
         ]);
 
         foreach ($validated['settings'] as $s) {
-            $model            = SystemSetting::firstOrNew(['key' => $s['key']]);
+            $model = SystemSetting::firstOrNew(['key' => $s['key']]);
             $model->is_secret = $s['is_secret'] ?? false;
-            $model->group     = $s['group'] ?? null;
-            $value            = $s['value'] ?? null;
+            $model->group = $s['group'] ?? null;
+            $value = $s['value'] ?? null;
             if ($value !== null && $value !== '' && ! ($model->is_secret && preg_match('/^•+$/', (string) $value))) {
                 $model->value = $value;
             }
@@ -181,7 +199,7 @@ class SystemSettingsController extends Controller
     private function deleteFile(string $pathKey, string $diskKey): void
     {
         $existing = SystemSetting::get($pathKey);
-        $disk     = SystemSetting::get($diskKey, 'public');
+        $disk = SystemSetting::get($diskKey, 'public');
         if ($existing) {
             app(StorageManager::class)->ensureDiskReady($disk);
             Storage::disk($disk)->delete($existing);
