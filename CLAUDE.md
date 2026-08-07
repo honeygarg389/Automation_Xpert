@@ -203,6 +203,26 @@ Rules:
   Both were caught only because a test failed for an unexpected reason. Search for the
   concept, not the symbol you already have: sibling methods on the related model, the policy,
   the middleware, and any service that answers the same question.
+- **A signature change is not done when the public callers compile.** Grepping the public API
+  finds the callers you were thinking about. It does not find the ones inside the class you
+  just edited, and it does not find tests.
+
+  Concretely, changing `OnboardingService::markStep()`'s parameters broke callers in **three
+  places, each found by a different mechanism**:
+
+  | Broken caller | Found by |
+  |---|---|
+  | 4 controllers / middleware | grep — the ones I was looking for |
+  | 2 **internal** callers inside `OnboardingService` itself (`complete()` → `markStep()`, and `getProgress()` → `complete()`) | runtime `TypeError` in the new tests |
+  | 2 existing test files (`OnboardingMilestonesTest`, `BillingFixesTest`) | **the full-suite run, and nothing else** |
+
+  The internal pair mattered most: they were `TypeError`s on the dashboard and on *every*
+  client page via `HandleInertiaRequests`, and one of them was a `@deprecated` shim nobody
+  would think to check.
+
+  So: after any signature change, grep for the method name **without** a `$this->`/`self::`
+  qualifier too, and **run the whole suite** — not the module's tests. A red suite here is the
+  change working as intended; a green one after only grepping means you have not looked yet.
 - **A clean merge is not evidence that a document is coherent.** Git conflicts on overlapping
   *lines*, not contradictory *meaning*. Two branches that append to different regions of the
   same file merge silently — and append-structured files (`docs/found-bugs.md`, roadmaps,
