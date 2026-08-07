@@ -16,7 +16,7 @@ class BillingFixesTest extends TestCase
         $user = $ctx['user'];
 
         $service = app(OnboardingService::class);
-        $result = $service->markStep($user, 'nonexistent_step');
+        $result = $service->markStep($user, $user->workspace_id, 'nonexistent_step');
 
         $this->assertFalse($result);
     }
@@ -27,7 +27,7 @@ class BillingFixesTest extends TestCase
         $user = $ctx['user'];
 
         $service = app(OnboardingService::class);
-        $result = $service->markStep($user, 'verify_email');
+        $result = $service->markStep($user, $user->workspace_id, 'verify_email');
 
         $this->assertTrue($result);
         $this->assertDatabaseHas('onboarding_steps', ['user_id' => $user->id, 'step' => 'verify_email', 'completed' => true]);
@@ -39,7 +39,7 @@ class BillingFixesTest extends TestCase
         $user = $ctx['user'];
 
         $service = app(OnboardingService::class);
-        $result = $service->markStep($user, 'verify_email');
+        $result = $service->markStep($user, $user->workspace_id, 'verify_email');
 
         $this->assertFalse($result);
     }

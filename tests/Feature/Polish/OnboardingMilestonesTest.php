@@ -23,7 +23,7 @@ class OnboardingMilestonesTest extends TestCase
         ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
 
         $service = $this->makeService();
-        $progress = $service->getProgress($user);
+        $progress = $service->getProgress($user, $workspace->id);
 
         $step = collect($progress['steps'])->firstWhere('key', 'connect_first_channel');
         $this->assertFalse($step['completed'], 'Should not be completed before channel exists');
@@ -37,7 +37,7 @@ class OnboardingMilestonesTest extends TestCase
             'status' => 'active',
         ]);
 
-        $progress2 = $service->getProgress($user->refresh());
+        $progress2 = $service->getProgress($user->refresh(), $workspace->id);
         $step2 = collect($progress2['steps'])->firstWhere('key', 'connect_first_channel');
         $this->assertTrue($step2['completed'], 'Should be completed after channel account exists');
     }
@@ -47,7 +47,7 @@ class OnboardingMilestonesTest extends TestCase
         ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
 
         $service = $this->makeService();
-        $progress = $service->getProgress($user);
+        $progress = $service->getProgress($user, $workspace->id);
 
         $step = collect($progress['steps'])->firstWhere('key', 'import_first_contacts');
         $this->assertFalse($step['completed']);
@@ -57,7 +57,7 @@ class OnboardingMilestonesTest extends TestCase
             'phone_e164' => '+8801700000001',
         ]);
 
-        $progress2 = $service->getProgress($user->refresh());
+        $progress2 = $service->getProgress($user->refresh(), $workspace->id);
         $step2 = collect($progress2['steps'])->firstWhere('key', 'import_first_contacts');
         $this->assertTrue($step2['completed']);
     }
@@ -67,7 +67,7 @@ class OnboardingMilestonesTest extends TestCase
         ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
 
         $service = $this->makeService();
-        $progress = $service->getProgress($user);
+        $progress = $service->getProgress($user, $workspace->id);
 
         $step = collect($progress['steps'])->firstWhere('key', 'train_first_chatbot');
         $this->assertFalse($step['completed']);
@@ -80,18 +80,18 @@ class OnboardingMilestonesTest extends TestCase
             'max_context_chunks' => 5,
         ]);
 
-        $progress2 = $service->getProgress($user->refresh());
+        $progress2 = $service->getProgress($user->refresh(), $workspace->id);
         $step2 = collect($progress2['steps'])->firstWhere('key', 'train_first_chatbot');
         $this->assertTrue($step2['completed']);
     }
 
     public function test_next_step_is_first_incomplete_step(): void
     {
-        ['user' => $user] = $this->createWorkspaceContext();
+        ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
         $user->update(['email_verified_at' => now()]);
 
         $service = $this->makeService();
-        $progress = $service->getProgress($user->refresh());
+        $progress = $service->getProgress($user->refresh(), $workspace->id);
 
         // verify_email should be complete; next should be choose_plan or connect_first_channel
         $this->assertNotNull($progress['next_step']);
