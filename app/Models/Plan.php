@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Modules\Entitlements\Models\AddOn;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
@@ -93,6 +95,26 @@ class Plan extends Model
         $limits = $this->limits;
 
         return is_array($limits) ? ($limits[$key] ?? null) : null;
+    }
+
+    /**
+     * The add-ons this plan includes.
+     *
+     * The backward-compatibility bridge for Phase 1, not a new concept: each
+     * existing plan gains one synthesized `package` add-on carrying its current
+     * `limits`, and links to it here. Existing subscriptions need no migration —
+     * they still point at plan_id, and the resolver walks
+     * plan -> plan_add_on -> add_on_grants.
+     *
+     * `plans.limits` stays authoritative until a test proves nothing reads it.
+     *
+     * @return BelongsToMany<AddOn, $this>
+     */
+    public function addOns(): BelongsToMany
+    {
+        return $this->belongsToMany(AddOn::class, 'plan_add_on')
+            ->withPivot('quantity')
+            ->withTimestamps();
     }
 
     public function clientSubscriptions(): HasMany
