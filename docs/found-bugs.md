@@ -1222,6 +1222,54 @@ and a global scope both saying everything is fine.
 The one-line version, for a reviewer: **the scope answers "whose rows may this query see".
 It never answers "was this the right id to ask about".**
 
+### ⚠️ And it must not be allowed to answer WHO IS AUTHORIZED
+
+Same family as the wrong-dispatch limit above, found in Phase 0 slice 7 and worth naming
+because it is the more seductive of the two.
+
+**The scope answers "whose rows may this query see". It must never be allowed to answer
+"who is authorized".**
+
+The case that produced it: `BroadcastChannelsServiceProvider`'s conversation channel did
+
+```php
+$conversation = Conversation::find($conversationId);
+return self::userCanAccessWorkspace($user, (int) $conversation->workspace_id);
+```
+
+`userCanAccessWorkspace()` is **deliberately broader** than the current workspace — it grants
+pivot membership, ownership and same-client access. Once `Conversation` was scoped, `find()`
+resolved only the CURRENT workspace, so a user with two workspaces was **denied a channel they
+were entitled to** whenever the other one was selected.
+
+Nothing failed. Authorization still ran, on a `$conversation` that no longer existed as far as
+the query was concerned, and returned false. **The scope had silently replaced a considered
+authorization rule with a narrower one, by accident.**
+
+### The shape to look for
+
+Any code that **resolves a model first and judges it second**:
+
+```php
+$thing = Model::find($id);          // <- discovery
+if (! $thing) { return false; }     // <- now means "not authorized", not "not found"
+return someAuthorizationRule($user, $thing);   // <- never reached
+```
+
+When the discovery query is scoped and the authorization rule is broader than the scope, the
+scope wins and nobody is told. It is worse than the wrong-dispatch limit because it FAILS
+CLOSED — it produces a denial, which looks like the system working.
+
+### The rule
+
+Where a check resolves a model in order to judge it, **the discovery query must not be
+scoped**. Bypass it, one query wide, inventoried — and leave the authorization rule as the
+only thing that decides. That is what the broadcast channel now does.
+
+Where to look: anything with its own membership or access definition. This codebase already
+has several, and CLAUDE.md's "grep for OTHER definitions of the same concept" rule exists
+because they keep disagreeing.
+
 ### Related, from the same slice
 
 - **`failed()` handlers run OUTSIDE job middleware.** Laravel invokes them from the worker's
