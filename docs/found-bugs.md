@@ -616,7 +616,7 @@ makes the loud-failure test fail by **writing an archive** instead of throwing.
 
 ---
 
-## BUG-009 — onboarding completions are stored per USER, not per workspace
+## BUG-009 — onboarding completions are stored per USER, not per workspace — ✅ FIXED
 
 **Severity:** Medium — wrong progress display, no data exposure
 **Found:** 2026-08-07, while writing the BUG-008 regression tests. **Not fixed** — needs a
@@ -658,6 +658,30 @@ migration must decide what existing rows mean — most plausibly, backfill them 
 home workspace, since that is the only workspace they could have been recorded against.
 
 ---
+
+
+### ✅ Closed 2026-08-09 — Phase 0 slice 9
+
+Fixed in `2685677`, by migration and code together:
+
+- `onboarding_steps.workspace_id` added, backfilled from the owner's home workspace, then
+  `NOT NULL`.
+- `OnboardingService::markStep()` now keys `updateOrCreate` on
+  `(user_id, workspace_id, step)`.
+- `detect()` reads with the workspace too.
+- **UNIQUE `(user_id, step)` widened to `(user_id, workspace_id, step)` in the SAME
+  migration.** Without that, fixing the record key would have replaced a silent wrong answer
+  with a duplicate-key error the first time anyone completed the same step in a second
+  workspace.
+
+Pinned by `OrphanModelsScopeTest::a_step_completed_in_one_workspace_does_not_read_as_complete_in_another`
+— which asserts the READ in workspace B, not the existence of a row, because a row existed
+before the fix too.
+
+Two migration facts recorded in the migration's own comments, both learned the hard way:
+dropping an index that backs a foreign key fails with MySQL 1553 unless the replacement is
+created first; and `dropIndex()` takes a STRING, because an array means "these columns".
+The second was caught only by running the rollback.
 
 ## BUG-010 — `client_role` looks like an authorization mechanism and is not one
 
@@ -1540,3 +1564,29 @@ on a deployed install, existing rows may already collide.
 **This must be part of building the scraper, not a follow-up.** Shipping BUG-007's fix alone
 would take a dormant defect and make it live — precisely the "when a fix reveals a second bug
 the first was masking" rule in CLAUDE.md.
+
+
+---
+
+## 📌 `subscriptions` is NOT an orphan — do not give it a workspace_id
+
+Recorded 2026-08-09, during Phase 0 slice 9, so it is not picked up later as unfinished work.
+
+`subscriptions` has `user_id` and no `workspace_id`, which makes it look like the same shape as
+`onboarding_steps` and `webhook_endpoints`. It is not.
+
+It is a **client-level billing model**, and `CLAUDE.md` already records the open question:
+
+> **`Subscription` (user_id) vs `ClientSubscription` (client_id)**: `ClientSubscription` is
+> authoritative for billing. `Subscription` appears to have no live writers — **verify against
+> the billing gateways and seeders before marking it deprecated.**
+
+Adding `workspace_id` would be **deciding the relationship between two billing models** — which
+of them is authoritative, and whether a subscription is per workspace or per organisation.
+That is a billing decision requiring the gateway and seeder verification the handover asks
+for, not a tenancy cleanup.
+
+Billing belongs to the client, not the workspace: a client with three workspaces has one
+subscription. Scoping it per workspace would be wrong even if it were easy.
+
+**Leave it alone until the Subscription/ClientSubscription question is settled.**

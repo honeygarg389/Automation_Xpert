@@ -57,6 +57,14 @@ class OnboardingService
     {
 
         // BUG-009: read per workspace, to match how markStep() now writes.
+        //
+        // NOT independently load-bearing — a stash-check proved it: removing this
+        // filter leaves every test green, because OnboardingStep now carries the
+        // workspace scope and getProgress() runs inside for($workspaceId), so the
+        // scope applies the same predicate. It is kept as defence in depth for
+        // the case CampaignReportController illustrates: if the trait were ever
+        // removed, an explicit filter is the difference between a narrowed query
+        // and a cross-tenant read.
         $completed = OnboardingStep::where('user_id', $user->id)
             ->where('workspace_id', $workspaceId)
             ->where('completed', true)
