@@ -145,6 +145,32 @@ return [
             'replace_placeholders' => true,
         ],
 
+        /*
+         * Entitlement decisions the application chose NOT to act on.
+         *
+         * ⚠️ `level` is hard-coded, and deliberately not `env('LOG_LEVEL', …)`.
+         * `.env.example` ships `LOG_LEVEL=error`, so on a default deployment
+         * every `Log::warning()` in this codebase is discarded — measured, not
+         * assumed: under the suite's own config, `Log::warning()` fires no
+         * MessageLogged event while `Log::error()` does.
+         *
+         * That matters more here than anywhere else. `EnforceLimit`'s
+         * report-only mode exists to size the cohort a flip would start
+         * refusing, and it reports by logging. On the default log level it would
+         * write nothing, the operator would read an empty file, conclude "no
+         * customers affected", and flip the flag onto a cohort nobody measured.
+         *
+         * A diagnostic that is silently discarded is worse than one that was
+         * never written, because its silence reads as evidence.
+         */
+        'entitlements' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/entitlements.log'),
+            'level' => 'info',
+            'days' => env('LOG_ENTITLEMENTS_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
     ],
 
 ];

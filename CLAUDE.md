@@ -336,9 +336,26 @@ scheduled, all would die quietly when Phase 0 closes:
 - **SMTP will need a partner tier**: `workspace → partner → platform`. `WorkspaceSmtpConfig`
   is the tenant override, `SmtpConfiguration` the platform fallback. Do not build the partner
   layer now, but do not design anything that blocks inserting it.
-- **`Subscription` (user_id) vs `ClientSubscription` (client_id)**: `ClientSubscription` is
-  authoritative for billing. `Subscription` appears to have no live writers — **verify against
-  the billing gateways and seeders before marking it deprecated.** Separate task, not assumed.
+- **`Subscription` (user_id) vs `ClientSubscription` (client_id)** — ⚠️ **VERIFIED 2026-08-09,
+  and the earlier note here was backwards.** It said `ClientSubscription` was authoritative and
+  `Subscription` "appears to have no live writers". Measured:
+
+  | Table | Live writers |
+  |---|---|
+  | `subscriptions` | **15** — one per payment gateway (`StripeGateway`, `PaddleGateway`, …) |
+  | `client_subscriptions` | **1** — `Admin\ClientController::assignPlan`, plus 2 seeder calls |
+
+  Neither is authoritative alone. **They are two parallel billing paths**: `subscriptions` is
+  self-serve/gateway billing, `client_subscriptions` is admin assignment. Do **not** deprecate
+  `Subscription` — it carries the paying customers.
+
+  **"Which subscription is in effect" is the entitlement resolver's first job**, not a detail
+  it can defer. `Client::effectivePlan()` already encodes the precedence (admin assignment
+  first, then any of the client's users' active subscriptions); `Client::activePlan()` sees only
+  the first and is the narrower of the two.
+
+  The cost of the wrong note was real: `EnforceLimit` was written against `activePlan()`, so
+  every gateway-billed customer has been exempt from every plan limit since launch. See BUG-023.
 - **BUG-002**: 10 pre-existing PHPStan `property.notFound` errors in `app/Modules/Social`.
   Fix properly with `@property` annotations, or baseline as a *tracked decision* — not as a
   side effect of not looking. See `docs/found-bugs.md`.

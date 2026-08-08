@@ -51,6 +51,7 @@ class WorkspaceScopeBypassGuardTest extends TestCase
         'app/Support/WorkspaceContext.php' => 'Defines crossTenant(). The flag and its try/finally are the implementation.',
         'app/Modules/Shared/Services/ChannelAccountRouting.php' => 'BUG-019 routing. findForInbound() must see across workspaces because the workspace is the ANSWER it seeks; resolveForAttach() must, because detecting a cross-workspace claim IS seeing across workspaces. One query wide.',
         'app/Providers/BroadcastChannelsServiceProvider.php' => 'Broadcast auth discovers a conversation workspace, then judges it with userCanAccessWorkspace() — a deliberately broader rule than the current workspace. One query wide; authorization still runs.',
+        'app/Modules/Broadcasting/Models/UsageMeter.php' => 'current() takes an explicit workspace_id and its own where() IS the boundary. Under the scope a null context would report ZERO usage, which EnforceLimit reads as under-limit — a missing context would grant unlimited quota. Fail-open; bypassed deliberately.',
         'app/Models/Scopes/WorkspaceScope.php' => 'The scope itself. It reads isCrossTenant() to honour the door; it does not open one.',
         'app/Jobs/Middleware/EstablishesWorkspaceContext.php' => 'THE one job-context bypass: reads a single workspace_id column so a job can establish its own tenant. One query wide. Also routes declared cross-tenant jobs.',
 
