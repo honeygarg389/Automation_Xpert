@@ -1,8 +1,78 @@
 # Phase 0 — Tenant Isolation Enforcement & Partner Tier: Investigation & Plan
 
-**Status:** Awaiting approval. **No code written.**
-**Date:** 2026-08-03
+**Status:** ⚠️ **PARTIALLY IMPLEMENTED — see the outstanding list immediately below.**
+**Date:** 2026-08-03, status updated 2026-08-09 (merged as `dece5a8`)
 **Scope:** Promote workspace isolation from convention to enforced global scope; add the Partner tier additively.
+
+---
+
+# ⚠️ WHAT IS STILL OUTSTANDING (as of 2026-08-09, master `dece5a8`)
+
+Measured, not remembered. Everything below is actionable as written.
+
+## A. 21 of 27 models are NOT scoped
+
+Done: `Lead`, `Contact`, `Conversation`, `Segment`, `ContactTag`, `ChannelAccount`, plus
+`OnboardingStep` and `WebhookEndpoint` (which needed a migration, and were never in the 27).
+
+Remaining — the authoritative list is `PENDING` in
+`tests/Feature/Workspace/WorkspaceScopeCoverageGuardTest.php`, which fails if it goes stale:
+
+```
+LeadScrapeJob · Campaign · SmsProviderConfig · WorkspaceSmtpConfig · UsageMeter
+CannedReply · InboxLabel · EcommerceCart · EcommerceProduct · EcommerceStore
+EcommerceOrder · SocialPost · SocialAccount · AiKnowledgeBase · AiProviderConfig
+AiChatbot · Automation · WhatsappWidget · WhatsappBusinessAccount
+WhatsappTemplate · WhatsappAutoReply
+```
+
+## B. TWO RULINGS BLOCK THE NEXT SLICE
+
+1. **Grouping.** Risk-first (`Automation`, `WhatsappBusinessAccount`, `WhatsappWidget`,
+   `EcommerceStore` — the four resolved from a globally-unique token on an UNAUTHENTICATED
+   request) or module-first? The four share a property: scoping them without a discovery
+   bypass does not narrow access, it stops the route working.
+2. **Does §G-4's 403→404 sign-off extend to UNAUTHENTICATED routes?** `EcommerceStore` binds
+   implicitly on `webhooks/ecommerce/*/{store}`. A 404 there is not better security — it is
+   Shopify retrying and giving up. That one likely needs a binding-level bypass, not an
+   expectation change.
+
+## C. Two dormant mechanisms, with their trigger conditions
+
+| Mechanism | Dormant because | Wakes when |
+|---|---|---|
+| `EstablishesWorkspaceContext::from()`'s conditional bypass | it skips `withoutGlobalScope` when the model is unscoped, and **all 7 models it is used with are still unscoped** | `Campaign`, `EcommerceStore`, `EcommerceCart`, `LeadScrapeJob`, `SocialPost`, `WhatsappBusinessAccount` or `Automation` takes the trait |
+| `EstablishesWorkspaceContext::through()` (AutomationRun → Automation) | same — `Automation` is unscoped | `Automation` takes the trait |
+
+Both are wired and tested against a fixture. **Neither has bypassed anything in production
+code yet.** The first slice that scopes any of those models is the first real exercise.
+
+*(For contrast, these two ARE live and their tests fail without them:
+`ChannelAccountRouting`'s two lookups, and `BroadcastChannelsServiceProvider`'s discovery
+query.)*
+
+## D. Prerequisites already annotated, not yet needed
+
+`WorkspaceScopeCoverageGuardTest`'s `PENDING` list carries inline prerequisites. Read them
+before scoping the model they sit above — they describe failures that produce a SILENTLY
+EMPTY result, not an error.
+
+## E. Known-outstanding, recorded in `docs/found-bugs.md`
+
+BUG-012 (CSP is not a mitigating control) · BUG-013 (`media.mime_type` disagrees with the
+file) · BUG-014 (Sanctum's config comment is wrong) · BUG-015 (`remember_token` on the
+impersonation path) · BUG-016 (webhook secrets never rotate) · BUG-017 (PHPStan "must pass at
+level 6" is false — 733 on master) · BUG-018 (weekly digest window a day short) · BUG-020
+(lead scraper write key collides — **gates BUG-007's build**) · the mobile `['*']` decision ·
+`storage:inventory --dry-run` · `sanctum:prune-expired` · the slice-5 `workspace()` decision ·
+the four `BelongsToWorkspace` hazards (H-1..H-4).
+
+## F. Housekeeping
+
+- `docs/test-suite-baseline.md` records **819**; master is now **948 / 0 failures / 1 skipped**.
+- `BroadcastChannelAuthTest` REIMPLEMENTS the channel callbacks rather than invoking them, and
+  its copy is narrower than the real one — recorded in the file.
+- `subscriptions` is **NOT** an orphan. See `docs/found-bugs.md`.
 
 ---
 

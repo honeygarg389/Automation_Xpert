@@ -2,7 +2,7 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **819 tests, 38,597 assertions, 0 failures, 1 documented skip.**
+> The suite passes: **948 tests, 38,839 assertions, 0 failures, 1 documented skip.**
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
 > failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
@@ -153,6 +153,8 @@ lands — but it must be re-derived against tests that actually exercise the pat
 | 2026-08-07 | **DEEP-03** merged (`a6c888b`) — 4 privileged actions off read permissions | 792 | **0** | +10 privileged-action tests |
 | 2026-08-07 | **SEC-004** merged (`637de50`) — upload extension spoofing | 805 | **0** | +13 upload tests |
 | 2026-08-07 | **SEC-006** merged (`473d583`) — token expiry + revocation | 819 | **0** | +14 token-lifecycle tests |
+| 2026-08-08 | **BUG-019** merged (`c77f797`) — channel routing uniqueness | 838 | **0** | +19 routing tests |
+| 2026-08-09 | **Phase 0** merged (`dece5a8`) — scope, guards, brake, 6 models + 2 orphans | 948 | **0** | +110; 36 new test files |
 
 **TASK 1 detail.** Both causes were test defects; neither touched production code.
 
