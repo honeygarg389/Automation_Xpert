@@ -52,7 +52,11 @@ return new class extends Migration
     {
         foreach (array_keys(self::TABLES) as $table) {
             Schema::table($table, function (Blueprint $t) {
-                $t->unsignedBigInteger('workspace_id')->nullable()->after('user_id');
+                // NO ->after(). MySQL's ALGORITHM=INSTANT requires the column be
+                // APPENDED LAST; naming a position forces a full table rebuild
+                // and a lock. Column order is cosmetic, a rebuild on a large
+                // table is not.
+                $t->unsignedBigInteger('workspace_id')->nullable();
                 $t->index('workspace_id');
             });
 
