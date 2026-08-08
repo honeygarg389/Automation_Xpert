@@ -372,7 +372,7 @@ class InstagramDriver implements ChannelDriverInterface
         //
         // Found by scoping Conversation, not by review.
         return WorkspaceContext::for((int) $workspaceId, fn () => $this->persistEchoMessage(
-            (int) $workspaceId, $channelAccount, $recipientId, $mid, $event
+            (int) $workspaceId, $channelAccount, $recipientId, $msgBody, $mid, $event
         ));
     }
 
@@ -385,6 +385,7 @@ class InstagramDriver implements ChannelDriverInterface
         int $workspaceId,
         ChannelAccount $channelAccount,
         string $recipientId,
+        string $msgBody,
         ?string $mid,
         array $event,
     ): ?Message {

@@ -125,7 +125,12 @@ class SharedModelsScopeTest extends TestCase
             'The conversation itself is what gates the children.');
     }
 
-    /** The existing-row write path, on Conversation's own firstOrCreate shape. */
+    /**
+     * CHARACTERISATION, not a discriminator — the stash-check proved it: with the
+     * trait removed this still passes, because an unscoped firstOrCreate matches
+     * the row too. It pins that the correct context does the right thing; the
+     * test below is the one that shows what a WRONG context does.
+     */
     #[Test]
     public function conversation_first_or_create_matches_the_existing_row_in_the_right_context(): void
     {
@@ -140,6 +145,37 @@ class SharedModelsScopeTest extends TestCase
         ));
 
         $this->assertSame(1, DB::table('conversations')->count(), 'A duplicate conversation was created.');
+    }
+
+    /**
+     * ⚠️ THE DISCRIMINATOR for Conversation's write path.
+     *
+     * Unlike `contacts`, `conversations` has NO unique constraint on
+     * (workspace_id, contact_id, channel_account_id) — so a wrong context does
+     * not fail loudly the way Contact's does. The scoped lookup misses and
+     * firstOrCreate silently creates a SECOND conversation for the same contact
+     * on the same account.
+     *
+     * That is the quieter half of the 4c failure mode, and it is why every
+     * caller of this shape must establish context: the symptom is a duplicated
+     * thread, not an exception.
+     */
+    #[Test]
+    public function conversation_first_or_create_with_the_wrong_context_silently_duplicates(): void
+    {
+        $contactId = $this->contact(11, '+15550001111');
+        $accountId = $this->channelAccount(11);
+        $uuid = $this->conversation(11, $contactId);
+        DB::table('conversations')->where('uuid', $uuid)->update(['channel_account_id' => $accountId]);
+
+        WorkspaceContext::for(22, fn () => Conversation::firstOrCreate(
+            ['workspace_id' => 11, 'contact_id' => $contactId, 'channel_account_id' => $accountId],
+            ['status' => 'open']
+        ));
+
+        $this->assertSame(2, DB::table('conversations')->count(),
+            'A wrong context did NOT duplicate — if that becomes true, check whether the scope '
+            .'is still filtering, because the explicit workspace_id argument alone cannot save it.');
     }
 
     // ══════════════════ SEGMENT — id key, pivot child ══════════════════════
@@ -255,6 +291,10 @@ class SharedModelsScopeTest extends TestCase
     }
 
     /**
+     * NOTE: this and the test below discriminate the BYPASS, not the trait —
+     * with ChannelAccount unscoped they pass trivially. Stash-checked by
+     * removing the withoutGlobalScope() from ChannelAccountRouting instead.
+     *
      * The other half of the prerequisite: detecting a cross-workspace claim
      * means seeing across workspaces by definition. Scoped, it would refuse
      * nothing and BUG-019 would quietly return.

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Workspace;
 
 use App\Models\Scopes\WorkspaceScope;
+use App\Modules\Inbox\Services\InstagramDriver;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Services\ContactService;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -299,5 +301,77 @@ class InboundWebhookWorkspaceContextTest extends TestCase
 
         $this->assertSame(0, Contact::count(), 'The scope is not applied — it should hide everything with no context.');
         $this->assertSame(1, WorkspaceContext::for(101, fn () => Contact::count()));
+    }
+
+    // ══ The SECOND inbound path, missed by slice 4c ════════════════════════
+
+    /**
+     * ⚠️ ADDED AFTER A STASH-CHECK FOUND NOTHING PINNING IT.
+     *
+     * `InstagramDriver::processEchoMessage()` handles the echoes Instagram sends
+     * back for messages a page sent. It resolves a workspace and writes Contact,
+     * Conversation and Message exactly as `processInboundMessage()` does — and
+     * slice 4c wrapped only the latter, because I looked at the method I knew
+     * about rather than for others of the same shape.
+     *
+     * Without its own `for()`, the echo runs with a null context: the scoped
+     * Contact lookup misses, the insert hits the UNIQUE (workspace_id,
+     * phone_e164) index, and the driver's per-message try/catch swallows it.
+     */
+    #[Test]
+    public function the_instagram_echo_path_establishes_its_own_workspace_context(): void
+    {
+        DB::table('channel_accounts')->insert([
+            'workspace_id' => 303,
+            'channel' => 'instagram',
+            'provider' => 'meta',
+            'display_name' => 'IG',
+            'meta_json' => json_encode(['instagram_page_id' => 'IG-303', 'instagram_account_id' => 'IG-303']),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // A contact that must be MATCHED, not created — the discriminator.
+        DB::table('contacts')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => 303,
+            'phone_e164' => null,
+            'custom_fields' => json_encode(['instagram_psid' => 'IGUSER-1']),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Http::fake(['graph.facebook.com/*' => Http::response([], 200)]);
+
+        app(InstagramDriver::class)->processWebhookPayload([
+            'object' => 'instagram',
+            'entry' => [[
+                'id' => 'IG-303',
+                'messaging' => [[
+                    'sender' => ['id' => 'IG-303'],
+                    'recipient' => ['id' => 'IGUSER-1'],
+                    'message' => ['mid' => 'mid.echo.1', 'text' => 'sent by the page', 'is_echo' => true],
+                ]],
+            ]],
+        ]);
+
+        // THE DISCRIMINATOR. Asserting on the message alone is not enough: with
+        // no context the Contact lookup misses and simply CREATES a second
+        // contact — phone_e164 is null here, and MySQL permits many nulls in the
+        // UNIQUE (workspace_id, phone_e164) index — so the message still lands,
+        // attached to a duplicate contact nobody will ever find.
+        $this->assertSame(1, DB::table('contacts')->count(),
+            'The echo path duplicated the contact instead of matching it, so it ran with no '
+            .'workspace context. The message still landed, which is why asserting on messages '
+            .'alone cannot see this.');
+
+        $this->assertSame(1, DB::table('messages')->count());
+
+        $workspaceIds = DB::table('messages')
+            ->join('conversations', 'conversations.id', '=', 'messages.conversation_id')
+            ->pluck('conversations.workspace_id')->map(fn ($w) => (int) $w)->all();
+
+        $this->assertSame([303], $workspaceIds);
     }
 }
