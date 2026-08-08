@@ -31,6 +31,9 @@ with its own full-suite run:
 | `a6c888b` — **DEEP-03** + 3 sibling read-permission gates | 10 privileged-action tests | 792 |
 | `637de50` — **SEC-004** upload extension spoofing | 13 upload tests | 805 |
 | `473d583` — **SEC-006** token expiry + revocation | 14 token-lifecycle tests | **819** |
+| Phase 0 — `BelongsToWorkspace`, slices 1–9 + BUG-019 | scope, guards, brake, job context | 949 |
+| `25c9476` — partner tier data layer | 9 partner-tier tests | 957 |
+| `54f965a` — **BUG-022/023** plan limits never enforced | 9 rewritten + 5 new limit tests | **966** |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
@@ -49,14 +52,14 @@ in this working copy (flattened symlinks).
 
 | Metric | Value |
 |---|---|
-| Tests | **819** |
-| Assertions | 38,597 |
+| Tests | **966** |
+| Assertions | 38,894 |
 | **Failures** | **0** |
 | Errors | **0** |
 | Skipped | **1** (documented — BUG-007, see above) |
 | Risky / Incomplete | **0** |
-| Time | 51.2 s |
-| Peak memory | 173 MB |
+| Time | 32.4 s |
+| Peak memory | 193 MB |
 | Connection | `mysql` → **`whatsmine_test`** ✅ (working DB untouched) |
 
 The two `S` markers in the original baseline (DNS-dependent cases in `PublicHttpUrlTest`) are
