@@ -55,9 +55,6 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
      * @var list<class-string<Model>>
      */
     private const PENDING = [
-        // ── slice 5 — the canary ──
-        'App\Modules\Leads\Models\Lead',
-
         // ═══ slice 6 — Contact and the Shared models (the hard case) ═══
         //
         // ⚠️ TWO OF THESE HAVE PREREQUISITES. Applying the trait without doing

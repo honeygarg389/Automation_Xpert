@@ -3,9 +3,7 @@
 namespace App\Models\Concerns;
 
 use App\Models\Scopes\WorkspaceScope;
-use App\Models\Workspace;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Phase 0. Marks a model as workspace-owned and applies {@see WorkspaceScope}.
@@ -45,6 +43,31 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * There are currently zero bypasses in `app/`. Every future one is a deliberate
  * act, and should read like one.
+ *
+ * ─── Why this trait does NOT define a workspace() relation ───────────────────
+ *
+ * An earlier draft did. It was removed at slice 5, deliberately.
+ *
+ * `InboxLabel` and `CannedReply` already declare their own `workspace()`, and
+ * PHP resolves class-over-trait SILENTLY — no error, no warning. That is the
+ * "one concept, two definitions" shape that has already produced two bugs in
+ * this codebase (`accessibleWorkspaces()` vs `isAccessibleBy()`; the two
+ * WhatsApp dedupe layers), both found only because a test failed for an
+ * unexpected reason.
+ *
+ * Three options were on the table: drop it from the trait, delete the two
+ * duplicates, or keep both behind a guard test. The deciding fact is that
+ * **nothing among the 27 models uses a `workspace` relation at all** — measured,
+ * zero call sites in `app/`, `resources/` and `tests/`. Every `->workspace` hit
+ * in the codebase is `$user->workspace`, and `User` never takes this trait.
+ *
+ * So a guard test would police a collision that need not exist, and deleting
+ * the two existing definitions would touch the Inbox module from a scope commit
+ * for no benefit. Removing it here eliminates the collision outright and leaves
+ * the trait doing exactly one thing: applying the scope.
+ *
+ * If a scoped model ever needs the relation, it declares its own — one
+ * definition, in the place that uses it.
  */
 trait BelongsToWorkspace
 {
@@ -56,8 +79,10 @@ trait BelongsToWorkspace
     /**
      * Drop the workspace scope for this query.
      *
+     * @param  Builder<static>  $query
      * @param  string  $reason  Why this query must cross workspaces. Required.
      *                          Conventionally prefixed "reason: ".
+     * @return Builder<static>
      */
     public function scopeWithoutWorkspaceScope(Builder $query, string $reason): Builder
     {
@@ -68,10 +93,5 @@ trait BelongsToWorkspace
         }
 
         return $query->withoutGlobalScope(WorkspaceScope::class);
-    }
-
-    public function workspace(): BelongsTo
-    {
-        return $this->belongsTo(Workspace::class);
     }
 }

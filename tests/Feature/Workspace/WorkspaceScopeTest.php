@@ -258,25 +258,6 @@ class WorkspaceScopeTest extends TestCase
 
     // ── Slice 1 wires the trait to nothing ─────────────────────────────────
 
-    /**
-     * Pins the slice boundary. If this fails, a model was scoped in a commit
-     * that claims to scope none — which is the review problem this whole
-     * sequencing exists to avoid.
-     */
-    #[Test]
-    public function slice_one_applies_the_trait_to_no_application_model(): void
-    {
-        $scoped = [];
-
-        foreach (['App\Modules\Leads\Models\Lead', 'App\Modules\Shared\Models\Contact', 'App\Modules\Shared\Models\Conversation', 'App\Modules\Broadcasting\Models\Campaign'] as $class) {
-            if (in_array(BelongsToWorkspace::class, class_uses_recursive($class), true)) {
-                $scoped[] = $class;
-            }
-        }
-
-        $this->assertSame([], $scoped,
-            'Slice 1 introduces the mechanism only. Applying the trait belongs to slices 5 onward — delete this test in the commit that starts doing so.');
-    }
 }
 
 /**

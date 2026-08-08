@@ -1432,3 +1432,63 @@ roadmap.
 A sweep is only as good as the shape it looks for. This one asked "which tables have a tenant
 key but the wrong one" and could not see "which tables have no tenant key at all". The second
 question needed a different query, and nothing about the first hinted that it was missing.
+
+---
+
+## BUG-020 — the lead scraper's write key collides across workspaces
+
+**Severity: High if it were reachable. It is not — the scraper has never worked (BUG-007).
+Found 2026-08-08 by Phase 0 slice 5, with Lead as the canary. Recorded, not fixed.**
+
+`GooglePlacesScraper::persistPlace()`:
+
+```php
+Lead::updateOrCreate(
+    ['google_place_id' => $placeId],          // <- the ONLY lookup key
+    ['workspace_id' => $workspaceId, ...],
+);
+```
+
+and the schema (`2026_04_30_000800_create_leads_tables.php:26`):
+
+```php
+$table->string('google_place_id', 128)->nullable()->unique();   // GLOBAL unique
+```
+
+**Same shape as BUG-019**: a globally-unique third-party identifier used as a lookup key
+without the tenant.
+
+### Two different failures, before and after the workspace scope
+
+**Before** — workspace B scrapes a business workspace A already scraped. The lookup matches
+**A's row** and the update overwrites `workspace_id` to B. **A's lead is silently moved to
+another tenant.** No error, no trace.
+
+**After** (Phase 0 slice 5) — the lookup becomes `google_place_id = X AND workspace_id = B`,
+misses A's row, attempts an INSERT, and the global unique index refuses it. The scrape job
+fails loudly instead.
+
+The scope converts silent cross-tenant theft into a hard failure. That is an improvement and
+not a fix: the scraper still cannot scrape a business another tenant has already scraped —
+which, for a lead-generation product where popular businesses are the point, is not a rare
+edge case.
+
+Both behaviours are pinned by
+`LeadScopeTest::the_scraper_write_key_collides_across_workspaces_and_the_scope_turns_theft_into_a_hard_failure`,
+with a positive control proving a SAME-workspace re-scrape still updates in place.
+
+### The fix, when BUG-007's scraper is built
+
+Two changes, and they belong together:
+
+1. Key the upsert on `['workspace_id' => $wsId, 'google_place_id' => $placeId]`.
+2. Replace the global unique index with a composite `UNIQUE (workspace_id, google_place_id)`
+   — the same correction BUG-019 made for `channel_accounts`.
+
+**Do not do (1) without (2):** the composite lookup would then attempt an insert that the
+global index still refuses. And **(2) needs the same pre-flight as BUG-019's migration** —
+on a deployed install, existing rows may already collide.
+
+**This must be part of building the scraper, not a follow-up.** Shipping BUG-007's fix alone
+would take a dormant defect and make it live — precisely the "when a fix reveals a second bug
+the first was masking" rule in CLAUDE.md.
