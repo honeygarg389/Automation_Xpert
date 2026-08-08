@@ -10,6 +10,7 @@ use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Notifications\ConversationHandoverNotification;
+use App\Support\WorkspaceContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -75,11 +76,19 @@ class HandoverTest extends TestCase
             'sent_by' => 'human',
             'sent_at' => now(),
         ]);
-        $message->setRelation('conversation', $this->conversation->load('channelAccount'));
-
-        $event = new MessageReceived($message);
+        // The eager load must happen INSIDE the context too: channelAccount is
+        // scoped from slice 7, so loading it with no context sets the relation to
+        // null and the listener then can't route the handover.
+        // Phase 0, slice 7. In production this listener fires INSIDE the
+        // driver's per-message WorkspaceContext::for() (slice 4c), so a workspace
+        // context always exists. Invoking it bare in a test is not faithful:
+        // Conversation is scoped now, so the listener's own lookups return
+        // nothing and it silently does nothing.
         $listener = app(AutoReplyListener::class);
-        $listener->handle($event);
+        WorkspaceContext::for((int) $this->conversation->workspace_id, function () use ($message, $listener) {
+            $message->setRelation('conversation', $this->conversation->load('channelAccount'));
+            $listener->handle(new MessageReceived($message));
+        });
 
         $this->conversation->refresh();
         $this->assertEquals('human', $this->conversation->assigned_to);
@@ -115,14 +124,22 @@ class HandoverTest extends TestCase
             'sent_by' => 'human',
             'sent_at' => now(),
         ]);
-        $message->setRelation('conversation', $this->conversation->load('channelAccount'));
-
+        // The eager load must happen INSIDE the context too: channelAccount is
+        // scoped from slice 7, so loading it with no context sets the relation to
+        // null and the listener then can't route the handover.
         // Initial message count
         $countBefore = Message::where('conversation_id', $this->conversation->id)->where('direction', 'out')->count();
 
-        $event = new MessageReceived($message);
+        // Phase 0, slice 7. In production this listener fires INSIDE the
+        // driver's per-message WorkspaceContext::for() (slice 4c), so a workspace
+        // context always exists. Invoking it bare in a test is not faithful:
+        // Conversation is scoped now, so the listener's own lookups return
+        // nothing and it silently does nothing.
         $listener = app(AutoReplyListener::class);
-        $listener->handle($event);
+        WorkspaceContext::for((int) $this->conversation->workspace_id, function () use ($message, $listener) {
+            $message->setRelation('conversation', $this->conversation->load('channelAccount'));
+            $listener->handle(new MessageReceived($message));
+        });
 
         // No new outbound messages created (bot was skipped)
         $countAfter = Message::where('conversation_id', $this->conversation->id)->where('direction', 'out')->count();

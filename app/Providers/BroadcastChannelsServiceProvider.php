@@ -68,7 +68,26 @@ class BroadcastChannelsServiceProvider extends ServiceProvider
                     'conversation_id' => $conversationId,
                 ]);
 
-                $conversation = Conversation::find($conversationId);
+                // Phase 0, slice 7. Deliberately UNSCOPED, one query wide.
+                //
+                // This lookup exists to discover WHICH workspace the conversation
+                // belongs to; the decision is then made by
+                // userCanAccessWorkspace(), which is intentionally BROADER than
+                // the current workspace — it grants pivot membership, ownership
+                // and same-client access.
+                //
+                // Scoped, `find()` would resolve only conversations in the user's
+                // CURRENT workspace, so a user with two workspaces would be
+                // denied a channel they are entitled to whenever they had the
+                // other one selected. The scope would silently override a
+                // deliberately wider rule — the "two definitions of one concept"
+                // trap CLAUDE.md records, with the scope winning by accident.
+                //
+                // Authorization is NOT weakened: it still runs, on the line below.
+                $conversation = Conversation::withoutWorkspaceScope(
+                    'reason: broadcast auth must discover the conversation\'s workspace before userCanAccessWorkspace() can judge it; that rule is deliberately broader than the current workspace'
+                )->find($conversationId);
+
                 if (! $conversation) {
                     return false;
                 }
@@ -78,7 +97,26 @@ class BroadcastChannelsServiceProvider extends ServiceProvider
 
             // Presence channel: tracks who is currently viewing a conversation
             Broadcast::channel('presence-conversation.{conversationId}', function (User $user, int $conversationId) {
-                $conversation = Conversation::find($conversationId);
+                // Phase 0, slice 7. Deliberately UNSCOPED, one query wide.
+                //
+                // This lookup exists to discover WHICH workspace the conversation
+                // belongs to; the decision is then made by
+                // userCanAccessWorkspace(), which is intentionally BROADER than
+                // the current workspace — it grants pivot membership, ownership
+                // and same-client access.
+                //
+                // Scoped, `find()` would resolve only conversations in the user's
+                // CURRENT workspace, so a user with two workspaces would be
+                // denied a channel they are entitled to whenever they had the
+                // other one selected. The scope would silently override a
+                // deliberately wider rule — the "two definitions of one concept"
+                // trap CLAUDE.md records, with the scope winning by accident.
+                //
+                // Authorization is NOT weakened: it still runs, on the line below.
+                $conversation = Conversation::withoutWorkspaceScope(
+                    'reason: broadcast auth must discover the conversation\'s workspace before userCanAccessWorkspace() can judge it; that rule is deliberately broader than the current workspace'
+                )->find($conversationId);
+
                 if (! $conversation) {
                     return false;
                 }

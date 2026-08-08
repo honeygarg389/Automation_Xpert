@@ -2,6 +2,7 @@
 
 namespace App\Modules\Shared\Models;
 
+use App\Models\Concerns\BelongsToWorkspace;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -44,6 +45,21 @@ use Illuminate\Support\Carbon;
  */
 class ChannelAccount extends Model
 {
+    /**
+     * Phase 0, slice 7 — completing the Shared module.
+     *
+     * id route key. THE INBOUND ROUTING MODEL: every WhatsApp, Messenger and
+     * Instagram message is routed by matching an identifier on this table.
+     *
+     * Its prerequisite was closed in slice 6, BEFORE this trait. Both
+     * ChannelAccountRouting methods drop the scope explicitly, one query wide,
+     * and the service is in the bypass inventory — findForInbound() runs with no
+     * authenticated user and the workspace is the ANSWER it seeks, while
+     * resolveForAttach() must see across workspaces to detect a cross-workspace
+     * claim at all (BUG-019).
+     */
+    use BelongsToWorkspace;
+
     protected $fillable = [
         'workspace_id', 'channel', 'provider', 'credentials',
         'display_name', 'phone_number_id', 'business_account_id', 'status', 'meta_json',

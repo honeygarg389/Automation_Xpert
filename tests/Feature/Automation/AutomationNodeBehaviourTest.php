@@ -42,6 +42,18 @@ class AutomationNodeBehaviourTest extends TestCase
         $this->workspace = $ctx['workspace'];
         $this->client = $ctx['client'];
 
+        // Phase 0, slice 7. Contact, Conversation, ContactTag and ChannelAccount
+        // are all scoped now, and this class queries them directly all over —
+        // fixtures in setUp, assertions like $contact->fresh()->tags(), and
+        // helpers that look up an account by workspace.
+        //
+        // Authenticating establishes the workspace context for the whole test,
+        // which is what production has: these paths run either inside a job's
+        // middleware or inside an authenticated request. Without it the
+        // assertions query with a null context and read as "the automation did
+        // nothing" rather than "the test has no tenant".
+        $this->actingAs($ctx['user']);
+
         $this->contact = Contact::factory()->create([
             'workspace_id' => $this->workspace->id,
             'first_name' => 'Alice',

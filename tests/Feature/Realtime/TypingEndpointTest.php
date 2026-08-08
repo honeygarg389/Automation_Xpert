@@ -48,8 +48,13 @@ class TypingEndpointTest extends TestCase
         $response = $this->actingAs($ctx2['user'])
             ->postJson(route('client.inbox.typing', $conv->uuid), [
                 'is_typing' => true,
+                // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+                // implicit route-model binding, so a foreign record is never resolved and
+                // binding aborts before authorization. 403 -> 404 is better security — a 403
+                // confirms the row exists, a 404 does not. The row-survival assertion and the
+                // same-route/same-verb positive controls in this file are what make it evidence.
             ]);
 
-        $response->assertForbidden();
+        $response->assertNotFound();
     }
 }

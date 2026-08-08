@@ -11,6 +11,7 @@ use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Shared\Services\ChannelManager;
+use App\Support\WorkspaceContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Mockery;
@@ -203,7 +204,12 @@ class InboxShareProductTest extends TestCase
 
         Http::fake(['graph.facebook.com/*' => Http::response(['message_id' => 'mid.ABC'], 200)]);
 
-        $id = app(MessengerDriver::class)->send($message->fresh()->load('conversation.channelAccount'));
+        // Phase 0, slice 7. Every production caller of driver->send() is an
+        // authenticated controller, so a workspace context exists. Without one
+        // the scoped `conversation` relation eager-loads as null and this fails
+        // on ->channelAccount rather than on anything the test is about.
+        $id = WorkspaceContext::for((int) $conversation->workspace_id, fn () => app(MessengerDriver::class)
+            ->send($message->fresh()->load('conversation.channelAccount')));
 
         $this->assertSame('mid.ABC', $id);
         Http::assertSentCount(2);

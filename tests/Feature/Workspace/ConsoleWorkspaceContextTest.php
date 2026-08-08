@@ -293,12 +293,14 @@ class ConsoleWorkspaceContextTest extends TestCase
         [$a] = $this->workspaceWithOwner('Tenant A');
         $this->seedConversation($a->id);
 
-        $this->assertSame(1, Conversation::count(), 'Unscoped baseline.');
-
+        // Slice 7 scoped Conversation for real, so there is no longer an
+        // "unscoped baseline" to compare against — the model arrives scoped.
+        // The simulation is now a no-op for Conversation and the assertion that
+        // matters is the same one: with no context it must see nothing.
         $this->simulateScopeOn(Conversation::class);
 
         $this->assertSame(0, Conversation::count(),
-            'simulateScopeOn() did not apply the scope, so every other test in this file is vacuous.');
+            'The scope is not filtering, so every other test in this file is vacuous.');
         $this->assertSame(1, WorkspaceContext::for($a->id, fn () => Conversation::count()));
     }
 }

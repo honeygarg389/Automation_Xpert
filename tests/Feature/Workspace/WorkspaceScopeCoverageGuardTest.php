@@ -62,7 +62,10 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
         // EMPTY result on paths that carry customer messages. Read both notes
         // before touching this group.
         //
-        // ── ChannelAccount ──────────────────────────────────────────────────
+        // ── ChannelAccount — DONE at slice 7 ────────────────────────────────
+        //
+        // Its prerequisite was closed in slice 6, before the trait went on.
+        // Kept below because it is the reasoning, not a to-do.
         //
         // `App\Modules\Shared\Services\ChannelAccountRouting` (added by
         // BUG-019) queries ChannelAccount with Eloquent in BOTH its methods, and
@@ -92,10 +95,6 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
         // unique, so the automation identifies its tenant.
         //
         // ────────────────────────────────────────────────────────────────────
-        'App\Modules\Shared\Models\Conversation',
-        'App\Modules\Shared\Models\Segment',
-        'App\Modules\Shared\Models\ContactTag',
-        'App\Modules\Shared\Models\ChannelAccount',
 
         // ── slices 7-8 — the remaining modules ──
         'App\Modules\Leads\Models\LeadScrapeJob',

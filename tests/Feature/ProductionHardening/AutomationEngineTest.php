@@ -11,6 +11,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
+use App\Support\WorkspaceContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -114,7 +115,12 @@ class AutomationEngineTest extends TestCase
             'sent_at' => now(),
         ]);
 
-        MessageReceived::dispatch($message);
+        // Phase 0, slice 7. In production this listener fires INSIDE the
+        // driver's per-message WorkspaceContext::for() (slice 4c), so a workspace
+        // context always exists. Invoking it bare in a test is not faithful:
+        // Conversation is scoped now, so the listener's own lookups return
+        // nothing and it silently does nothing.
+        WorkspaceContext::for((int) $workspace->id, fn () => MessageReceived::dispatch($message));
 
         // AutomationTriggerListener should have dispatched ExecuteAutomationRunJob
         Queue::assertPushedOn('automation', ExecuteAutomationRunJob::class);

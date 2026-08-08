@@ -2,6 +2,7 @@
 
 namespace App\Modules\Shared\Models;
 
+use App\Models\Concerns\BelongsToWorkspace;
 use App\Models\InternalNote;
 use App\Models\User;
 use App\Modules\Inbox\Models\InboxLabel;
@@ -13,6 +14,16 @@ use Illuminate\Support\Str;
 
 class Conversation extends Model
 {
+    /**
+     * Phase 0, slice 7 — completing the Shared module.
+     *
+     * uuid route key. Its children — messages, inbox_assignments, inbox_notes,
+     * internal_notes — carry no workspace_id and are reachable only through this
+     * model, which is why they stay unscoped. See the six child tables recorded
+     * in docs/found-bugs.md.
+     */
+    use BelongsToWorkspace;
+
     protected static function boot(): void
     {
         parent::boot();

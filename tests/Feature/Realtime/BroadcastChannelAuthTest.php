@@ -58,7 +58,20 @@ class BroadcastChannelAuthTest extends TestCase
             'status' => 'open',
         ]);
 
-        // The channel callback: Conversation::where('id', $id)->where('workspace_id', $u->workspace_id)->exists()
+        // Phase 0, slice 7: `actingAs` matters now. Broadcast auth is an
+        // AUTHENTICATED request, so in production a workspace context exists.
+        // Without it here the scope fails closed and this asserts nothing about
+        // the callback — it just proves a null context returns nothing.
+        //
+        // ⚠️ This file reimplements the channel callbacks rather than invoking
+        // them (see the class docblock, which admits it). That was a
+        // pre-existing weakness and it bit here: the production callback uses
+        // Conversation::find() plus userCanAccessWorkspace(), which is BROADER
+        // than the copy below. The real callback now bypasses the scope for its
+        // discovery query precisely so accessible-but-not-current workspaces
+        // keep working — a behaviour this copy cannot see.
+        $this->actingAs($user);
+
         $allowed = Conversation::where('id', $conv->id)
             ->where('workspace_id', $user->workspace_id)
             ->exists();

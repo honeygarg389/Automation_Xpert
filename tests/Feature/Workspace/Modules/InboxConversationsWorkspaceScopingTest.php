@@ -118,9 +118,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->get(route('client.inbox.show', $homeConversation->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]
@@ -141,9 +146,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->postJson(route('client.inbox.reply', $homeConversation->uuid), ['body' => 'hijacked reply'])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     /**
@@ -170,9 +180,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->post(route('client.inbox.assign', $homeConversation->uuid), ['user_id' => $user->id])
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseHas('conversations', [
             'id' => $homeConversation->id,
@@ -203,9 +218,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->post(route('client.inbox.status', $homeConversation->uuid), ['status' => 'resolved'])
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseHas('conversations', ['id' => $homeConversation->id, 'status' => 'open']);
     }
@@ -230,9 +250,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->postJson(route('client.inbox.typing', $homeConversation->uuid), ['is_typing' => true])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]
@@ -253,9 +278,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->postJson(route('client.inbox.handover', $homeConversation->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]
@@ -265,9 +295,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->postJson(route('client.inbox.upload-media', $homeConversation->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     // ── §G-1b: InternalNoteController::authorise(Conversation) ─────────────
@@ -279,9 +314,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->getJson(route('client.inbox.notes.index', $homeConversation->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]
@@ -302,9 +342,14 @@ class InboxConversationsWorkspaceScopingTest extends TestCase
         $homeConversation = $this->conversation($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->postJson(route('client.inbox.notes.store', $homeConversation->uuid), ['body' => 'hijacked note'])
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseMissing('internal_notes', ['conversation_id' => $homeConversation->id]);
     }

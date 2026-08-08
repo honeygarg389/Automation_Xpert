@@ -361,6 +361,33 @@ class InstagramDriver implements ChannelDriverInterface
             'mid' => $mid,
         ]);
 
+        // Phase 0, slice 7. THIS PATH WAS MISSED BY SLICE 4C.
+        //
+        // processEchoMessage() is a SECOND inbound path — Instagram echoes the
+        // messages a page sends — and it resolves a workspace and writes
+        // Contact, Conversation and Message exactly as processInboundMessage()
+        // does. Slice 4c wrapped that one and did not look for siblings in the
+        // same class, which is precisely the "grep for OTHER definitions of the
+        // same concept" rule in CLAUDE.md.
+        //
+        // Found by scoping Conversation, not by review.
+        return WorkspaceContext::for((int) $workspaceId, fn () => $this->persistEchoMessage(
+            (int) $workspaceId, $channelAccount, $recipientId, $mid, $event
+        ));
+    }
+
+    /**
+     * The body of processEchoMessage(), running inside its workspace.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    private function persistEchoMessage(
+        int $workspaceId,
+        ChannelAccount $channelAccount,
+        string $recipientId,
+        ?string $mid,
+        array $event,
+    ): ?Message {
         $contact = $this->resolveInstagramContact($workspaceId, $recipientId, $channelAccount);
 
         $conversation = Conversation::firstOrCreate(

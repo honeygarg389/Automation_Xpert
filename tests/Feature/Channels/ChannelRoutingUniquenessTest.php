@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Services\ChannelAccountRouting;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -68,7 +69,10 @@ class ChannelRoutingUniquenessTest extends TestCase
 
         $this->assertNotNull($resolved, 'A same-workspace reconnect must find its own row, not create a second.');
         $this->assertSame($original->id, $resolved->id);
-        $this->assertSame(1, ChannelAccount::count(), 'No duplicate row was created.');
+        // DB::table, not Eloquent: ChannelAccount is scoped from slice 7, so an
+        // Eloquent count here would report 0 for a null test context and prove
+        // nothing about what is actually in the table.
+        $this->assertSame(1, DB::table('channel_accounts')->count(), 'No duplicate row was created.');
     }
 
     #[Test]
@@ -130,7 +134,7 @@ class ChannelRoutingUniquenessTest extends TestCase
             $this->assertStringContainsString('PN-1', $e->getMessage());
         }
 
-        $this->assertSame(1, ChannelAccount::count(), 'No second row was created.');
+        $this->assertSame(1, DB::table('channel_accounts')->count(), 'No second row was created.');
     }
 
     #[Test]
