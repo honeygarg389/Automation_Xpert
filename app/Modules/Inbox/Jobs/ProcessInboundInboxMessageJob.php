@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inbox\Jobs;
 
+use App\Jobs\Middleware\EstablishesWorkspaceContext;
 use App\Modules\Inbox\Services\InstagramDriver;
 use App\Modules\Inbox\Services\MessengerDriver;
 use App\Support\Retry\Jitter;
@@ -44,12 +45,34 @@ class ProcessInboundInboxMessageJob implements ShouldQueue
         private readonly string $object,
     ) {}
 
+    /**
+     * CROSS-TENANT BY DESIGN — and for a different reason from the schedulers.
+     *
+     * A scheduler is cross-tenant because it SHOULD see every workspace.
+     * This job is cross-tenant because it CANNOT KNOW its workspace: one
+     * webhook payload legitimately carries messages for several tenants, so
+     * there is no single correct answer at job level.
+     *
+     * Context is established per message inside the driver, at the point the
+     * routing identifier resolves to a ChannelAccount. Declaring it here
+     * rather than leaving it unset matters: the scope fails closed, so 'no
+     * context' would give the driver nothing at all rather than everything.
+     *
+     * @return array<int, object>
+     */
+    public function middleware(): array
+    {
+        return [EstablishesWorkspaceContext::crossTenant(
+            'reason: ONE Meta payload can carry events for several pages and therefore several workspaces; webhooks/meta/{token} validates a platform-global token, so the job has no tenant to resolve. Context is established PER MESSAGE inside the Messenger/Instagram drivers',
+        )];
+    }
+
     public function handle(InstagramDriver $instagram, MessengerDriver $messenger): void
     {
         match ($this->object) {
             'instagram' => $instagram->processWebhookPayload($this->payload),
-            'page'      => $messenger->processWebhookPayload($this->payload),
-            default     => null,
+            'page' => $messenger->processWebhookPayload($this->payload),
+            default => null,
         };
     }
 }

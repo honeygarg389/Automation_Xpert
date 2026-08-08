@@ -30,6 +30,8 @@ class OutboundWebhookApiTest extends TestCase
         $token = $user->createToken('t', ['*'])->plainTextToken;
 
         WebhookEndpoint::create([
+            // Phase 0 slice 9: workspace_id is NOT NULL and the scope reads it.
+            'workspace_id' => $user->workspace_id,
             'user_id' => $user->id,
             'url' => 'https://example.com/hook',
             'events' => ['contact.created'],
@@ -89,6 +91,7 @@ class OutboundWebhookApiTest extends TestCase
         $token = $user->createToken('t', ['*'])->plainTextToken;
 
         $ep = WebhookEndpoint::create([
+            'workspace_id' => $user->workspace_id,
             'user_id' => $user->id,
             'url' => 'https://example.com/hook',
             'events' => [],
@@ -111,6 +114,7 @@ class OutboundWebhookApiTest extends TestCase
         $token = $user->createToken('t', ['*'])->plainTextToken;
 
         $ep = WebhookEndpoint::create([
+            'workspace_id' => $user->workspace_id,
             'user_id' => $otherUser->id,
             'url' => 'https://example.com/hook',
             'events' => [],

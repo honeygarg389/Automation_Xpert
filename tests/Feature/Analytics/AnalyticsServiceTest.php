@@ -9,6 +9,7 @@ use App\Modules\Broadcasting\Models\CampaignRecipient;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Services\AnalyticsService;
+use App\Support\WorkspaceContext;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -133,7 +134,13 @@ class AnalyticsServiceTest extends TestCase
         $from = Carbon::now()->subDays(1);
         $to = Carbon::now();
 
-        $result = $this->svc->conversationsResolvedOverTime($this->wsId, $from, $to);
+        // Phase 0, slice 7. AnalyticsService is GIVEN a workspace and filters on
+        // it directly (hazard H-2). Every production caller is an authenticated
+        // controller, so context exists and the two predicates agree. A direct
+        // service call in a test has none, so the scope ANDs against null and
+        // every figure comes back zero — which reads as "no activity" rather
+        // than as a broken test.
+        $result = WorkspaceContext::for($this->wsId, fn () => $this->svc->conversationsResolvedOverTime($this->wsId, $from, $to));
 
         $this->assertIsArray($result);
         $openedTotal = array_sum(array_column($result, 'opened'));

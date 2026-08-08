@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Notifications\NewMessageNotification;
+use App\Support\WorkspaceContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
@@ -39,8 +40,13 @@ class NotificationDeliveryTest extends TestCase
             'sent_at' => now(),
         ]);
 
+        // Phase 0, slice 7. In production this listener fires INSIDE the
+        // driver's per-message WorkspaceContext::for() (slice 4c), so a workspace
+        // context always exists. Invoking it bare in a test is not faithful:
+        // Conversation is scoped now, so the listener's own lookups return
+        // nothing and it silently does nothing.
         $listener = new SendNewMessageNotification;
-        $listener->handle(new MessageReceived($message));
+        WorkspaceContext::for((int) $conv->workspace_id, fn () => $listener->handle(new MessageReceived($message)));
 
         Notification::assertSentTo($user, NewMessageNotification::class);
     }
@@ -74,8 +80,13 @@ class NotificationDeliveryTest extends TestCase
             'enabled' => false,
         ]);
 
+        // Phase 0, slice 7. In production this listener fires INSIDE the
+        // driver's per-message WorkspaceContext::for() (slice 4c), so a workspace
+        // context always exists. Invoking it bare in a test is not faithful:
+        // Conversation is scoped now, so the listener's own lookups return
+        // nothing and it silently does nothing.
         $listener = new SendNewMessageNotification;
-        $listener->handle(new MessageReceived($message));
+        WorkspaceContext::for((int) $conv->workspace_id, fn () => $listener->handle(new MessageReceived($message)));
 
         Notification::assertSentTo($user, NewMessageNotification::class, function ($notification) use ($user) {
             $via = $notification->via($user);

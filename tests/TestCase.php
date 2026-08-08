@@ -177,4 +177,40 @@ abstract class TestCase extends BaseTestCase
             'status' => ClientSubscription::STATUS_ACTIVE,
         ]);
     }
+
+    /**
+     * Run a queued job the way the QUEUE WORKER runs it — through its
+     * middleware — rather than by calling handle() directly.
+     *
+     * Phase 0, slice 6. Scoping `Contact` turned 28 tests red, and almost all of
+     * them for the same reason: they call `(new SomeJob($id))->handle()`, which
+     * skips `middleware()`. The queue never does that. So the job ran with no
+     * workspace context, the scope failed closed, and `Contact::find()` returned
+     * null — "Attempt to read property on null" fourteen times over.
+     *
+     * Production was correct throughout; the harness was not faithful. Calling
+     * handle() directly was harmless while nothing depended on middleware, and
+     * stopped being harmless the moment tenant context did.
+     *
+     * Use this instead. It is closer to production, and it means a job that
+     * forgets its middleware fails in tests rather than in a queue worker.
+     *
+     * @template T
+     *
+     * @param  object  $job  a job instance
+     * @param  array<int, mixed>  $handleArgs  dependencies handle() expects
+     */
+    protected function runJob(object $job, array $handleArgs = []): mixed
+    {
+        $pipeline = method_exists($job, 'middleware') ? array_reverse($job->middleware()) : [];
+
+        $next = fn () => $job->handle(...$handleArgs);
+
+        foreach ($pipeline as $middleware) {
+            $current = $next;
+            $next = fn () => $middleware->handle($job, fn () => $current());
+        }
+
+        return $next();
+    }
 }

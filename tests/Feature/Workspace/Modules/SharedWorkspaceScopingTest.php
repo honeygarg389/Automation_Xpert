@@ -135,9 +135,18 @@ class SharedWorkspaceScopingTest extends TestCase
         $homeContact = $this->contact($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4: 403 -> 404. Contact's route key is `uuid`, and the workspace
+            // scope applies to implicit route-model binding — so a foreign uuid
+            // is never resolved and binding aborts before authorization runs.
+            // Better security: a 403 confirms the row exists, a 404 does not.
+            //
+            // The status alone is weak evidence (a 404 is also what a wrong
+            // route key produces). What makes it evidence is the assertion that
+            // follows, plus the positive controls in this file succeeding on the
+            // SAME route and verb for the owner.
             ->withSession(['current_workspace_id' => $other->id])
             ->get(route('client.contacts.show', $homeContact->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]
@@ -163,9 +172,18 @@ class SharedWorkspaceScopingTest extends TestCase
         $homeContact = $this->contact($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4: 403 -> 404. Contact's route key is `uuid`, and the workspace
+            // scope applies to implicit route-model binding — so a foreign uuid
+            // is never resolved and binding aborts before authorization runs.
+            // Better security: a 403 confirms the row exists, a 404 does not.
+            //
+            // The status alone is weak evidence (a 404 is also what a wrong
+            // route key produces). What makes it evidence is the assertion that
+            // follows, plus the positive controls in this file succeeding on the
+            // SAME route and verb for the owner.
             ->withSession(['current_workspace_id' => $other->id])
             ->delete(route('client.contacts.destroy', $homeContact->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertNotSoftDeleted($homeContact);
     }
@@ -190,9 +208,18 @@ class SharedWorkspaceScopingTest extends TestCase
         $homeContact = $this->contact($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4: 403 -> 404. Contact's route key is `uuid`, and the workspace
+            // scope applies to implicit route-model binding — so a foreign uuid
+            // is never resolved and binding aborts before authorization runs.
+            // Better security: a 403 confirms the row exists, a 404 does not.
+            //
+            // The status alone is weak evidence (a 404 is also what a wrong
+            // route key produces). What makes it evidence is the assertion that
+            // follows, plus the positive controls in this file succeeding on the
+            // SAME route and verb for the owner.
             ->withSession(['current_workspace_id' => $other->id])
             ->put(route('client.contacts.update', $homeContact->uuid), ['first_name' => 'Hijacked'])
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseHas('contacts', ['id' => $homeContact->id, 'first_name' => 'HomeContact']);
     }
@@ -217,9 +244,18 @@ class SharedWorkspaceScopingTest extends TestCase
         $homeContact = $this->contact($home->id, 'HomeContact');
 
         $this->actingAs($user)
+            // §G-4: 403 -> 404. Contact's route key is `uuid`, and the workspace
+            // scope applies to implicit route-model binding — so a foreign uuid
+            // is never resolved and binding aborts before authorization runs.
+            // Better security: a 403 confirms the row exists, a 404 does not.
+            //
+            // The status alone is weak evidence (a 404 is also what a wrong
+            // route key produces). What makes it evidence is the assertion that
+            // follows, plus the positive controls in this file succeeding on the
+            // SAME route and verb for the owner.
             ->withSession(['current_workspace_id' => $other->id])
             ->delete(route('client.contacts.avatar.delete', $homeContact->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]
@@ -339,9 +375,14 @@ class SharedWorkspaceScopingTest extends TestCase
         $homeSegment = $this->segment($home->id, 'HomeSegment');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->delete(route('client.segments.destroy', $homeSegment->id))
-            ->assertForbidden();
+            ->assertNotFound();
 
         // Segment does NOT soft-delete, so a surviving row is a real proof.
         $this->assertDatabaseHas('segments', ['id' => $homeSegment->id]);
@@ -367,9 +408,14 @@ class SharedWorkspaceScopingTest extends TestCase
         $homeSegment = $this->segment($home->id, 'HomeSegment');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->get(route('client.segments.contacts', $homeSegment->id))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]

@@ -10,6 +10,7 @@ use App\Modules\Broadcasting\Models\Campaign;
 use App\Modules\Broadcasting\Models\CampaignRecipient;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
+use App\Support\WorkspaceContext;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Mail;
@@ -39,19 +40,31 @@ class SendWeeklyDigestCommand extends Command
                     continue;
                 }
 
-                $stats = $this->buildStats($workspace->id, $from, $to);
+                // Phase 0. buildStats() reads Conversation and Campaign, which are
+                // workspace-scoped. A console command has no authenticated user, so
+                // without this the scope resolves null, fails closed, and every
+                // statistic silently comes back as zero — a weekly email of zeroes
+                // sent to every customer, with the command still exiting 0.
+                //
+                // The enumeration above does NOT need a bypass: Workspace and User
+                // are never scoped. Only the per-workspace body does. This is
+                // therefore a PER-TENANT command that happens to loop, not a
+                // cross-tenant one.
+                WorkspaceContext::for($workspace->id, function () use ($workspace, $owner, $from, $to, $period) {
+                    $stats = $this->buildStats($workspace->id, $from, $to);
 
-                Mail::to($owner->email)->queue(
-                    new WeeklyDigestMail(
-                        workspace: $workspace,
-                        stats: $stats,
-                        period: $period,
-                        dashboardUrl: route('client.dashboard'),
-                        settingsUrl: route('client.settings.index'),
-                    )
-                );
+                    Mail::to($owner->email)->queue(
+                        new WeeklyDigestMail(
+                            workspace: $workspace,
+                            stats: $stats,
+                            period: $period,
+                            dashboardUrl: route('client.dashboard'),
+                            settingsUrl: route('client.settings.index'),
+                        )
+                    );
 
-                $this->line("  Queued digest for workspace #{$workspace->id}: {$workspace->name}");
+                    $this->line("  Queued digest for workspace #{$workspace->id}: {$workspace->name}");
+                });
             }
         });
 

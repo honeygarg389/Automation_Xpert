@@ -616,7 +616,7 @@ makes the loud-failure test fail by **writing an archive** instead of throwing.
 
 ---
 
-## BUG-009 — onboarding completions are stored per USER, not per workspace
+## BUG-009 — onboarding completions are stored per USER, not per workspace — ✅ FIXED
 
 **Severity:** Medium — wrong progress display, no data exposure
 **Found:** 2026-08-07, while writing the BUG-008 regression tests. **Not fixed** — needs a
@@ -658,6 +658,30 @@ migration must decide what existing rows mean — most plausibly, backfill them 
 home workspace, since that is the only workspace they could have been recorded against.
 
 ---
+
+
+### ✅ Closed 2026-08-09 — Phase 0 slice 9
+
+Fixed in `2685677`, by migration and code together:
+
+- `onboarding_steps.workspace_id` added, backfilled from the owner's home workspace, then
+  `NOT NULL`.
+- `OnboardingService::markStep()` now keys `updateOrCreate` on
+  `(user_id, workspace_id, step)`.
+- `detect()` reads with the workspace too.
+- **UNIQUE `(user_id, step)` widened to `(user_id, workspace_id, step)` in the SAME
+  migration.** Without that, fixing the record key would have replaced a silent wrong answer
+  with a duplicate-key error the first time anyone completed the same step in a second
+  workspace.
+
+Pinned by `OrphanModelsScopeTest::a_step_completed_in_one_workspace_does_not_read_as_complete_in_another`
+— which asserts the READ in workspace B, not the existence of a row, because a row existed
+before the fix too.
+
+Two migration facts recorded in the migration's own comments, both learned the hard way:
+dropping an index that backs a foreign key fails with MySQL 1553 unless the replacement is
+created first; and `dropIndex()` takes a STRING, because an array means "these columns".
+The second was caught only by running the rollback.
 
 ## BUG-010 — `client_role` looks like an authorization mechanism and is not one
 
@@ -985,6 +1009,341 @@ the security change harder to review, and there is currently nothing to prune.
 
 ---
 
+## 📌 BelongsToWorkspace — four hazards found during the STEP 1 inventory (2026-08-07)
+
+Recorded **before slice 1 is written**, deliberately: each of these is a place the global
+scope would **change behaviour rather than enforce it**, and each is invisible at the point
+of failure. Discovering them mid-slice would mean discovering them as a red test with no
+context.
+
+None is a bug today. All four become one the moment the trait reaches the relevant model.
+
+### H-1 — `Admin\DashboardController` returns platform-wide counts with no `where`
+
+```php
+// app/Http/Controllers/Admin/DashboardController.php:79-80
+'contacts_total'      => Contact::count(),
+'conversations_total' => Conversation::count(),
+```
+
+Under the scope these become *some* number — plausibly 0, plausibly one tenant's. **No error,
+no exception, no failing test: a wrong figure on the admin dashboard.**
+
+This is the archetype for the whole change. The ruled null-behaviour (match nothing, with an
+explicit admin-guard exception inside the scope) is what protects it, which makes the admin
+exception load-bearing rather than convenient — hence its own named test in slice 1.
+
+**Action when `Contact`/`Conversation` take the trait (slices 6/7):** verify these two counts
+against a seeded multi-tenant fixture, not against "the page still loads".
+
+### H-2 — `AnalyticsService` already filters by `workspace_id` in 9 places
+
+Lines 288, 294, 336, 475, 495, 746, 766, 796, 836 all read
+`Model::where('workspace_id', $wsId)`. With the scope active the SQL becomes
+`WHERE workspace_id = ? AND workspace_id = ?`.
+
+Harmless **when the two agree**. Silently **empty** when they do not — e.g. an admin viewing a
+client's report, where the explicit `$wsId` is the client's and the scope resolves to null or
+to a different workspace. An empty analytics panel reads as "no activity", not as "broken".
+
+**Action:** these 9 sites must be read individually, not bulk-edited. The question at each is
+*where does `$wsId` come from* — if it is `WorkspaceContext`, the explicit filter is now
+redundant; if it is a route parameter or an admin's selection, the explicit filter is the
+correct one and the scope must be bypassed.
+
+### H-3 — the webhook lookup cannot be scoped, structurally
+
+```php
+// app/Modules/Whatsapp/Http/Controllers/WhatsappWebhookController.php:101,117
+$waba = WhatsappBusinessAccount::findByWebhookToken($token);
+```
+
+This query **must cross workspaces in order to discover which workspace it is**. There is no
+authenticated user, and the workspace is the *answer*, not an input. A scope that needs the
+answer to run the query is incapable of running it.
+
+This is the most dangerous bypass in the codebase: it is on the inbound message path, it runs
+unauthenticated, and CLAUDE.md's standing rule is that the webhook flow must never be
+duplicated or worked around.
+
+**Action:** an explicit `withoutWorkspaceScope('reason: …')` with a test proving the token
+lookup resolves the correct workspace **and** that everything downstream of it is scoped to
+that workspace via `WorkspaceContext::for()`. The bypass must be one query wide, not one
+request wide.
+
+### H-4 — the test and factory surface is larger than the app surface
+
+**242 model call sites across 61 test files. Only 6 of 17 factories set `workspace_id`.**
+
+Tests create models with no authenticated user, so under the scope they create rows the
+subsequent assertion cannot read back. This is the single most likely cause of "the slice was
+a day of work and three days of test repair".
+
+The ruling that **the trait filters reads only and never writes `workspace_id` on create**
+(2026-08-07) narrows this considerably — a factory that sets the column explicitly keeps
+working — but it does not remove it: a factory that does *not* set the column produces a row
+with `workspace_id = 0`/null that no scoped query will return.
+
+**Action:** before slice 5, audit the 11 factories that do not set `workspace_id` and decide
+per factory whether it should. That is a prerequisite of the canary, not a consequence of it.
+
+### Recorded ruling — auto-fill on create is NOT in scope, and here is why
+
+Considered and **deliberately rejected for now** (2026-08-07):
+
+- 11 of 17 factories do not set `workspace_id`;
+- jobs and webhooks have no workspace context at create time;
+- 68 controller sites already write it explicitly — auto-fill would either **conflict** with
+  those or make them **redundant, invisibly**.
+
+**Read filtering is enforcement. Write auto-fill is a behaviour change.** This phase ships
+enforcement only.
+
+A later slice may add auto-fill, and if it does it must be its own slice with its own
+stash-check, because its failure mode — rows silently written to the wrong workspace — is
+worse than the one it prevents.
+
+---
+
+## BUG-017 — "PHPStan must pass at level 6" is false, and has never been true
+
+**Severity: Medium (false assurance) — recorded 2026-08-07, not fixed.**
+
+`CLAUDE.md` lists under Commands:
+
+```
+./vendor/bin/phpstan analyse          # must pass at level 6
+```
+
+and instructs "Run tests + PHPStan + Pint before declaring any task complete."
+
+**Measured on `master` @ `c77b95d`: 733 errors.** Not 10, which is what BUG-002 implies by
+naming only the `app/Modules/Social` `property.notFound` cluster.
+
+### Inherited, not broken by us
+
+Checked, because "did we do this" is the first question:
+
+- `phpstan.neon` was added in **`4ec7e3e` "Development whatsmine" (2026-08-03)** — the initial
+  import of the WhatsMine codebase — and **has never been modified since**
+  (`git log -- phpstan.neon` returns exactly one commit).
+- It has **always** included `phpstan-baseline.neon`, which carries **1,213 suppressed
+  entries**.
+
+So the position is: the project shipped with a 1,213-entry baseline **and** 733 errors on top
+of it, and the config has not been touched. **"Must pass at level 6" was aspirational from the
+start.** We did not break it and we have not made it worse.
+
+### Why this is worth recording rather than shrugging at
+
+`CLAUDE.md` is read at the start of every session. A line saying PHPStan must pass is
+currently an instruction to run a command that always fails — which trains the reader to
+ignore its output. That is how the one error that *is* yours gets lost in 733 that are not.
+
+The working practice that has actually held all week is the honest version: **run PHPStan on
+the files you changed and compare against master.** That is how the SEC-006 `TransientToken`
+fatal was caught — a real bug in new code, found because the comparison was scoped to 5 files
+rather than drowned in a repo-wide run.
+
+### The 734th error is mine, and it is temporary
+
+`feature/workspace-isolation-scope` reports 734. The addition is:
+
+```
+app/Models/Concerns/BelongsToWorkspace.php:38: Trait ... is used zero times and is not analysed. [trait.unused]
+```
+
+Accurate: `phpstan.neon` analyses `app/` only, and in slice 1 the trait's sole user is a
+fixture model defined inside the test file. **It clears the moment slice 5 applies the trait
+to `Lead`.** Recorded here so it is not mistaken for a regression in the meantime.
+
+### Options, not chosen
+
+1. Regenerate the baseline to absorb all 733, making the command genuinely pass — cheap, and
+   makes the assurance real, but converts 733 unexamined errors into 733 permanently
+   invisible ones.
+2. Correct `CLAUDE.md` to say what is true: "PHPStan is not currently clean; run it on changed
+   files and compare against master."
+3. Fix the 733 — not a Phase 0 activity.
+
+**Option 2 is the honest minimum** and costs one line. Not done here because editing
+`CLAUDE.md`'s stated workflow is the project owner's call, not a side effect of a scope commit.
+
+## 📌 Slice-5 decision — `BelongsToWorkspace::workspace()` collides with three existing definitions
+
+The trait defines a `workspace()` relation. PHP resolves **class-over-trait silently** — no
+error, no warning — so a model with its own `workspace()` keeps its own and a model without
+one gets the trait's.
+
+This is the **"one concept, two definitions"** shape that has already bitten this codebase
+twice (`User::accessibleWorkspaces()` vs `Workspace::isAccessibleBy()`; the two WhatsApp
+webhook dedupe layers). Both times it was found only because a test failed for an unexpected
+reason.
+
+**Models that already define `workspace()`:**
+
+| Model | Definition |
+|---|---|
+| `App\Modules\Inbox\Models\InboxLabel` | `belongsTo(Workspace::class)` |
+| `App\Modules\Inbox\Models\CannedReply` | `belongsTo(Workspace::class)` |
+| `App\Models\User` | `belongsTo(Workspace::class, 'workspace_id')` — **never takes the trait**, so not a collision, listed for completeness |
+
+The two real ones are **semantically identical** to the trait's version today, so nothing is
+broken. The risk is entirely future: the moment one of them diverges — a different FK, a
+`withDefault()`, a filtered relation — half the scoped models will resolve one way and half
+the other, with nothing to indicate it.
+
+**Decide at slice 5, three options:**
+
+1. **Remove `workspace()` from the trait.** The trait's job is the scope; the relation is a
+   separate concern that happens to travel with it. Cleanest separation, but 25 models then
+   lack the relation entirely unless each declares it.
+2. **Keep it in the trait and delete the two duplicates.** One definition, enforced by the
+   trait. Requires touching two Inbox models in a slice that is otherwise about Shared.
+3. **Keep both and add a guard test** asserting no scoped model overrides `workspace()`.
+   Matches how every other "two definitions" trap in this codebase is now handled.
+
+Not decided here. Flagged so the choice is made deliberately at slice 5 rather than
+discovered at slice 12.
+
+---
+
+## ⚠️ The workspace scope does NOT protect against a WRONG dispatch — only a missing one
+
+**Recorded 2026-08-08, during Phase 0 slice 4. Not a bug — a limit, recorded because the
+sentence "we have a global scope now" will be read as covering it, and it does not.**
+
+`EstablishesWorkspaceContext` resolves a queued job's tenant with one deliberately unscoped
+lookup:
+
+```php
+$workspaceId = Campaign::withoutGlobalScope(WorkspaceScope::class)
+    ->whereKey($this->campaignId)->value('workspace_id');
+```
+
+**It trusts the key it was handed.** Dispatch `SendCampaignMessageJob` with another tenant's
+campaign id and the middleware will faithfully establish *that* tenant's context and do the
+work — correctly, scoped, and to the wrong customer.
+
+The same is true in the request path. The scope constrains what a query returns; it says
+nothing about which id reached the query. A controller that accepts `campaign_id` from the
+request and dispatches without checking ownership is exactly as wrong after Phase 0 as before.
+
+### What actually protects against a wrong id
+
+The **68 controller sites migrated in Phase 1c**, and route-model binding, which resolves
+through the scope and therefore 404s on another tenant's uuid. Those remain load-bearing.
+Phase 0 does not replace them; it removes a *different* failure — the query that silently
+returned everything because nobody remembered to filter it.
+
+### Why this is worth writing down
+
+There is a predictable reasoning error waiting here: "isolation is enforced by the database
+now, so the controller checks are redundant." They are not redundant, they defend a different
+boundary, and deleting one of them would reintroduce a cross-tenant write with a green suite
+and a global scope both saying everything is fine.
+
+The one-line version, for a reviewer: **the scope answers "whose rows may this query see".
+It never answers "was this the right id to ask about".**
+
+### ⚠️ And it must not be allowed to answer WHO IS AUTHORIZED
+
+Same family as the wrong-dispatch limit above, found in Phase 0 slice 7 and worth naming
+because it is the more seductive of the two.
+
+**The scope answers "whose rows may this query see". It must never be allowed to answer
+"who is authorized".**
+
+The case that produced it: `BroadcastChannelsServiceProvider`'s conversation channel did
+
+```php
+$conversation = Conversation::find($conversationId);
+return self::userCanAccessWorkspace($user, (int) $conversation->workspace_id);
+```
+
+`userCanAccessWorkspace()` is **deliberately broader** than the current workspace — it grants
+pivot membership, ownership and same-client access. Once `Conversation` was scoped, `find()`
+resolved only the CURRENT workspace, so a user with two workspaces was **denied a channel they
+were entitled to** whenever the other one was selected.
+
+Nothing failed. Authorization still ran, on a `$conversation` that no longer existed as far as
+the query was concerned, and returned false. **The scope had silently replaced a considered
+authorization rule with a narrower one, by accident.**
+
+### The shape to look for
+
+Any code that **resolves a model first and judges it second**:
+
+```php
+$thing = Model::find($id);          // <- discovery
+if (! $thing) { return false; }     // <- now means "not authorized", not "not found"
+return someAuthorizationRule($user, $thing);   // <- never reached
+```
+
+When the discovery query is scoped and the authorization rule is broader than the scope, the
+scope wins and nobody is told. It is worse than the wrong-dispatch limit because it FAILS
+CLOSED — it produces a denial, which looks like the system working.
+
+### The rule
+
+Where a check resolves a model in order to judge it, **the discovery query must not be
+scoped**. Bypass it, one query wide, inventoried — and leave the authorization rule as the
+only thing that decides. That is what the broadcast channel now does.
+
+Where to look: anything with its own membership or access definition. This codebase already
+has several, and CLAUDE.md's "grep for OTHER definitions of the same concept" rule exists
+because they keep disagreeing.
+
+### Related, from the same slice
+
+- **`failed()` handlers run OUTSIDE job middleware.** Laravel invokes them from the worker's
+  exception path, so they have no workspace context and, under the scope, see nothing.
+  `ProcessEcommerceWebhookJob` and `ProcessInboundMessageJob` both define one; both only call
+  `Log::error()` with ids from their own payload, so neither is broken today. Anyone adding a
+  *query* to a `failed()` handler will get an empty result and no indication why. Pinned by
+  `failed_handlers_run_outside_the_middleware_and_therefore_have_no_context`.
+
+- **"No context" and "cross-tenant" are not the same thing**, and conflating them was a real
+  bug in the first draft of this slice. Because the scope fails closed, running a scheduler
+  with *no* context gives it **zero** due campaigns rather than every tenant's — the exact
+  silent no-op the middleware exists to abolish. Declared cross-tenant work therefore has to
+  actively suppress the scope (`WorkspaceContext::crossTenant()`), not merely decline to set
+  one. Caught by a test, not by review.
+
+---
+
+## BUG-018 — the weekly digest window is a day short, from a Carbon mutation
+
+**Severity: Low — recorded 2026-08-08 while writing slice 4b's tests. Not fixed.**
+
+`SendWeeklyDigestCommand::handle()`:
+
+```php
+$from   = Carbon::now()->subWeek()->startOfDay();
+$to     = Carbon::now()->startOfDay();
+$period = $from->format('M j').'–'.$to->subDay()->format('M j, Y');   // <- mutates $to
+...
+$stats = $this->buildStats($workspace->id, $from, $to);               // <- gets the mutated $to
+```
+
+`Carbon` is **mutable**. `$to->subDay()` inside the label expression permanently moves `$to`
+back one day, and every `whereBetween('created_at', [$from, $to])` in `buildStats()` then runs
+against a **six-day** window ending yesterday, not the seven-day window the email claims.
+
+The label happens to be right; the numbers under it are computed over a different period than
+the one printed.
+
+**How it was found:** slice 4b's test seeded conversations at `now()` and got zero, which
+initially looked like the workspace scope failing closed — the exact symptom the test was
+written to detect. It was not. That is the trap worth recording: *a count of zero has more
+than one cause, and the new one will be blamed first.*
+
+**Not fixed here** because it is unrelated to Phase 0 and changing the reporting window
+changes numbers customers see. The fix is `$to->copy()->subDay()` (or `CarbonImmutable`).
+
+**Worth a wider look when it is fixed:** `Carbon::now()` is used throughout this codebase, and
+this is the failure mode that leaves no trace. Grepping for `->sub`/`->add` used inline inside
+a `format()` or a string concatenation would find any siblings.
 ## BUG-019 — a channel routing identifier claimed by two workspaces sent every message to the wrong tenant — ✅ FIXED
 
 **Severity: High. Found 2026-08-08 while planning Phase 0 slice 4c. Fixed on
@@ -1095,3 +1454,139 @@ here; a deployed install must run the audit first.
 - **`ecommerce_stores.webhook_secret` is not unique**, which is fine: the store is identified
   by the route's uuid and the secret only verifies HMAC for that store. Recorded so the next
   sweep does not re-raise it.
+
+---
+
+## 📌 Correction — the BUG-009 orphan sweep had a blind spot (recorded 2026-08-08)
+
+In the Phase 0 STEP-1 inventory I reported: **"BUG-009 has exactly one sibling."** That was
+wrong, and the shape of the error matters more than the count.
+
+The sweep looked for tables with `client_id` or `user_id` and **no** `workspace_id`. Tables
+with **none of the three** were invisible to it — and child tables keyed only to a scoped
+parent are exactly that shape. Re-running properly finds **six**:
+
+| Table | Reaches its workspace via |
+|---|---|
+| `automation_runs` | `automation_id` → `automations` |
+| `ai_runs` | `conversation_id` → `conversations` |
+| `campaign_recipients` | `campaign_id` → `campaigns` |
+| `contact_tag_pivot` | `contact_id` → `contacts` |
+| `inbox_label_conversation` | `conversation_id` → `conversations` |
+| `segment_contact` | `contact_id` → `contacts` |
+
+So it was one sibling **of that shape**. These are a second shape the sweep could not see.
+
+**Four are pure pivots** (`contact_tag_pivot`, `inbox_label_conversation`, `segment_contact`,
+and effectively `campaign_recipients`) and are protected by their parent: they are only
+reachable through a row the scope already filtered.
+
+### Decision: `automation_runs` stays unscoped — recorded, not omitted
+
+Considered and rejected for Phase 0:
+
+- Its parent `Automation` **is** in the 27, so a run is only reachable through an
+  already-filtered automation.
+- Adding the column means a migration plus a backfill, on a table that will be large.
+- `SendWeeklyDigestCommand` already joins `ai_runs` and `campaign_recipients` **through their
+  parents**, which is the pattern that keeps working either way.
+
+`ExecuteAutomationRunJob` therefore resolves its tenant through the relation
+(`EstablishesWorkspaceContext::through(AutomationRun::class, $runId, 'automation_id',
+Automation::class)`) rather than from a column on the run itself.
+
+**Revisit if** a query ever needs to reach runs *without* going through their automation —
+a partner-level "all automation activity" report is the obvious candidate, and it is on the
+roadmap.
+
+### The lesson worth keeping
+
+A sweep is only as good as the shape it looks for. This one asked "which tables have a tenant
+key but the wrong one" and could not see "which tables have no tenant key at all". The second
+question needed a different query, and nothing about the first hinted that it was missing.
+
+---
+
+## BUG-020 — the lead scraper's write key collides across workspaces
+
+**Severity: High if it were reachable. It is not — the scraper has never worked (BUG-007).
+Found 2026-08-08 by Phase 0 slice 5, with Lead as the canary. Recorded, not fixed.**
+
+`GooglePlacesScraper::persistPlace()`:
+
+```php
+Lead::updateOrCreate(
+    ['google_place_id' => $placeId],          // <- the ONLY lookup key
+    ['workspace_id' => $workspaceId, ...],
+);
+```
+
+and the schema (`2026_04_30_000800_create_leads_tables.php:26`):
+
+```php
+$table->string('google_place_id', 128)->nullable()->unique();   // GLOBAL unique
+```
+
+**Same shape as BUG-019**: a globally-unique third-party identifier used as a lookup key
+without the tenant.
+
+### Two different failures, before and after the workspace scope
+
+**Before** — workspace B scrapes a business workspace A already scraped. The lookup matches
+**A's row** and the update overwrites `workspace_id` to B. **A's lead is silently moved to
+another tenant.** No error, no trace.
+
+**After** (Phase 0 slice 5) — the lookup becomes `google_place_id = X AND workspace_id = B`,
+misses A's row, attempts an INSERT, and the global unique index refuses it. The scrape job
+fails loudly instead.
+
+The scope converts silent cross-tenant theft into a hard failure. That is an improvement and
+not a fix: the scraper still cannot scrape a business another tenant has already scraped —
+which, for a lead-generation product where popular businesses are the point, is not a rare
+edge case.
+
+Both behaviours are pinned by
+`LeadScopeTest::the_scraper_write_key_collides_across_workspaces_and_the_scope_turns_theft_into_a_hard_failure`,
+with a positive control proving a SAME-workspace re-scrape still updates in place.
+
+### The fix, when BUG-007's scraper is built
+
+Two changes, and they belong together:
+
+1. Key the upsert on `['workspace_id' => $wsId, 'google_place_id' => $placeId]`.
+2. Replace the global unique index with a composite `UNIQUE (workspace_id, google_place_id)`
+   — the same correction BUG-019 made for `channel_accounts`.
+
+**Do not do (1) without (2):** the composite lookup would then attempt an insert that the
+global index still refuses. And **(2) needs the same pre-flight as BUG-019's migration** —
+on a deployed install, existing rows may already collide.
+
+**This must be part of building the scraper, not a follow-up.** Shipping BUG-007's fix alone
+would take a dormant defect and make it live — precisely the "when a fix reveals a second bug
+the first was masking" rule in CLAUDE.md.
+
+
+---
+
+## 📌 `subscriptions` is NOT an orphan — do not give it a workspace_id
+
+Recorded 2026-08-09, during Phase 0 slice 9, so it is not picked up later as unfinished work.
+
+`subscriptions` has `user_id` and no `workspace_id`, which makes it look like the same shape as
+`onboarding_steps` and `webhook_endpoints`. It is not.
+
+It is a **client-level billing model**, and `CLAUDE.md` already records the open question:
+
+> **`Subscription` (user_id) vs `ClientSubscription` (client_id)**: `ClientSubscription` is
+> authoritative for billing. `Subscription` appears to have no live writers — **verify against
+> the billing gateways and seeders before marking it deprecated.**
+
+Adding `workspace_id` would be **deciding the relationship between two billing models** — which
+of them is authoritative, and whether a subscription is per workspace or per organisation.
+That is a billing decision requiring the gateway and seeder verification the handover asks
+for, not a tenancy cleanup.
+
+Billing belongs to the client, not the workspace: a client with three workspaces has one
+subscription. Scoping it per workspace would be wrong even if it were easy.
+
+**Leave it alone until the Subscription/ClientSubscription question is settled.**

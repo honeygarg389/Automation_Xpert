@@ -45,6 +45,40 @@ class WorkspaceContext
     private static ?int $override = null;
 
     /**
+     * True while a deliberately cross-tenant operation is running.
+     *
+     * Phase 0, slice 4. The schedulers exist to scan EVERY workspace for due
+     * work, and the workspace scope fails closed — so "no context" gives them
+     * nothing, not everything. Skipping context establishment is not enough;
+     * the scope has to be told this is intentional.
+     *
+     * Set only by crossTenant(), which is time-bounded to one callable and
+     * counted by the bypass inventory. It is a door, not a default.
+     */
+    private static bool $crossTenant = false;
+
+    /**
+     * How many `for()` / `crossTenant()` frames are currently on the stack.
+     *
+     * Phase 0, slice 6. `Queue::before` flushes this class so a long-lived queue
+     * worker cannot carry one tenant's context into the next job. That is
+     * correct BETWEEN jobs and wrong INSIDE one: with the `sync` driver — which
+     * the test suite uses and some small deployments do — `dispatch_sync()` runs
+     * the job in-process, `Queue::before` fires, and the flush wiped the
+     * override of the `for()` block that was still running around it.
+     *
+     * Measured: inside `for(555, …)`, a single `dispatch_sync()` dropped
+     * `WorkspaceContext::id()` from 555 to null, and everything after it in that
+     * block silently saw nothing.
+     *
+     * The depth counter distinguishes the two cases. Zero means no `for()` is
+     * active, so any override is left over from something that died without its
+     * `finally` running and SHOULD be cleared. Above zero means we are nested
+     * inside a live context and must not be touched.
+     */
+    private static int $depth = 0;
+
+    /**
      * Memoised resolution, keyed by user id, so a global scope calling id()
      * once per query does not re-run the membership check every time.
      *
@@ -67,12 +101,57 @@ class WorkspaceContext
     {
         $previous = self::$override;
         self::$override = $workspaceId;
+        self::$depth++;
 
         try {
             return $callback();
         } finally {
             self::$override = $previous;
+            self::$depth--;
         }
+    }
+
+    /**
+     * Run a callback across ALL workspaces, with the scope suppressed.
+     *
+     * For operations whose correctness REQUIRES seeing every tenant: the
+     * campaign/post schedulers, and OAuth token refresh. Giving those a single
+     * workspace silently reduces them to one tenant's work; giving them no
+     * context at all gives them nothing, because the scope fails closed.
+     *
+     * The reason is required and is not decoration — `WorkspaceContext::crossTenant`
+     * is one of the spellings the bypass-inventory guard greps for, so every use
+     * is counted and reviewed.
+     *
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    public static function crossTenant(string $reason, callable $callback): mixed
+    {
+        if (trim($reason) === '') {
+            throw new \InvalidArgumentException(
+                'crossTenant() requires a reason: an unexplained cross-tenant read is indistinguishable from a leak.'
+            );
+        }
+
+        $previous = self::$crossTenant;
+        self::$crossTenant = true;
+        self::$depth++;
+
+        try {
+            return $callback();
+        } finally {
+            self::$crossTenant = $previous;
+            self::$depth--;
+        }
+    }
+
+    /** Whether a deliberately cross-tenant operation is in progress. */
+    public static function isCrossTenant(): bool
+    {
+        return self::$crossTenant;
     }
 
     /**
@@ -121,13 +200,36 @@ class WorkspaceContext
     }
 
     /**
-     * Forget memoised resolutions. Call after changing a user's membership, and
-     * between tests.
+     * Forget everything. For tests and for a genuine reset.
      */
     public static function flush(): void
     {
         self::$override = null;
         self::$resolved = [];
+        self::$crossTenant = false;
+        self::$depth = 0;
+    }
+
+    /**
+     * The flush a PROCESS BOUNDARY should perform — see
+     * AppServiceProvider::flushWorkspaceContextBetweenProcesses().
+     *
+     * Always clears the memo, which is the long-lived-process hazard. Clears the
+     * override and cross-tenant flag ONLY when no `for()` / `crossTenant()`
+     * frame is active, because those manage themselves with try/finally and a
+     * nested sync dispatch must not destroy the context wrapped around it.
+     *
+     * An override with depth 0 is genuinely stale — left by something that died
+     * without its finally running — and is cleared.
+     */
+    public static function flushBetweenUnitsOfWork(): void
+    {
+        self::$resolved = [];
+
+        if (self::$depth === 0) {
+            self::$override = null;
+            self::$crossTenant = false;
+        }
     }
 
     private static function resolveForUser(User $user): ?int

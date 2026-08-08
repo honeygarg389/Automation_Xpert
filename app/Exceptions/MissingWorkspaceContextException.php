@@ -30,4 +30,28 @@ class MissingWorkspaceContextException extends RuntimeException
             .'workspace but not a current one. Refusing to guess.'
         );
     }
+
+    /**
+     * A queued job whose tenant could not be derived from its own payload.
+     *
+     * Distinct from forJob(): there is no user involved. The job named a model
+     * and a key, and the row either does not exist or has no workspace_id — so
+     * the job cannot know whose data it would be touching.
+     *
+     * Without this throw the job would run with a null context, the scope would
+     * match nothing, and every worker job's `if (! $model) { return; }` would
+     * turn that into a silent success. See EstablishesWorkspaceContext.
+     */
+    public static function forQueuedJob(string $job, ?string $modelClass, int|string|null $key): self
+    {
+        $target = $modelClass === null
+            ? 'no model was declared'
+            : $modelClass.' #'.var_export($key, true).' was not found, or has no workspace_id';
+
+        return new self(
+            "{$job} could not establish a workspace from its own payload: {$target}. "
+            .'Refusing to run: with no context the workspace scope matches nothing, so the '
+            .'job would silently succeed having done nothing at all.'
+        );
+    }
 }

@@ -12,6 +12,7 @@ use App\Modules\Shared\Models\Message;
 use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
 use App\Services\WebhookIdempotencyService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -193,6 +194,37 @@ class MessengerDriver implements ChannelDriverInterface
             'mid' => $event['message']['mid'] ?? null,
         ]);
 
+        // Phase 0, slice 4c. Tenant context per MESSAGE, not per job.
+        //
+        // One Meta payload can carry events for several pages, and therefore
+        // several workspaces — webhooks/meta/{token} validates a PLATFORM-GLOBAL
+        // verify token (BUG-019), so the job has no tenant to resolve. The
+        // workspace is known only here, once the page has been matched.
+        //
+        // Nothing below moved: $workspaceId was already computed at this point
+        // and already passed explicitly to the calls that follow. This wraps the
+        // same work so Message::create and the MessageReceived listeners run
+        // inside the right tenant too.
+        return WorkspaceContext::for((int) $workspaceId, fn () => $this->persistInboundMessage(
+            (int) $workspaceId, $channelAccount, $senderId, $msgBody, $event
+        ));
+    }
+
+    /**
+     * The body of processInboundMessage(), running inside its workspace.
+     *
+     * Split out so the whole of it can be wrapped without reindenting and
+     * burying the change in whitespace.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    private function persistInboundMessage(
+        int $workspaceId,
+        ChannelAccount $channelAccount,
+        string $senderId,
+        string $msgBody,
+        array $event,
+    ): ?Message {
         $contact = $this->resolveMessengerContact($workspaceId, $senderId, $channelAccount);
 
         $conversation = Conversation::firstOrCreate(

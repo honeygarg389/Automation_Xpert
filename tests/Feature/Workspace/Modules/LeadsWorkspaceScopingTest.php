@@ -89,9 +89,22 @@ class LeadsWorkspaceScopingTest extends TestCase
 
         $foreignLead = $this->lead($foreignWorkspace->id, 'ForeignLead');
 
+        // §G-4 EXPECTATION CHANGE, first realised at slice 5 (Lead).
+        //
+        // 403 -> 404. The global scope applies to implicit route-model binding,
+        // so a foreign lead is not found and binding aborts BEFORE the
+        // controller's authorization check ever runs.
+        //
+        // This is better security, not merely different: a 403 confirms the row
+        // exists (an existence oracle); a 404 does not.
+        //
+        // The status assertion alone would be weak — a 404 is also what a broken
+        // route produces. Two things make it evidence: the row must SURVIVE
+        // (below), and the positive controls in this file delete successfully
+        // through the SAME route and verb.
         $this->actingAs($user)
             ->delete(route('client.leads.destroy', $foreignLead))
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseHas('leads', ['id' => $foreignLead->id]);
     }
@@ -144,10 +157,23 @@ class LeadsWorkspaceScopingTest extends TestCase
         ['user' => $user, 'home' => $home, 'other' => $other] = $this->createTwoWorkspaceUser();
         $homeLead = $this->lead($home->id, 'HomeLead');
 
+        // §G-4 EXPECTATION CHANGE, first realised at slice 5 (Lead).
+        //
+        // 403 -> 404. The global scope applies to implicit route-model binding,
+        // so a foreign lead is not found and binding aborts BEFORE the
+        // controller's authorization check ever runs.
+        //
+        // This is better security, not merely different: a 403 confirms the row
+        // exists (an existence oracle); a 404 does not.
+        //
+        // The status assertion alone would be weak — a 404 is also what a broken
+        // route produces. Two things make it evidence: the row must SURVIVE
+        // (below), and the positive controls in this file delete successfully
+        // through the SAME route and verb.
         $this->actingAs($user)
             ->withSession(['current_workspace_id' => $other->id])
             ->delete(route('client.leads.destroy', $homeLead))
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseHas('leads', ['id' => $homeLead->id]);
     }

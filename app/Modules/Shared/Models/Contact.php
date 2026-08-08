@@ -2,6 +2,7 @@
 
 namespace App\Modules\Shared\Models;
 
+use App\Models\Concerns\BelongsToWorkspace;
 use App\Services\StorageManager;
 use App\Support\Concerns\MasksDemoData;
 use Database\Factories\ContactFactory;
@@ -36,7 +37,23 @@ use Illuminate\Support\Str;
  */
 class Contact extends Model
 {
-    use HasFactory, MasksDemoData, SoftDeletes;
+    /**
+     * Phase 0, slice 6. The real canary — Contact carries all four hazards Lead
+     * lacked:
+     *
+     *   uuid route key   getRouteKeyName() is 'uuid', so cross-tenant access
+     *                    404s at binding rather than 403ing in the controller.
+     *   soft deletes     assertDatabaseHas cannot prove a delete was prevented;
+     *                    the scope and SoftDeletes compose, so a trashed row is
+     *                    hidden by BOTH and only one of them is under test.
+     *   child tables     conversations and messages hang off it and are reached
+     *                    through it.
+     *   four modules     Shared, Inbox, Broadcasting and Automation all bind it.
+     *
+     * Two prerequisites were closed BEFORE this trait went on — see the coverage
+     * guard's PENDING annotations and slice 6's commit.
+     */
+    use BelongsToWorkspace, HasFactory, MasksDemoData, SoftDeletes;
 
     protected static function newFactory()
     {

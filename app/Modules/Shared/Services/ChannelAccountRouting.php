@@ -4,6 +4,7 @@ namespace App\Modules\Shared\Services;
 
 use App\Exceptions\AmbiguousChannelRoutingException;
 use App\Exceptions\ChannelAlreadyConnectedException;
+use App\Models\Scopes\WorkspaceScope;
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Services\AuditLogService;
 use Illuminate\Database\Eloquent\Builder;
@@ -191,7 +192,24 @@ class ChannelAccountRouting
      */
     private function matching(string $channel, array $routingKeys): Builder
     {
+        // Phase 0. BOTH callers need the scope off, and both are one query wide:
+        //
+        //   findForInbound()    routes every inbound message with no
+        //                       authenticated user, and the workspace is the
+        //                       ANSWER it is looking for. Scoped, it returns
+        //                       null for EVERY message and each driver's "no
+        //                       channel_account match" branch drops the lot.
+        //
+        //   resolveForAttach()  detects an identifier already claimed by
+        //                       ANOTHER workspace. Seeing across workspaces is
+        //                       the entire point; scoped, it refuses nothing and
+        //                       BUG-019 quietly returns.
+        //
+        // Applied now rather than when ChannelAccount takes the trait:
+        // withoutGlobalScope() is a no-op while the scope is absent, so this is
+        // safe today and removes a trap from the slice that scopes it.
         return ChannelAccount::query()
+            ->withoutGlobalScope(WorkspaceScope::class)
             ->where('channel', $channel)
             ->where(function (Builder $query) use ($routingKeys) {
                 // OR across keys, because Instagram genuinely stores its id under

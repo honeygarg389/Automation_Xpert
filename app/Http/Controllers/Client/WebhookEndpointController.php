@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\WebhookEndpoint;
 use App\Rules\PublicHttpUrl;
 use App\Services\WebhookDispatchService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -52,8 +53,20 @@ class WebhookEndpointController extends Controller
             'events.*' => ['string', 'max:100'],
         ]);
 
+        // Phase 0 slice 9: workspace_id is NOT NULL now. A user with no workspace
+        // would otherwise hit an integrity-constraint 500 on insert; refuse
+        // cleanly instead. This is not reachable through the normal signup flow,
+        // which always creates a workspace — it is the defensive half of making
+        // the column required.
+        $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;
+        abort_if($workspaceId === null, 422, 'This account is not attached to a workspace.');
+
         $request->user()->webhookEndpoints()->create([
             ...$validated,
+            // Phase 0 slice 9: workspace_id is NOT NULL now, and the endpoint
+            // belongs to the workspace the user is actually operating in — not
+            // necessarily their home one.
+            'workspace_id' => $workspaceId,
             'secret' => WebhookEndpoint::generateSecret(),
             'enabled' => true,
         ]);
@@ -104,7 +117,7 @@ class WebhookEndpointController extends Controller
         $this->authorize('update', $webhookEndpoint);
 
         $this->dispatcher->dispatchToEndpoint($webhookEndpoint, 'test.ping', [
-            'message' => 'This is a test webhook delivery from ' . config('app.name'),
+            'message' => 'This is a test webhook delivery from '.config('app.name'),
         ]);
 
         return back()->with('success', __('Test webhook queued.'));

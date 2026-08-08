@@ -70,8 +70,16 @@ class LeadsTest extends TestCase
 
         $lead = Lead::factory()->create(['workspace_id' => $workspaceB->id]);
 
+        // §G-4 EXPECTATION CHANGE (Phase 0 slice 5): 403 -> 404. The workspace
+        // scope applies to route-model binding, so the foreign lead is never
+        // resolved and authorization is never reached. Better security — a 403
+        // confirms the row exists; a 404 does not.
         $response = $this->actingAs($userA)->delete("/app/leads/{$lead->id}");
-        $response->assertStatus(403);
+        $response->assertStatus(404);
+
+        // The assertion that actually proves protection. assertDatabaseHas uses
+        // the query builder, so it is unaffected by the scope and reports the
+        // truth: the row is still there.
         $this->assertDatabaseHas('leads', ['id' => $lead->id]);
     }
 }

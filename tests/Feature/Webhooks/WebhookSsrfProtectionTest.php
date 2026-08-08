@@ -6,6 +6,7 @@ use App\Jobs\DispatchWebhookJob;
 use App\Models\User;
 use App\Models\WebhookDelivery;
 use App\Models\WebhookEndpoint;
+use App\Rules\PublicHttpUrl;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -26,26 +27,31 @@ class WebhookSsrfProtectionTest extends TestCase
 
     private function clientUser(): User
     {
-        return User::factory()->create([
+        // Phase 0 slice 9: webhook_endpoints.workspace_id is NOT NULL and scoped,
+        // so the endpoint must land in the acting user's workspace or route
+        // binding will not resolve it. UserFactory creates no workspace.
+        ['user' => $user] = $this->createWorkspaceContext([], [
             'role' => 'client',
             'email_verified_at' => now(),
         ]);
+
+        return $user;
     }
 
     /** @return array<string, array{0: string}> */
     public static function blockedDestinations(): array
     {
         return [
-            'loopback'            => ['https://127.0.0.1/hook'],
-            'cloud metadata'      => ['https://169.254.169.254/latest/meta-data/'],
-            'rfc1918 10/8'        => ['https://10.0.0.1/hook'],
-            'rfc1918 192.168/16'  => ['https://192.168.1.1/hook'],
-            'cgnat'               => ['https://100.64.0.1/hook'],
-            'this-network'        => ['https://0.0.0.0/hook'],
-            'loopback v6'         => ['https://[::1]/hook'],
-            'ipv4-mapped v6'      => ['https://[::ffff:127.0.0.1]/hook'],
-            'plain http'          => ['http://example.com/hook'],
-            'non-standard port'   => ['https://example.com:8080/hook'],
+            'loopback' => ['https://127.0.0.1/hook'],
+            'cloud metadata' => ['https://169.254.169.254/latest/meta-data/'],
+            'rfc1918 10/8' => ['https://10.0.0.1/hook'],
+            'rfc1918 192.168/16' => ['https://192.168.1.1/hook'],
+            'cgnat' => ['https://100.64.0.1/hook'],
+            'this-network' => ['https://0.0.0.0/hook'],
+            'loopback v6' => ['https://[::1]/hook'],
+            'ipv4-mapped v6' => ['https://[::ffff:127.0.0.1]/hook'],
+            'plain http' => ['http://example.com/hook'],
+            'non-standard port' => ['https://example.com:8080/hook'],
         ];
     }
 
@@ -103,7 +109,7 @@ class WebhookSsrfProtectionTest extends TestCase
 
     public function test_public_https_url_is_accepted(): void
     {
-        if (\App\Rules\PublicHttpUrl::resolve('example.com') === []) {
+        if (PublicHttpUrl::resolve('example.com') === []) {
             $this->markTestSkipped('DNS unavailable in this environment.');
         }
 

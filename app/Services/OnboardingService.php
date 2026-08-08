@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Social\Models\SocialAccount;
+use App\Support\WorkspaceContext;
 
 class OnboardingService
 {
@@ -31,8 +32,41 @@ class OnboardingService
      */
     public function getProgress(User $user, ?int $workspaceId): array
     {
+        // Phase 0, slice 6. This service is GIVEN a workspace (the 1c Option-B
+        // ruling: carry it explicitly) and its detections then filter on it
+        // directly — `Contact::where('workspace_id', $workspaceId)->exists()`.
+        //
+        // Under the scope that predicate is ANDed with the resolved context, so
+        // when the two disagree — or when there is no context, as in a queued
+        // export or a direct service call — every milestone silently reports
+        // FALSE. Hazard H-2 exactly: harmless when they agree, silently empty
+        // when they do not, and "no milestones completed" looks like a plausible
+        // answer rather than a bug.
+        //
+        // Establishing the context it was given makes the explicit filters agree
+        // with the scope instead of fighting it.
+        if ($workspaceId !== null) {
+            return WorkspaceContext::for($workspaceId, fn () => $this->detect($user, $workspaceId));
+        }
 
+        return $this->detect($user, $workspaceId);
+    }
+
+    /** @return array<string, mixed> */
+    private function detect(User $user, ?int $workspaceId): array
+    {
+
+        // BUG-009: read per workspace, to match how markStep() now writes.
+        //
+        // NOT independently load-bearing — a stash-check proved it: removing this
+        // filter leaves every test green, because OnboardingStep now carries the
+        // workspace scope and getProgress() runs inside for($workspaceId), so the
+        // scope applies the same predicate. It is kept as defence in depth for
+        // the case CampaignReportController illustrates: if the trait were ever
+        // removed, an explicit filter is the difference between a narrowed query
+        // and a cross-tenant read.
         $completed = OnboardingStep::where('user_id', $user->id)
+            ->where('workspace_id', $workspaceId)
             ->where('completed', true)
             ->pluck('step')
             ->toArray();
@@ -126,8 +160,23 @@ class OnboardingService
             return false;
         }
 
+        // Phase 0 slice 9: workspace_id is NOT NULL now. Without a workspace there
+        // is nothing meaningful to record — progress is per workspace — so refuse
+        // rather than insert a null and 500. false is the existing "not marked"
+        // signal, and every caller already handles it.
+        if ($workspaceId === null) {
+            return false;
+        }
+
+        // BUG-009, THE FIX. This used to key on (user_id, step) alone, so a step
+        // completed in ONE workspace marked it complete in every workspace that
+        // user could reach — while getProgress() DETECTED completion per
+        // workspace. Record and detection disagreed.
+        //
+        // The key now includes the workspace, matching the widened UNIQUE
+        // (user_id, workspace_id, step).
         OnboardingStep::updateOrCreate(
-            ['user_id' => $user->id, 'step' => $step],
+            ['user_id' => $user->id, 'workspace_id' => $workspaceId, 'step' => $step],
             ['completed' => true, 'completed_at' => now()]
         );
 

@@ -12,6 +12,7 @@ use App\Modules\Shared\Models\Message;
 use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
 use App\Services\WebhookIdempotencyService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -249,6 +250,27 @@ class InstagramDriver implements ChannelDriverInterface
             'mid' => $event['message']['mid'] ?? null,
         ]);
 
+        // Phase 0, slice 4c. Tenant context per MESSAGE, not per job — see
+        // MessengerDriver for the full reasoning. Instagram additionally matches
+        // EITHER of two meta_json keys (BUG-019), so the workspace is not
+        // knowable until that match has happened.
+        return WorkspaceContext::for((int) $workspaceId, fn () => $this->persistInboundMessage(
+            (int) $workspaceId, $channelAccount, $senderId, $msgBody, $event
+        ));
+    }
+
+    /**
+     * The body of processInboundMessage(), running inside its workspace.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    private function persistInboundMessage(
+        int $workspaceId,
+        ChannelAccount $channelAccount,
+        string $senderId,
+        string $msgBody,
+        array $event,
+    ): ?Message {
         $contact = $this->resolveInstagramContact($workspaceId, $senderId, $channelAccount);
 
         $conversation = Conversation::firstOrCreate(
@@ -339,6 +361,34 @@ class InstagramDriver implements ChannelDriverInterface
             'mid' => $mid,
         ]);
 
+        // Phase 0, slice 7. THIS PATH WAS MISSED BY SLICE 4C.
+        //
+        // processEchoMessage() is a SECOND inbound path — Instagram echoes the
+        // messages a page sends — and it resolves a workspace and writes
+        // Contact, Conversation and Message exactly as processInboundMessage()
+        // does. Slice 4c wrapped that one and did not look for siblings in the
+        // same class, which is precisely the "grep for OTHER definitions of the
+        // same concept" rule in CLAUDE.md.
+        //
+        // Found by scoping Conversation, not by review.
+        return WorkspaceContext::for((int) $workspaceId, fn () => $this->persistEchoMessage(
+            (int) $workspaceId, $channelAccount, $recipientId, $msgBody, $mid, $event
+        ));
+    }
+
+    /**
+     * The body of processEchoMessage(), running inside its workspace.
+     *
+     * @param  array<string, mixed>  $event
+     */
+    private function persistEchoMessage(
+        int $workspaceId,
+        ChannelAccount $channelAccount,
+        string $recipientId,
+        string $msgBody,
+        ?string $mid,
+        array $event,
+    ): ?Message {
         $contact = $this->resolveInstagramContact($workspaceId, $recipientId, $channelAccount);
 
         $conversation = Conversation::firstOrCreate(

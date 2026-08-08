@@ -223,9 +223,14 @@ class InboxConfigWorkspaceScopingTest extends TestCase
         $homeLabel = $this->label($home->id, 'HomeLabel');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->postJson(route('client.inbox.labels.attach', $homeConversation->uuid), ['label_id' => $homeLabel->id])
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseMissing('inbox_label_conversation', ['conversation_id' => $homeConversation->id]);
     }
@@ -366,9 +371,14 @@ class InboxConfigWorkspaceScopingTest extends TestCase
         $homeAccount = $this->channelAccount($home->id, 'HomeAccount');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->delete(route('client.inbox.setup.destroy', $homeAccount->id))
-            ->assertForbidden();
+            ->assertNotFound();
 
         $this->assertDatabaseHas('channel_accounts', ['id' => $homeAccount->id]);
     }
@@ -393,9 +403,14 @@ class InboxConfigWorkspaceScopingTest extends TestCase
         $homeAccount = $this->channelAccount($home->id, 'HomeAccount');
 
         $this->actingAs($user)
+            // §G-4 (signed off 2026-08-08, all sites): the workspace scope applies to
+            // implicit route-model binding, so a foreign record is never resolved and
+            // binding aborts before authorization. 403 -> 404 is better security — a 403
+            // confirms the row exists, a 404 does not. The row-survival assertion and the
+            // same-route/same-verb positive controls in this file are what make it evidence.
             ->withSession(['current_workspace_id' => $other->id])
             ->patch(route('client.inbox.setup.assign-chatbot', $homeAccount->id), ['chatbot_id' => null])
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]

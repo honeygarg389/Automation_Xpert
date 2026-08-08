@@ -43,11 +43,13 @@ use Dedoc\Scramble\Support\Generator\SecurityScheme;
 use Illuminate\Auth\Events\Login;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\Facades\Vite;
@@ -76,6 +78,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->flushWorkspaceContextBetweenProcesses();
         $this->configureHttpClientSsl();
         $this->scrubCredentialsFromConnectionFailures();
         $this->forceHttpsForWebhookUrls();
@@ -205,6 +208,45 @@ class AppServiceProvider extends ServiceProvider
      *
      * See BUG-005 and BUG-006 in docs/found-bugs.md.
      */
+    /**
+     * Phase 0, slice 4. Clear tenant context at every process boundary.
+     *
+     * `WorkspaceContext` memoises its resolution per user id for the lifetime of
+     * the PHP process. That is correct for a web request, which handles one
+     * user and exits. It is wrong for every long-lived process:
+     *
+     *   - a queue worker handles many tenants' jobs in sequence;
+     *   - `schedule:run` executes many commands in one process;
+     *   - Octane (not installed today) would persist it across REQUESTS, which
+     *     is the same leak in the request path and considerably worse.
+     *
+     * ─── Why BEFORE and not after ───────────────────────────────────────────
+     *
+     * `Queue::before` rather than `Queue::after`, deliberately. An after-hook
+     * that does not run — a fatal error, a killed worker, `SIGKILL` mid-job —
+     * leaves the process dirty and the NEXT job inherits stale context. A
+     * before-hook that does not run means the job never started. Cleaning up on
+     * entry is the only version that is safe against the failures you cannot
+     * catch.
+     *
+     * `Queue::failing` and `Queue::exceptionOccurred` are registered too, so the
+     * cleanup is not deferred to whenever the next job happens to arrive.
+     *
+     * If Octane is ever adopted, add its `RequestReceived` listener here. This
+     * method is the single place that knows about process boundaries — that is
+     * the point of consolidating it.
+     */
+    private function flushWorkspaceContextBetweenProcesses(): void
+    {
+        $flush = static fn () => WorkspaceContext::flushBetweenUnitsOfWork();
+
+        Queue::before($flush);
+        Queue::failing($flush);
+        Queue::exceptionOccurred($flush);
+
+        Event::listen(CommandStarting::class, $flush);
+    }
+
     private function scrubCredentialsFromConnectionFailures(): void
     {
         Http::globalMiddleware(ConnectionExceptionScrubber::middleware());
