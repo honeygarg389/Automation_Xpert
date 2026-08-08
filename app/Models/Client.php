@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
@@ -15,6 +17,7 @@ class Client extends Model
 
     protected $fillable = [
         'name',
+        'partner_id',
         'email',
         'phone',
         'address',
@@ -39,6 +42,49 @@ class Client extends Model
         $disk = $this->logo_disk ?? 'public';
 
         return Storage::disk($disk)->url($this->logo_path);
+    }
+
+    /**
+     * The reseller this client belongs to, or NULL for a platform-owned
+     * (direct) customer.
+     *
+     * ⚠️ NULL IS A PERMANENT, SUPPORTED STATE — not a migration artefact to be
+     * tidied away. Every partner-aware query must decide explicitly whether it
+     * includes direct customers; `Client::directOnly()` and
+     * `Client::forPartner()` exist so that decision is spelled rather than
+     * implied by a bare `where('partner_id', …)`, which silently excludes them.
+     */
+    /** @return BelongsTo<Partner, $this> */
+    public function partner(): BelongsTo
+    {
+        return $this->belongsTo(Partner::class);
+    }
+
+    /** Clients belonging to one reseller. Excludes direct customers by design. */
+    /**
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeForPartner(Builder $query, int $partnerId): Builder
+    {
+        return $query->where('partner_id', $partnerId);
+    }
+
+    /**
+     * Platform-owned customers only.
+     *
+     * The named counterpart to forPartner(). The failure this prevents is a
+     * platform-wide total written as a partner query, which would silently omit
+     * every direct customer — and the platform owner's own dashboard is exactly
+     * where that would be wrong and unnoticed.
+     */
+    /**
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     */
+    public function scopeDirectOnly(Builder $query): Builder
+    {
+        return $query->whereNull('partner_id');
     }
 
     public function users(): HasMany
