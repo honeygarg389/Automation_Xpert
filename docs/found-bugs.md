@@ -1590,3 +1590,76 @@ Billing belongs to the client, not the workspace: a client with three workspaces
 subscription. Scoping it per workspace would be wrong even if it were easy.
 
 **Leave it alone until the Subscription/ClientSubscription question is settled.**
+
+---
+
+## BUG-021 — 121 of 154 foreign-key-shaped columns have no foreign key
+
+**Severity: Medium — STRUCTURAL, not a live defect. Recorded 2026-08-09. Deferred by ruling:
+not a patch, and not a same-day follow-up.**
+
+Measured on the working database:
+
+| | Count |
+|---|---|
+| `*_id` columns (excluding `id`) | **154** |
+| With a real FK constraint | **35** |
+| **Without** | **121** |
+
+Across the three tenant keys specifically:
+
+| Column | Lacking an FK |
+|---|---|
+| `client_id` | 3 of 6 (`audit_logs`, `users`, `workspaces`) |
+| `workspace_id` | **30 of 31** |
+| `user_id` | 5 of 17 |
+
+**38 unconstrained tenant-key columns. Zero orphan rows** — every affected table is empty, so
+nothing is broken today. This is a structural gap, not a defect with symptoms.
+
+### Why it happened, at least in part
+
+Not carelessness. The three `client_id` cases are documented in the migrations themselves as
+an **ordering constraint** — `users` (`0001_01_01`), `workspaces` (`2025_02_25_000004`) and
+`audit_logs` (`2025_02_25_600001`) were all created BEFORE `clients` (`2026_03_04_100001`),
+and you cannot reference a table that does not exist yet:
+
+> `// workspaces.client_id is a plain column (no FK) — clients are created in a later migration.`
+
+The three `client_id` columns that DO have FKs were all created after `clients`. Whether the
+same explanation covers the 30 unconstrained `workspace_id` columns has not been checked.
+
+### Why this is a project, not a patch
+
+Each column needs a **per-table decision** — `cascade`, `restrict`, or `nullOnDelete` — and
+those are not interchangeable:
+
+- an `audit_logs` row should probably OUTLIVE the client it refers to (`nullOnDelete`);
+- a `workspaces` row must NOT be silently orphaned (`restrict`);
+- a pivot row probably should cascade.
+
+Getting one wrong is worse than having none: `cascade` where `restrict` belonged deletes
+customer data on an operation nobody thought was destructive, and `nullOnDelete` where
+`restrict` belonged silently reparents rows — the same failure mode recorded for
+`clients.partner_id`, where `nullOnDelete` would have converted a partner's customers into
+direct ones and changed who bills them.
+
+Thirty-eight of those decisions is a body of work with its own review, not a migration
+someone writes between two other tasks.
+
+### ⚠️ Schedule it BEFORE launch, not after
+
+It gets materially harder once there are customers. Today every table is empty, so each
+constraint is a pure `ALTER` with nothing to reconcile. With live data, every one needs an
+orphan sweep first, and any orphans found are a data decision per row — the shape BUG-019's
+migration pre-flight exists for. The cheapest this will ever be is now.
+
+### ⚠️ DO NOT "fix" the inconsistency by removing `clients.partner_id`'s FK
+
+`clients.partner_id` has a proper FK with `ON DELETE RESTRICT`, added 2026-08-09 with the
+partner tier. That makes it inconsistent with 121 columns that have none.
+
+**Keep it.** New work should be correct even where old work is not. The consistency argument
+runs the wrong way here: the right resolution is to raise the other 121, not to lower this
+one. Anyone reading the schema and seeing a lone FK should read it as the standard the rest
+has not reached yet — which is exactly what it is.
