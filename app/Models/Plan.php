@@ -7,6 +7,15 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property int $id
+ * @property string $name
+ * @property string $slug
+ * @property array<string, mixed>|null $features
+ * @property array<string, int|null>|null $limits
+ * @property bool $white_label_enabled
+ * @property bool $enabled
+ */
 class Plan extends Model
 {
     use HasFactory;

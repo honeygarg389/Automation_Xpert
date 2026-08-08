@@ -1663,3 +1663,186 @@ partner tier. That makes it inconsistent with 121 columns that have none.
 runs the wrong way here: the right resolution is to raise the other 121, not to lower this
 one. Anyone reading the schema and seeing a lone FK should read it as the standard the rest
 has not reached yet — which is exactly what it is.
+
+---
+
+## BUG-022 — `UsageMeter::track()` reset the counter to zero on every increment
+
+**Severity: CRITICAL — live, revenue-affecting, present since the method was written.
+Found and fixed 2026-08-09 (`fix/usage-meter-accumulation`).**
+
+```php
+static::updateOrCreate(
+    ['workspace_id' => $workspaceId, 'metric' => $metric, 'period' => $period],
+    ['value' => 0]          // ← applied on UPDATE as well as on INSERT
+);
+static::where(...)->increment('value', $by);
+```
+
+`updateOrCreate`'s second argument is the attribute set applied **whether the row is created
+or found**. On an existing row it wrote `value = 0`, and the next statement incremented from
+there. The counter's value was therefore always the size of the most recent increment.
+
+Measured against `whatsmine_test` before the fix:
+
+```
+after track #1 -> current() = 1
+after track #2 -> current() = 1
+after track #3 -> current() = 1
+two x 500 tokens -> 500
+```
+
+### Why it mattered
+
+`EnforceLimit` compares `$usage >= $limit`. It was comparing **1** against the plan limit,
+which is false for every limit above 1. Combined with BUG-023 and BUG-024, **no plan limit was
+enforced for any customer, on any route, for as long as this middleware has existed.**
+
+Eleven call sites feed this meter — campaigns, WhatsApp messages, AI tokens, social posts,
+lead credits, contact imports. All of them recorded nothing usable.
+
+### The second defect behind the first
+
+The old shape was also a read-modify-write across two statements, and `track()` is called from
+queue workers in parallel (`SendCampaignMessageJob`, once per delivered message). Even with
+`updateOrCreate` corrected to `firstOrCreate`, two workers interleaving between the two
+statements lose a count. The fix is a single atomic
+`INSERT … ON DUPLICATE KEY UPDATE value = value + n` against the existing
+`(workspace_id, metric, period)` unique index — which the two-statement form could never be.
+
+Asking "what has never actually executed before, and is it correct?" is what surfaced this:
+the accumulation branch had literally never run.
+
+### Why no test caught it
+
+`PlanLimitAlignmentTest` called `track()` **exactly once** and asserted the stored value equalled
+the amount tracked. One call cannot distinguish "accumulates" from "resets and increments" —
+both leave `$by` in the column. It had been green for its entire life.
+
+Fixed: every test in that file now calls `track()` more than once, and the headline case calls
+it three times and asserts 3.
+
+---
+
+## BUG-023 — `EnforceLimit` read the plan from a source that excludes every self-serve customer
+
+**Severity: HIGH — live. Found 2026-08-09. Corrected in REPORT-ONLY mode behind
+`ENFORCE_EFFECTIVE_PLAN_SOURCE`, by ruling.**
+
+The middleware resolved the plan through `Client::activePlan()`, which reads
+`client_subscriptions` only — the admin-assignment path, whose single writer is
+`Admin\ClientController::assignPlan`.
+
+Self-serve customers are billed through `subscriptions` instead. That table has **15 live
+writers, one per payment gateway** (`StripeGateway`, `PaddleGateway`, `RazorpayGateway`, …).
+For those customers `activePlan()` returns `null`, so `$limits` was `[]`, so `$limit` was
+`null` — and `null` means unlimited. **Every gateway-billed customer has been exempt from every
+plan limit since launch.**
+
+`Client::effectivePlan()` is the correct source: admin assignment first, otherwise the plan
+behind any of the client's users' active subscriptions.
+
+### Why it is not shipped hot
+
+Correcting the source does not restore intended behaviour — it **turns on enforcement for a
+cohort that has never been metered**, and the way they find out is a 402 mid-campaign.
+
+So the corrected source ships disabled. While `entitlements.enforce_effective_plan_source` is
+false the middleware enforces exactly as before, and additionally logs every request the
+corrected source *would* have refused, with workspace, plan, metric, usage and both limits.
+Size the cohort from those logs, then flip deliberately.
+
+Note this is a different cohort from BUG-022's. Fixing the meter alone made the middleware live
+for the **admin-assigned** customers — deliberately, and it is the smaller group, because
+`assignPlan` is a single manual action.
+
+---
+
+## BUG-024 — 7 of the 14 plan limit keys are structurally unenforceable
+
+**Severity: Medium — live but latent. Recorded 2026-08-09. NOT fixed; belongs to the
+entitlement resolver's counter/gauge distinction.**
+
+`usage_meters` is keyed `(workspace_id, metric, period)` where `period` is `Ym`. It can only
+express **counters** — "how many X this month". Seven of the seeded limit keys are **gauges** —
+"how many X may exist at once":
+
+| Key | Kind | Meter increments it? | Enforced anywhere? |
+|---|---|---|---|
+| `users` | gauge | no | no |
+| `storage` | gauge | no | no — and see BUG-025 |
+| `whatsapp_accounts` | gauge | no | no |
+| `whatsapp_templates` | gauge | no | no |
+| `inbox_agents` | gauge | no | no |
+| `chatbots` | gauge | no | no |
+| `social_accounts` | gauge | no | no |
+| `knowledge_bases` | gauge | no | **middleware attached, reads 0 forever** |
+
+`knowledge_bases` is the sharp one: `app/ai/knowledge-bases` carries
+`limit:knowledge_bases,knowledge_bases`, so the middleware asks a per-period counter how many
+knowledge bases exist. Nothing ever calls `track('knowledge_bases')`, so it reads 0 on every
+request and the limit never bites. It looks enforced in the route file, and is not.
+
+A gauge is answered by `COUNT(*)` against the owning table at request time, never by a meter.
+The fix is to declare the kind (`counter` | `gauge` | `boolean`) in the entitlement catalog and
+enforce each accordingly — not to add seven more `track()` calls, which would be wrong for
+every one of them (deleting a chatbot must decrease the number; a counter never decreases).
+
+---
+
+## BUG-025 — the storage quota key is `storage`, the code asks for `storage_gb`
+
+**Severity: Medium — live. Recorded 2026-08-09. NOT fixed: a rename would silently change
+every customer's quota. Ruling: migrate the key faithfully as `storage`.**
+
+| Where | Key | Unit |
+|---|---|---|
+| `PlanSeeder` (all 3 plans) | `storage` | MB (`5120`, `51200`, `512000`) |
+| `MediaService::quotaBytes()` | `storage_gb` | GB |
+| `SubscriptionApiController` | `storage_gb` | GB |
+
+`limitValue('storage_gb')` never matches, so `quotaBytes()` falls through to its hard-coded
+`?? 1` and **every customer on the system has a 1 GB quota regardless of plan** — including the
+enterprise plan, which intends 500 GB.
+
+### Why this must not be fixed in passing
+
+Renaming the key while migrating `plans.limits` into the add-on catalog would change every
+customer's quota **in both directions and without announcement**: enterprise customers jump
+1 GB → 500 GB, and any customer currently storing more than their plan's real allowance would
+be over quota the moment the migration ran.
+
+The units differ too, so a rename alone is wrong — `storage: 5120` read as `storage_gb` would
+grant 5120 GB.
+
+**Decision: the catalog migration copies the key faithfully as `storage`, in MB.** Correcting
+the consumers is a separate change with its own data decision and its own announcement. Recorded
+here so the rename cannot happen quietly inside a migration diff.
+
+---
+
+## BUG-026 — `Log::warning()` writes nothing on a default deployment
+
+**Severity: Medium — affects diagnosis, not behaviour. Found 2026-08-09 while building
+BUG-023's report-only mode. Worked around for that path; NOT audited codebase-wide.**
+
+`.env.example` ships `LOG_LEVEL=error`, and every channel in `config/logging.php` except
+`errors` takes its level from `env('LOG_LEVEL', …)`. On a default deployment, therefore, every
+`Log::warning()`, `Log::info()` and `Log::debug()` call in the application is discarded.
+
+Measured, not assumed — under the suite's own configuration a `Log::error()` fires a
+`MessageLogged` event and a `Log::warning()` immediately before it does not.
+
+### Why it was worth stopping for
+
+BUG-023's report-only mode exists precisely to be read before a decision. Had it logged at
+`warning` on the default channel it would have written **nothing**, the operator would have read
+an empty file, concluded "no customers affected", and flipped enforcement onto a cohort nobody
+had measured. A diagnostic that is silently discarded is worse than one that was never written,
+because its silence reads as evidence.
+
+Fixed for that path only: a dedicated `entitlements` channel with a **hard-coded** `level` of
+`info`, deliberately not `env('LOG_LEVEL', …)`.
+
+**Not audited:** how many other `Log::warning()`/`Log::info()` calls across the codebase are
+load-bearing for diagnosis and currently silent. That is its own pass.

@@ -101,7 +101,6 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
         'App\Modules\Broadcasting\Models\Campaign',
         'App\Modules\Broadcasting\Models\SmsProviderConfig',
         'App\Modules\Broadcasting\Models\WorkspaceSmtpConfig',
-        'App\Modules\Broadcasting\Models\UsageMeter',
         'App\Modules\Inbox\Models\CannedReply',
         'App\Modules\Inbox\Models\InboxLabel',
         'App\Modules\Ecommerce\Models\EcommerceCart',
