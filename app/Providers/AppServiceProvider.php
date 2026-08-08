@@ -238,7 +238,7 @@ class AppServiceProvider extends ServiceProvider
      */
     private function flushWorkspaceContextBetweenProcesses(): void
     {
-        $flush = static fn () => WorkspaceContext::flush();
+        $flush = static fn () => WorkspaceContext::flushBetweenUnitsOfWork();
 
         Queue::before($flush);
         Queue::failing($flush);

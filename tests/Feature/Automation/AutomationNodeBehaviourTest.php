@@ -116,7 +116,7 @@ class AutomationNodeBehaviourTest extends TestCase
             'started_at' => now(),
         ]);
 
-        (new ExecuteAutomationRunJob($run->id))->handle(app(AutomationEngine::class));
+        $this->runJob(new ExecuteAutomationRunJob($run->id), [app(AutomationEngine::class)]);
 
         return $run->fresh();
     }

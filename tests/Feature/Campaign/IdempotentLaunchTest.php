@@ -49,13 +49,13 @@ class IdempotentLaunchTest extends TestCase
         ]);
 
         // First launch — materialises 5 recipients.
-        (new LaunchCampaignJob($campaign->id))->handle();
+        $this->runJob(new LaunchCampaignJob($campaign->id));
         $this->assertSame(5, CampaignRecipient::where('campaign_id', $campaign->id)->count());
 
         // User pauses, then re-launches.
         $campaign->update(['status' => 'queued']);
 
-        (new LaunchCampaignJob($campaign->id))->handle();
+        $this->runJob(new LaunchCampaignJob($campaign->id));
 
         // Still exactly 5 — no duplicates because of the unique index + insertOrIgnore.
         $this->assertSame(5, CampaignRecipient::where('campaign_id', $campaign->id)->count());
@@ -86,7 +86,7 @@ class IdempotentLaunchTest extends TestCase
             'payload_json' => ['body' => 'Hi'],
         ]);
 
-        (new LaunchCampaignJob($campaign->id))->handle();
+        $this->runJob(new LaunchCampaignJob($campaign->id));
 
         $this->assertSame(3, CampaignRecipient::where('campaign_id', $campaign->id)->count());
     }
@@ -107,7 +107,7 @@ class IdempotentLaunchTest extends TestCase
             'payload_json' => ['body' => 'Hi'],
         ]);
 
-        (new LaunchCampaignJob($campaign->id))->handle();
+        $this->runJob(new LaunchCampaignJob($campaign->id));
 
         $campaign->refresh();
         $this->assertSame('failed', $campaign->status);

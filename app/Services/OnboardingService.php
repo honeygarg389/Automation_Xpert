@@ -9,6 +9,7 @@ use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Social\Models\SocialAccount;
+use App\Support\WorkspaceContext;
 
 class OnboardingService
 {
@@ -30,6 +31,29 @@ class OnboardingService
      *                             a user working in another workspace.
      */
     public function getProgress(User $user, ?int $workspaceId): array
+    {
+        // Phase 0, slice 6. This service is GIVEN a workspace (the 1c Option-B
+        // ruling: carry it explicitly) and its detections then filter on it
+        // directly — `Contact::where('workspace_id', $workspaceId)->exists()`.
+        //
+        // Under the scope that predicate is ANDed with the resolved context, so
+        // when the two disagree — or when there is no context, as in a queued
+        // export or a direct service call — every milestone silently reports
+        // FALSE. Hazard H-2 exactly: harmless when they agree, silently empty
+        // when they do not, and "no milestones completed" looks like a plausible
+        // answer rather than a bug.
+        //
+        // Establishing the context it was given makes the explicit filters agree
+        // with the scope instead of fighting it.
+        if ($workspaceId !== null) {
+            return WorkspaceContext::for($workspaceId, fn () => $this->detect($user, $workspaceId));
+        }
+
+        return $this->detect($user, $workspaceId);
+    }
+
+    /** @return array<string, mixed> */
+    private function detect(User $user, ?int $workspaceId): array
     {
 
         $completed = OnboardingStep::where('user_id', $user->id)

@@ -69,8 +69,17 @@ class MultiTenantScopingTest extends TestCase
         // Contact::getRouteKeyName() is 'uuid'. Passing the integer id made this
         // 404 at route-model binding, so the test never reached the
         // authorization check it was written to verify.
+        // §G-4: 403 -> 404. Contact's route key is `uuid`, and the workspace
+        // scope applies to implicit route-model binding — so a foreign uuid
+        // is never resolved and binding aborts before authorization runs.
+        // Better security: a 403 confirms the row exists, a 404 does not.
+        //
+        // The status alone is weak evidence (a 404 is also what a wrong
+        // route key produces). What makes it evidence is the assertion that
+        // follows, plus the positive controls in this file succeeding on the
+        // SAME route and verb for the owner.
         $response = $this->actingAs($userA)->delete("/app/contacts/{$contactB->uuid}");
-        $response->assertStatus(403);
+        $response->assertStatus(404);
 
         // Contact soft-deletes, so assertDatabaseHas alone is not load-bearing:
         // the row survives a *successful* delete too. Assert deleted_at is still

@@ -83,17 +83,15 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
         // You must ALSO add that service to WorkspaceScopeBypassGuardTest's
         // SANCTIONED list, or the bypass inventory goes red.
         //
-        // ── Contact ─────────────────────────────────────────────────────────
+        // ── Contact — DONE at slice 6 ───────────────────────────────────────
         //
-        // `App\Http\Controllers\Webhooks\AutomationWebhookController` resolves a
-        // contact from an inbound webhook payload with no authenticated user
-        // (`webhooks/automation/{trigger_token}`). Scoped with a null context it
-        // returns null, `$contactId` stays null, and the automation fires
-        // WITHOUT its contact — no exception, no failed job. It is a controller,
-        // so neither the job guard nor the command guard covers it.
+        // Its prerequisite (AutomationWebhookController's unauthenticated
+        // contact resolution) was closed first, in the same slice: the
+        // controller now wraps both lookups in WorkspaceContext::for() using the
+        // automation's own workspace. No bypass was needed — trigger_token is
+        // unique, so the automation identifies its tenant.
         //
         // ────────────────────────────────────────────────────────────────────
-        'App\Modules\Shared\Models\Contact',
         'App\Modules\Shared\Models\Conversation',
         'App\Modules\Shared\Models\Segment',
         'App\Modules\Shared\Models\ContactTag',

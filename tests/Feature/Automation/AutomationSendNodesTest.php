@@ -61,7 +61,7 @@ class AutomationSendNodesTest extends TestCase
             'started_at' => now(),
         ]);
 
-        (new ExecuteAutomationRunJob($run->id))->handle(app(AutomationEngine::class));
+        $this->runJob(new ExecuteAutomationRunJob($run->id), [app(AutomationEngine::class)]);
 
         Mail::assertQueued(AutomationEmail::class, function ($mail) {
             return $mail->emailSubject === 'Hello Alice';
@@ -101,7 +101,7 @@ class AutomationSendNodesTest extends TestCase
             'started_at' => now(),
         ]);
 
-        (new ExecuteAutomationRunJob($run->id))->handle(app(AutomationEngine::class));
+        $this->runJob(new ExecuteAutomationRunJob($run->id), [app(AutomationEngine::class)]);
 
         Mail::assertNothingQueued();
         $run->refresh();
@@ -135,7 +135,7 @@ class AutomationSendNodesTest extends TestCase
             'started_at' => now(),
         ]);
 
-        (new ExecuteAutomationRunJob($run->id))->handle(app(AutomationEngine::class));
+        $this->runJob(new ExecuteAutomationRunJob($run->id), [app(AutomationEngine::class)]);
 
         Http::assertSent(fn ($req) => $req->url() === 'https://example.com/hook');
         $run->refresh();

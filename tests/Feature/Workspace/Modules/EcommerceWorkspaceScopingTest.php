@@ -350,9 +350,18 @@ class EcommerceWorkspaceScopingTest extends TestCase
         ]);
 
         $this->actingAs($user)
+            // §G-4: 403 -> 404. Contact's route key is `uuid`, and the workspace
+            // scope applies to implicit route-model binding — so a foreign uuid
+            // is never resolved and binding aborts before authorization runs.
+            // Better security: a 403 confirms the row exists, a 404 does not.
+            //
+            // The status alone is weak evidence (a 404 is also what a wrong
+            // route key produces). What makes it evidence is the assertion that
+            // follows, plus the positive controls in this file succeeding on the
+            // SAME route and verb for the owner.
             ->withSession(['current_workspace_id' => $other->id])
             ->getJson(route('client.ecommerce.contacts.orders', $contact->uuid))
-            ->assertForbidden();
+            ->assertNotFound();
     }
 
     #[Test]
