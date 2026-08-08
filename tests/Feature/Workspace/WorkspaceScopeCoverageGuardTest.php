@@ -127,6 +127,38 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
      * happens before anyone is authenticated, so scoping it locks every account
      * out of the application. Measured — see WorkspaceScopeTest.
      *
+     * ─── THE STANDARD FOR ADDING TO THIS LIST ───────────────────────────────
+     *
+     * ⚠️ This guard matches on a COLUMN NAME, not on ownership. It asks "does
+     * this table have a workspace_id?" — which is a proxy for "is this customer
+     * data", and a proxy that will eventually be wrong.
+     *
+     * A PLATFORM-OWNED table can legitimately carry a `workspace_id` meaning
+     * something other than tenancy: "the workspace this platform record refers
+     * to", "the workspace that owns the thing being audited", "the workspace a
+     * platform-level job is acting upon". In every one of those the column is a
+     * REFERENCE, not an OWNER, and scoping the model would filter platform data
+     * by a customer boundary it does not belong to.
+     *
+     * So the test to apply before adding an entry here is NOT "does scoping it
+     * break something" — plenty of correct scoping breaks something. It is:
+     *
+     *     Does a row of this table BELONG TO the workspace named in that
+     *     column, such that a user of another workspace must never see it?
+     *
+     *   YES  -> it is customer data. Scope it. Fix whatever breaks.
+     *   NO   -> the column is a reference. Add it here WITH THE REASON, in the
+     *           shape of User's above: what the column actually means, and what
+     *           scoping it would break, measured rather than predicted.
+     *
+     * Two worked examples of the "NO" side, neither of which reaches this list
+     * because neither table has the column: `Partner` and `Client` are
+     * platform/reseller-level and sit ABOVE the tenant boundary entirely.
+     * `PartnerTierTest` asserts they are unscoped for exactly that reason — and
+     * it has to, because a table with no `workspace_id` never enters this
+     * guard's inventory at all. **This guard cannot see the models most likely
+     * to be wrongly scoped.**
+     *
      * @var list<class-string<Model>>
      */
     private const NEVER_SCOPED = [
