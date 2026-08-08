@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Workspace;
 
+use App\Events\AutomationWebhookReceived;
 use App\Models\Concerns\BelongsToWorkspace;
 use App\Modules\Leads\Models\Lead;
 use App\Modules\Shared\Models\Contact;
@@ -14,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -338,10 +340,26 @@ class ContactScopeTest extends TestCase
 
     // ══ The service that was fixed as a prerequisite ═══════════════════════
 
+    /**
+     * ⚠️ THIS ASSERTS THE RESOLVED CONTACT, NOT THE RESPONSE CODE.
+     *
+     * The first version asserted a 202. A stash-check exposed it as vacuous:
+     * removing the controller's `for()` left it green, because the endpoint
+     * returns 202 whether or not a contact was found — `$contactId` is simply
+     * passed to the event as null.
+     *
+     * That IS the failure mode, and it is why it needed catching: an
+     * unauthenticated webhook with a null context resolves no contact, and the
+     * automation runs unpersonalised with no exception and no failed job.
+     *
+     * So the assertion is on the event payload.
+     */
     #[Test]
     public function the_automation_webhook_resolves_a_contact_in_the_automations_workspace(): void
     {
-        $automationId = DB::table('automations')->insertGetId([
+        Event::fake([AutomationWebhookReceived::class]);
+
+        DB::table('automations')->insert([
             'uuid' => (string) Str::uuid(),
             'workspace_id' => 44,
             'name' => 'Test',
@@ -354,11 +372,46 @@ class ContactScopeTest extends TestCase
 
         $this->contactRow(44, '+15550004444');
         DB::table('contacts')->where('workspace_id', 44)->update(['email' => 'match@example.com']);
+        $expectedId = DB::table('contacts')->where('workspace_id', 44)->value('id');
 
         // Unauthenticated, exactly as the webhook arrives.
         $this->postJson('/webhooks/automation/tok-abc', ['email' => 'match@example.com'])
             ->assertStatus(202);
 
-        $this->assertNotNull($automationId);
+        Event::assertDispatched(
+            AutomationWebhookReceived::class,
+            function ($event) use ($expectedId) {
+                return (int) $event->contactId === (int) $expectedId;
+            }
+        );
+    }
+
+    /**
+     * POSITIVE CONTROL: an unknown email really does resolve to null, so the
+     * assertion above can fail.
+     */
+    #[Test]
+    public function the_automation_webhook_resolves_null_for_an_unknown_contact(): void
+    {
+        Event::fake([AutomationWebhookReceived::class]);
+
+        DB::table('automations')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => 44,
+            'name' => 'Test',
+            'status' => 'active',
+            'trigger_type' => 'webhook',
+            'trigger_token' => 'tok-xyz',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->postJson('/webhooks/automation/tok-xyz', ['email' => 'nobody@example.com'])
+            ->assertStatus(202);
+
+        Event::assertDispatched(
+            AutomationWebhookReceived::class,
+            fn ($event) => $event->contactId === null
+        );
     }
 }
