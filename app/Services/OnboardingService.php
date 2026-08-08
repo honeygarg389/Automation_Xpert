@@ -56,7 +56,9 @@ class OnboardingService
     private function detect(User $user, ?int $workspaceId): array
     {
 
+        // BUG-009: read per workspace, to match how markStep() now writes.
         $completed = OnboardingStep::where('user_id', $user->id)
+            ->where('workspace_id', $workspaceId)
             ->where('completed', true)
             ->pluck('step')
             ->toArray();
@@ -150,8 +152,23 @@ class OnboardingService
             return false;
         }
 
+        // Phase 0 slice 9: workspace_id is NOT NULL now. Without a workspace there
+        // is nothing meaningful to record — progress is per workspace — so refuse
+        // rather than insert a null and 500. false is the existing "not marked"
+        // signal, and every caller already handles it.
+        if ($workspaceId === null) {
+            return false;
+        }
+
+        // BUG-009, THE FIX. This used to key on (user_id, step) alone, so a step
+        // completed in ONE workspace marked it complete in every workspace that
+        // user could reach — while getProgress() DETECTED completion per
+        // workspace. Record and detection disagreed.
+        //
+        // The key now includes the workspace, matching the widened UNIQUE
+        // (user_id, workspace_id, step).
         OnboardingStep::updateOrCreate(
-            ['user_id' => $user->id, 'step' => $step],
+            ['user_id' => $user->id, 'workspace_id' => $workspaceId, 'step' => $step],
             ['completed' => true, 'completed_at' => now()]
         );
 

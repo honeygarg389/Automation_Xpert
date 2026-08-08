@@ -13,10 +13,15 @@ class WebhookEndpointTest extends TestCase
 
     private function clientUser(): User
     {
-        return User::factory()->create([
-            'role'              => 'client',
+        // Phase 0 slice 9: webhook_endpoints.workspace_id is NOT NULL, so a user
+        // with no workspace cannot own one. UserFactory does not create a
+        // workspace, so build a real context — which is what signup does.
+        ['user' => $user] = $this->createWorkspaceContext([], [
+            'role' => 'client',
             'email_verified_at' => now(),
         ]);
+
+        return $user;
     }
 
     public function test_user_can_list_webhook_endpoints(): void
@@ -35,21 +40,21 @@ class WebhookEndpointTest extends TestCase
 
         $this->actingAs($user)
             ->post(route('client.webhooks.store'), [
-                'url'     => 'https://example.com/webhook',
-                'events'  => ['subscription.created'],
+                'url' => 'https://example.com/webhook',
+                'events' => ['subscription.created'],
                 'enabled' => true,
             ])
             ->assertRedirect();
 
         $this->assertDatabaseHas('webhook_endpoints', [
             'user_id' => $user->id,
-            'url'     => 'https://example.com/webhook',
+            'url' => 'https://example.com/webhook',
         ]);
     }
 
     public function test_user_can_delete_own_endpoint(): void
     {
-        $user     = $this->clientUser();
+        $user = $this->clientUser();
         $endpoint = WebhookEndpoint::factory()->create(['user_id' => $user->id]);
 
         $this->actingAs($user)
@@ -61,18 +66,22 @@ class WebhookEndpointTest extends TestCase
 
     public function test_user_cannot_delete_other_users_endpoint(): void
     {
-        $user      = $this->clientUser();
+        $user = $this->clientUser();
         $otherUser = $this->clientUser();
-        $endpoint  = WebhookEndpoint::factory()->create(['user_id' => $otherUser->id]);
+        $endpoint = WebhookEndpoint::factory()->create(['user_id' => $otherUser->id]);
 
         $this->actingAs($user)
             ->delete(route('client.webhooks.destroy', $endpoint))
-            ->assertForbidden();
+            // §G-4 (standing sign-off): webhook_endpoints is scoped from slice 9,
+            // so another tenant's endpoint is never resolved and route binding
+            // aborts before authorization. The row surviving, below, is what
+            // proves protection rather than the status alone.
+            ->assertNotFound();
     }
 
     public function test_user_can_rotate_endpoint_secret(): void
     {
-        $user     = $this->clientUser();
+        $user = $this->clientUser();
         $endpoint = WebhookEndpoint::factory()->create(['user_id' => $user->id]);
         $oldSecret = $endpoint->secret;
 
