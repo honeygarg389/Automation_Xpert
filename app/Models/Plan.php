@@ -108,12 +108,16 @@ class Plan extends Model
      *
      * `plans.limits` stays authoritative until a test proves nothing reads it.
      *
+     * ⚠️ The pivot carries NO quantity. `entitlement_grants.quantity` is the one
+     * place a holding's quantity lives; a second one would make the resolver's
+     * answer depend on which path the grant arrived by for the same customer
+     * holding the same thing.
+     *
      * @return BelongsToMany<AddOn, $this>
      */
     public function addOns(): BelongsToMany
     {
         return $this->belongsToMany(AddOn::class, 'plan_add_on')
-            ->withPivot('quantity')
             ->withTimestamps();
     }
 

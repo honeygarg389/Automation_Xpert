@@ -70,14 +70,40 @@ class AddOnCatalogSchemaTest extends TestCase
         AddOnPrice::factory()->for($addOn)->create(['price_cents' => 4900]);
 
         $plan = Plan::factory()->create();
-        $plan->addOns()->attach($addOn->id, ['quantity' => 1]);
+        $plan->addOns()->attach($addOn->id);
 
         $addOn->refresh();
 
         $this->assertCount(2, $addOn->grants);
         $this->assertCount(1, $addOn->prices);
         $this->assertSame([$plan->id], $addOn->plans->pluck('id')->all());
-        $this->assertSame(1, (int) $addOn->plans->first()->pivot->quantity);
+    }
+
+    /**
+     * ⚠️ The plan pivot must NOT carry a quantity.
+     *
+     * `entitlement_grants.quantity` already means "how many of this add-on".
+     * A second column meaning the same thing makes the resolver's answer depend
+     * on which PATH the grant arrived by — plan-derived or purchased — for the
+     * same customer holding the same thing.
+     *
+     * That is not a hypothetical: it is the shape of BUG-023 (two subscription
+     * tables, one of which the enforcement code did not know about), of the
+     * accessibleWorkspaces/isAccessibleBy split, and of BUG-027 (16 limit keys
+     * in the front end, 2 in the back end). Asserted rather than commented,
+     * because a column is trivially easy to re-add and the reason lives here.
+     */
+    #[Test]
+    public function the_plan_pivot_does_not_carry_a_quantity(): void
+    {
+        $this->assertFalse(Schema::hasColumn('plan_add_on', 'quantity'),
+            'plan_add_on grew a quantity column. entitlement_grants.quantity is the single '
+            .'home for "how many"; two of them is a divergence waiting to be found by a '
+            .'customer.');
+
+        $this->assertTrue(Schema::hasColumn('entitlement_grants', 'quantity'),
+            'Positive control: the one legitimate quantity column must still exist, or the '
+            .'assertion above is satisfied by having no quantity anywhere at all.');
     }
 
     // ══ Dominant vs additive is DATA, not a code branch ════════════════════
@@ -394,6 +420,95 @@ class AddOnCatalogSchemaTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         $partner->update(['entitlement_mode' => Partner::MODE_CEILING]);
+    }
+
+    // ══ ⚠️ unit — BUG-025 designed out rather than repeated ════════════════
+
+    #[Test]
+    public function a_counter_grant_without_a_unit_is_refused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must declare a unit/');
+
+        AddOnGrant::factory()->create(['kind' => AddOnGrant::KIND_COUNTER, 'unit' => null]);
+    }
+
+    #[Test]
+    public function a_gauge_grant_without_a_unit_is_refused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must declare a unit/');
+
+        AddOnGrant::factory()->create(['kind' => AddOnGrant::KIND_GAUGE, 'unit' => null]);
+    }
+
+    /** A unit of whitespace is not a unit. */
+    #[Test]
+    public function a_blank_unit_does_not_satisfy_the_requirement(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        AddOnGrant::factory()->create(['kind' => AddOnGrant::KIND_COUNTER, 'unit' => '   ']);
+    }
+
+    /** A boolean grants a flag, not a quantity — a unit there is meaningless. */
+    #[Test]
+    public function a_boolean_grant_with_a_unit_is_refused(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must not declare a unit/');
+
+        AddOnGrant::factory()->create([
+            'kind' => AddOnGrant::KIND_BOOLEAN,
+            'value' => null,
+            'unit' => 'messages',
+        ]);
+    }
+
+    /** POSITIVE CONTROL: all three legitimate shapes persist. */
+    #[Test]
+    public function every_legitimate_kind_and_unit_combination_is_accepted(): void
+    {
+        $counter = AddOnGrant::factory()->create(['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'messages']);
+        $gauge = AddOnGrant::factory()->gauge()->create();
+        $boolean = AddOnGrant::factory()->boolean()->create();
+
+        $this->assertSame('messages', $counter->unit);
+        $this->assertNotEmpty($gauge->unit, 'A gauge must carry its unit.');
+        $this->assertNull($boolean->unit, 'A boolean must carry none.');
+
+        $this->assertSame(3, AddOnGrant::count(),
+            'All three legitimate shapes must persist — otherwise the four refusals above are '
+            .'equally consistent with the rule rejecting everything.');
+    }
+
+    /** ⚠️ The rule must hold on UPDATE, not only on create. */
+    #[Test]
+    public function an_existing_counter_grant_cannot_have_its_unit_removed(): void
+    {
+        $grant = AddOnGrant::factory()->create(['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'messages']);
+
+        $this->expectException(\InvalidArgumentException::class);
+
+        $grant->update(['unit' => null]);
+    }
+
+    /**
+     * The unit is what makes BUG-025 unrepeatable: two grants for the same
+     * concept in different units are DISTINGUISHABLE in the data, instead of
+     * both being a bare number whose meaning lives in a key's spelling.
+     */
+    #[Test]
+    public function two_grants_for_the_same_concept_in_different_units_are_distinguishable(): void
+    {
+        $mb = AddOnGrant::factory()->gauge('storage', 5120)->create(['unit' => 'megabytes']);
+        $gb = AddOnGrant::factory()->gauge('storage', 5)->create(['unit' => 'gigabytes']);
+
+        $this->assertNotSame($mb->unit, $gb->unit);
+        $this->assertSame('megabytes', $mb->unit,
+            'storage => 5120 must be readable as megabytes from the ROW, not inferred from the '
+            .'absence of a _gb suffix on the key. That inference is exactly what MediaService '
+            .'got wrong for every customer.');
     }
 
     // ══ The scope must not reach this layer ════════════════════════════════

@@ -105,6 +105,23 @@ return new class extends Migration
             // translation. Unlimited dominates any number at every fold step.
             $table->unsignedBigInteger('value')->nullable();
 
+            // ⚠️ THE UNIT THE VALUE IS COUNTED IN — 'messages', 'megabytes',
+            // 'tokens', 'seats'.
+            //
+            // A number whose unit is recoverable only from the spelling of its
+            // key is the storage/storage_gb defect (BUG-025) one layer down:
+            // `storage => 5120` means megabytes, `storage_gb` means gigabytes,
+            // nothing in the schema says which, and the consumer guessed wrong
+            // for every customer on the system. The plans.limits JSON has
+            // ALREADY drifted this way, so this is not a hypothetical risk being
+            // designed against — it is a defect being designed out.
+            //
+            // Required for counter and gauge, NULL for boolean, enforced at
+            // write time in AddOnGrant::assertUnitMatchesKind(). Nullable in the
+            // schema only because boolean grants legitimately have none; the
+            // model is what makes it required where it must be.
+            $table->string('unit', 32)->nullable();
+
             $table->timestamps();
 
             $table->unique(['add_on_id', 'key']);
@@ -140,9 +157,22 @@ return new class extends Migration
             $table->id();
             $table->foreignId('plan_id')->constrained('plans')->cascadeOnDelete();
             $table->foreignId('add_on_id')->constrained('add_ons')->cascadeOnDelete();
-            $table->unsignedInteger('quantity')->default(1);
             $table->timestamps();
 
+            // ⚠️ NO `quantity` COLUMN, deliberately.
+            //
+            // `entitlement_grants.quantity` already exists, and two columns
+            // meaning "how many of this add-on" makes the resolver's answer
+            // depend on WHICH PATH the grant arrived by — plan-derived or
+            // purchased — for the same customer holding the same thing. That is
+            // the shape behind BUG-023 (two subscription tables), the
+            // User::accessibleWorkspaces / Workspace::isAccessibleBy split, and
+            // the 16-vs-2 limit-key divergence in BUG-027. Three instances
+            // already; this would have been the fourth, added on purpose.
+            //
+            // If a plan ever needs to bundle several of one pack, that is a
+            // deliberate design decision with a migration behind it — not a
+            // column sitting here inviting it.
             $table->unique(['plan_id', 'add_on_id']);
         });
 

@@ -107,7 +107,6 @@ class AddOn extends Model
     public function plans(): BelongsToMany
     {
         return $this->belongsToMany(Plan::class, 'plan_add_on')
-            ->withPivot('quantity')
             ->withTimestamps();
     }
 
