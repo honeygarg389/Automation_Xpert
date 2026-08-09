@@ -85,14 +85,6 @@ class Plan extends Model
         return $this->belongsTo(Currency::class, 'currency_code', 'code');
     }
 
-    public function hasFeature(string $feature): bool
-    {
-        return match ($feature) {
-            'white_label' => $this->white_label_enabled,
-            default => false,
-        };
-    }
-
     /**
      * Value from the plan's JSON limits column. Not named `limit` — that is the query builder.
      */

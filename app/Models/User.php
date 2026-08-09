@@ -148,6 +148,7 @@ class User extends Authenticatable implements MustVerifyEmail
     // -------------------------------------------------------------------------
 
     /** Client (organisation) this user belongs to (null = standalone user). */
+    /** @return BelongsTo<Client, $this> */
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);

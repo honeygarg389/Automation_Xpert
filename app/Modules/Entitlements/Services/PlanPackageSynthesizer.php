@@ -4,8 +4,8 @@ namespace App\Modules\Entitlements\Services;
 
 use App\Models\Plan;
 use App\Modules\Entitlements\Models\AddOn;
-use App\Modules\Entitlements\Models\AddOnGrant;
 use App\Modules\Entitlements\Support\GrantBundle;
+use App\Modules\Entitlements\Support\PlanLimitKinds;
 
 /**
  * Turns an existing `plans.limits` JSON blob into the catalog shape the resolver
@@ -29,53 +29,13 @@ use App\Modules\Entitlements\Support\GrantBundle;
 class PlanPackageSynthesizer
 {
     /**
-     * ⚠️ THE KIND AND UNIT OF EVERY LEGACY LIMIT KEY, DECLARED.
-     *
-     * `plans.limits` carries no kind and no unit — it is a bare JSON map of key
-     * to number. Something has to supply the missing half, and there are only
-     * two ways to do it:
-     *
-     *   INFER it from the key's spelling (`*_per_month` means counter) — which
-     *   is precisely the mistake BUG-025 is made of. `storage => 5120` means
-     *   megabytes and `storage_gb` means gigabytes, the difference lived in a
-     *   suffix, and the consumer guessed wrong for every customer on the system.
-     *
-     *   DECLARE it once, in a table a human can review — which is this.
-     *
-     * So this map is not a convenience. It is the reason `add_on_grants.kind`
-     * and `.unit` are columns instead of conventions, applied to the sixteen
-     * keys that predate them.
-     *
-     * The nine gauges are BUG-024: cardinality limits ("how many chatbots may
-     * exist") that the current design checks against a per-period counter, so
-     * they read 0 forever. Recording the kind here does not fix that — slice 4
-     * does — but it is what makes the fix possible at all.
+     * @deprecated Use {@see PlanLimitKinds::MAP}. Kept as an alias only so an
+     *             existing reference does not silently resolve to a second,
+     *             divergent copy — which is the trap the extraction closed.
      *
      * @var array<string, array{kind: string, unit: string}>
      */
-    public const LEGACY_KEYS = [
-        // ── counters (7) — per-period, measured by usage_meters ──
-        'whatsapp_messages_per_month' => ['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'messages'],
-        'campaigns_per_month' => ['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'campaigns'],
-        'sms_per_month' => ['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'messages'],
-        'emails_per_month' => ['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'emails'],
-        'ai_tokens_per_month' => ['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'tokens'],
-        'social_posts_per_month' => ['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'posts'],
-        'lead_credits_per_month' => ['kind' => AddOnGrant::KIND_COUNTER, 'unit' => 'credits'],
-
-        // ── gauges (9) — cardinality, measured by COUNT(*). See BUG-024. ──
-        'users' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'seats'],
-        // ⚠️ MEGABYTES. The seeder writes 5120 / 51200 / 512000. Declared here
-        // because nothing else in the codebase says so — which is the bug.
-        'storage' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'megabytes'],
-        'whatsapp_accounts' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'accounts'],
-        'whatsapp_templates' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'templates'],
-        'inbox_agents' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'agents'],
-        'knowledge_bases' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'knowledge_bases'],
-        'chatbots' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'chatbots'],
-        'social_accounts' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'accounts'],
-        'automations' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'automations'],
-    ];
+    public const LEGACY_KEYS = PlanLimitKinds::MAP;
 
     /**
      * The plan's limits as a single dominant package.

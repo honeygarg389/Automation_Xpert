@@ -35,4 +35,29 @@ return [
 
     'enforce_effective_plan_source' => env('ENFORCE_EFFECTIVE_PLAN_SOURCE', false),
 
+    /*
+    |--------------------------------------------------------------------------
+    | The entitlement facade — THE BRAKE
+    |--------------------------------------------------------------------------
+    |
+    | Whether feature code asks `Entitlements` or reads `plans.limits` directly.
+    |
+    | Same shape as ENFORCE_WORKSPACE_SCOPE, and for the same reason: Phase 0
+    | proved that brake worth having, and proved it by PULLING it against a real
+    | model rather than a fixture. When it was pulled on `Contact`, route-model
+    | binding started resolving foreign rows again and the controllers' own
+    | checks held — which is the only reason we know the two layers are
+    | independent. A brake nobody has pulled on the real thing is a brake nobody
+    | knows works.
+    |
+    | true  = the three enforcing sites resolve through EntitlementResolver
+    | false = they read plans.limits exactly as they did before Phase 1
+    |
+    | The legacy path is NOT dead code to be deleted once this settles. It is the
+    | recovery path, and it stays until `plans.limits` itself is retired.
+    |
+    */
+
+    'enabled' => env('ENTITLEMENTS_ENABLED', true),
+
 ];

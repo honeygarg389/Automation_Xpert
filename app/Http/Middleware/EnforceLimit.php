@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Plan;
 use App\Models\Workspace;
 use App\Modules\Broadcasting\Models\UsageMeter;
+use App\Modules\Entitlements\Support\Entitlements;
 use App\Support\WorkspaceContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -71,7 +72,18 @@ class EnforceLimit
 
         // The source that ENFORCES. Unchanged until the flag is flipped.
         $enforcingPlan = $useEffective ? $client?->effectivePlan() : $client?->activePlan();
-        $limit = $this->limitFrom($enforcingPlan, $limitKey);
+
+        // ⚠️ THE BRAKE. The legacy expression stays right here, beside the new
+        // one, so an operator comparing the two during an incident does not have
+        // to reconstruct the old behaviour from git history.
+        //
+        // The resolver reads the SAME plan source, including the
+        // enforce_effective_plan_source flag, so these two lines agree by
+        // construction rather than by luck. That is the whole point: BUG-023 was
+        // two places deciding which subscription is in effect.
+        $limit = Entitlements::isEnabled()
+            ? app(Entitlements::class)->forClient($client)->limit($limitKey)
+            : $this->limitFrom($enforcingPlan, $limitKey);
 
         if (! $useEffective) {
             $this->reportWhatTheCorrectSourceWouldDo(

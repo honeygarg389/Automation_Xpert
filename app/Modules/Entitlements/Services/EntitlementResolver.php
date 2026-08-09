@@ -70,11 +70,23 @@ class EntitlementResolver
         $this->memo = [];
     }
 
+    /**
+     * The client-level entry point.
+     *
+     * Entitlements are held by an organisation and consumed by its workspaces,
+     * so this is the real resolution unit; `for()` is the workspace-shaped
+     * convenience over it. Both funnel into ONE `bundlesFor()`, which is the
+     * only place that decides which subscription is in effect — the duplication
+     * of that decision is precisely what BUG-023 was.
+     */
+    public function forClient(?Client $client): Entitlement
+    {
+        return $this->fold($this->bundlesFor($client));
+    }
+
     private function resolve(int $workspaceId): Entitlement
     {
-        $client = Workspace::with('client')->find($workspaceId)?->client;
-
-        return $this->fold($this->bundlesFor($client));
+        return $this->forClient(Workspace::with('client')->find($workspaceId)?->client);
     }
 
     /**
