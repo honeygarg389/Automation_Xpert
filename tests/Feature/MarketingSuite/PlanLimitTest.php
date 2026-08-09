@@ -147,9 +147,9 @@ class PlanLimitTest extends TestCase
      * A self-serve customer bills through `subscriptions`, so `activePlan()`
      * returns null and the limit reads as unlimited.
      *
-     * This is the current, shipped behaviour and the flag defaults to keeping
-     * it. The test asserts the STATUS QUO deliberately — flipping the flag is a
-     * business decision, and this pins that nothing changed underneath it.
+     * This was the shipped default until the cohort was measured at ZERO and the
+     * flag was flipped. It is now the FALLBACK path — the recovery route if the
+     * flip proves wrong — so it is still pinned, with the flag set explicitly.
      */
     #[Test]
     public function a_self_serve_customer_is_not_blocked_while_the_flag_is_off(): void
@@ -231,6 +231,62 @@ class PlanLimitTest extends TestCase
 
         $this->actingAs($user)->post(self::ROUTE, self::PAYLOAD)->assertSessionHas('success');
         $this->assertSame(1, $this->scrapeJobCount($user->workspace_id));
+    }
+
+    /**
+     * ⚠️ THE ASSERTION THAT PROVES THE DEFAULT CHANGED.
+     *
+     * Every other flag test in this file sets `entitlements.enforce_effective_plan_source`
+     * explicitly, so all of them would keep passing whichever way the default
+     * points. This one sets NOTHING — it asserts what a real deployment does
+     * with no env var present.
+     *
+     * Without it, flipping the default is untested: the tests either side are
+     * both pinned to explicit values and neither can see the change.
+     */
+    #[Test]
+    public function by_default_a_self_serve_customer_is_now_enforced(): void
+    {
+        $this->assertTrue(config('entitlements.enforce_effective_plan_source'),
+            'The shipped default is no longer true. If that was deliberate, BUG-023 in '
+            .'docs/found-bugs.md says otherwise and one of them is wrong.');
+
+        $user = $this->clientUserWithSelfServePlan(['lead_credits_per_month' => 5]);
+        UsageMeter::track($user->workspace_id, 'lead_credits', 50);
+
+        $this->actingAs($user)->postJson(self::ROUTE, self::PAYLOAD)->assertStatus(402);
+        $this->assertSame(0, $this->scrapeJobCount($user->workspace_id),
+            'With no config override at all, a gateway-billed customer over their limit must '
+            .'now be refused. This is the cohort that was exempt since launch.');
+    }
+
+    /** …and the admin-assigned path is unaffected by the new default. */
+    #[Test]
+    public function by_default_the_admin_assigned_path_is_unchanged(): void
+    {
+        $user = $this->clientUserWithAssignedPlan(['lead_credits_per_month' => 5]);
+        UsageMeter::track($user->workspace_id, 'lead_credits', 4);
+
+        $this->actingAs($user)->post(self::ROUTE, self::PAYLOAD)->assertSessionHas('success');
+        $this->assertSame(1, $this->scrapeJobCount($user->workspace_id));
+    }
+
+    /**
+     * The fallback still works. Report-only is the recovery path, not dead code —
+     * setting the env var to false must restore the old behaviour exactly.
+     */
+    #[Test]
+    public function the_fallback_to_report_only_still_works(): void
+    {
+        config(['entitlements.enforce_effective_plan_source' => false]);
+
+        $user = $this->clientUserWithSelfServePlan(['lead_credits_per_month' => 5]);
+        UsageMeter::track($user->workspace_id, 'lead_credits', 50);
+
+        $this->actingAs($user)->post(self::ROUTE, self::PAYLOAD)->assertSessionHas('success');
+        $this->assertSame(1, $this->scrapeJobCount($user->workspace_id),
+            'Reverting the flag no longer restores report-only behaviour, so there is no way '
+            .'back if the flip proves wrong.');
     }
 
     // ══ Fixtures ═══════════════════════════════════════════════════════════
