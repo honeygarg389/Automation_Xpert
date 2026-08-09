@@ -8,10 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ClientSubscription extends Model
 {
     public const STATUS_ACTIVE = 'active';
+
     public const STATUS_EXPIRED = 'expired';
+
     public const STATUS_CANCELLED = 'cancelled';
 
     public const BILLING_MONTHLY = 'monthly';
+
     public const BILLING_YEARLY = 'yearly';
 
     protected $fillable = [
@@ -37,6 +40,7 @@ class ClientSubscription extends Model
         return $this->belongsTo(Client::class);
     }
 
+    /** @return BelongsTo<Plan, $this> */
     public function plan(): BelongsTo
     {
         return $this->belongsTo(Plan::class);

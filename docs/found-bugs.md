@@ -1801,8 +1801,38 @@ request and the limit never bites. It looks enforced in the route file, and is n
 
 A gauge is answered by `COUNT(*)` against the owning table at request time, never by a meter.
 The fix is to declare the kind (`counter` | `gauge` | `boolean`) in the entitlement catalog and
-enforce each accordingly — not to add seven more `track()` calls, which would be wrong for
+enforce each accordingly — not to add nine more `track()` calls, which would be wrong for
 every one of them (deleting a chatbot must decrease the number; a counter never decreases).
+
+### ⚠️ SCOPE CORRECTION — 2026-08-09, the counts above were wrong
+
+The table lists 8 keys and the text said "7 of the 14 seeded limit keys". Both are understated.
+Re-measured by parsing `PlanSeeder` rather than eyeballing it:
+
+| | Count |
+|---|---|
+| Seeded limit keys | **16**, not 14 |
+| Counters (`*_per_month`) | 7 |
+| **Gauges** | **9**, not 7 |
+
+The missing key is **`automations`** — a gauge, absent from the table above and from the
+original count entirely.
+
+The 9 gauges: `users`, `storage`, `whatsapp_accounts`, `whatsapp_templates`, `inbox_agents`,
+`chatbots`, `social_accounts`, `knowledge_bases`, `automations`.
+
+Someone reading "7 of 14" would under-fix this by two keys, and `automations` is exactly the
+kind that gets missed twice — it has no middleware, no meter, and no mention anywhere else.
+
+**Scope of the seeder itself, also measured** (because an earlier framing of this had it
+spanning two seeders): `PlanSeeder` is the **only** writer of `plans.limits` — 3 occurrences,
+one per plan. `DemoSeeder` and `SubscriptionPaymentSeeder` both create plan *subscriptions* but
+only ever READ plans (`Plan::where('slug', …)->first()`); neither writes a limits array. The
+admin UI is the other write path, and it is its own defect — see BUG-027.
+
+**Type consistency, swept:** all 16 keys across all 3 seeded plans are `int` or `null`. No
+strings, no booleans, no absent keys, no `'unlimited'` sentinel anywhere in `app/` or
+`database/`. The JSON has drifted in UNIT (BUG-025), not in type.
 
 ---
 
@@ -1862,3 +1892,70 @@ Fixed for that path only: a dedicated `entitlements` channel with a **hard-coded
 
 **Not audited:** how many other `Log::warning()`/`Log::info()` calls across the codebase are
 load-bearing for diagnosis and currently silent. That is its own pass.
+
+
+---
+
+## BUG-027 — editing a plan in the admin UI silently discards 14 of its 16 limit keys
+
+**Severity: HIGH — live, data-destroying, and it grants access rather than removing it.
+Found 2026-08-09 while sweeping every `plans.limits` write path. NOT fixed — needs its own
+`fix/` branch off master.**
+
+`Admin\PlanController::defaultLimits()` returns **two** keys:
+
+```php
+return ['users' => null, 'storage' => null];
+```
+
+`validatePlan()` builds its rules from `array_keys(self::defaultLimits())`, so only
+`limits.users` and `limits.storage` have validation rules. Laravel's `validate()` returns
+**only attributes that have rules**, and `mapValidatedToAttributes()` then writes
+`'limits' => $validated['limits'] ?? null` — replacing the entire JSON blob with whatever
+survived.
+
+Measured, not inferred:
+
+```
+submitted keys : 16
+survived       : 2  -> users, storage
+DISCARDED      : whatsapp_accounts, whatsapp_templates, whatsapp_messages_per_month,
+                 campaigns_per_month, sms_per_month, emails_per_month, inbox_agents,
+                 ai_tokens_per_month, knowledge_bases, chatbots, social_accounts,
+                 social_posts_per_month, lead_credits_per_month, automations
+```
+
+### Why it is certain rather than theoretical
+
+`resources/js/Pages/Admin/Plans/PlanLimits.jsx` declares its own `LIMIT_KEYS` array containing
+**all 16**, renders a labelled input for each, and submits all 16. The back end keeps a
+separate two-item list. So an administrator fills in every limit, saves, and fourteen are
+dropped without a warning — and a dropped key is `null`, which every consumer reads as
+**unlimited**. Editing a plan grants everything on it.
+
+The two survivors are no comfort: `storage` is itself broken (BUG-025), so in practice one
+key of sixteen works.
+
+### The pattern
+
+This is the third confirmed instance of the trap CLAUDE.md already records — one idea
+implemented in two places, where fixing one closes nothing:
+
+| Concept | Definition A | Definition B |
+|---|---|---|
+| workspace membership | `User::accessibleWorkspaces()` | `Workspace::isAccessibleBy()` |
+| inbound dedup | `whatsapp_global` (controller) | `whatsapp_msg` (driver) |
+| **the set of plan limits** | **`PlanLimits.jsx:LIMIT_KEYS` (16)** | **`PlanController::defaultLimits()` (2)** |
+
+### Coverage
+
+**Zero tests** touch the plan update path — `grep -rln 'PlanController|admin.plans' tests/`
+returns nothing.
+
+### Proposed fix, one commit
+
+1. One source of truth for the key set, shared by the validator and the form, so the two
+   cannot drift again.
+2. A test submitting all 16 and asserting all 16 survive — with the positive control that a
+   plan edited *without* touching limits keeps the ones it had.
+3. Correct BUG-024's counts at the same time (done above).
