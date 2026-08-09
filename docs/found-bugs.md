@@ -2076,3 +2076,59 @@ Deleting the metrics and wiring the limits are opposite actions and only one can
 - if the limits were aspirational, the metrics are dead weight and should go.
 
 That is a product decision, not a cleanup. Recorded so it is decided rather than discovered.
+
+---
+
+## BUG-030 — `0` and `null` are set from one input, mean opposite extremes, and nothing says so
+
+**Severity: Low-Medium — a semantics and UX gap, NOT a fail-open. Recorded 2026-08-09. Current
+behaviour pinned by test; no behaviour changed.**
+
+### ⚠️ First, the correction, because the inverse is widely believed
+
+`0` does **not** mean unlimited. Measured three times — through `EnforceLimit::limitFrom()`,
+through the `Entitlement` value object, and through the facade on a gauge key:
+
+```
+limits[key]=0     -> limit=0     bounded    at count 0 -> REFUSED
+limits[key]=null  -> limit=NULL  unlimited  at count 0 -> allowed
+limits[key]=5     -> limit=5     bounded    at count 0 -> allowed
+```
+
+A plan intending "no chatbots" that sets `0` gets exactly that: the first one is refused. **This
+is correct, and inverting it would create the hole it is imagined to close** — every plan with a
+deliberate zero would begin granting everything. `GaugeReaderTest` now asserts these semantics
+explicitly so the inversion cannot be made quietly; someone would have to delete a test that
+states the truth.
+
+### The real gap
+
+Three states exist and only two are expressible without ambiguity:
+
+| Stored | Means | `limit()` | `has()` | `isUnlimited()` |
+|---|---|---|---|---|
+| `null` | granted, no ceiling | `null` | true | true |
+| `0` | granted, ceiling of zero — refuses everything | `0` | true | false |
+| *absent* | never granted | `null` | **false** | false |
+
+`limit()` returns `null` for both "unlimited" and "never granted", which is why `has()` exists.
+That is documented in `Entitlement` and enforced by test.
+
+The gap is at the **input**, in `resources/js/Pages/Admin/Plans/PlanLimits.jsx`:
+
+- the field's placeholder reads **"unlimited"**;
+- clearing it sends `null` → unlimited;
+- typing `0` sends `0` → **the feature is disabled entirely**;
+- `min={0}` actively invites typing `0`.
+
+So the two most opposite outcomes in the system are one keystroke apart, in a field whose
+placeholder describes one of them, with nothing on screen distinguishing them. An administrator
+who means "no limit" and types `0` disables that feature for every customer on the plan.
+
+### Not fixed here, and what the fix is not
+
+It is **not** a code change to the comparison — that would break correct behaviour. It is an
+interface change: distinguish the two states visibly (an explicit "Unlimited" toggle beside the
+number, or a confirmation when `0` is entered), and say in the label what `0` does. That is a UI
+decision with a copy decision attached, not a billing fix, and it belongs with whoever owns the
+admin surface.

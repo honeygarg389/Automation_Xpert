@@ -171,6 +171,22 @@ class GaugeReaderTest extends TestCase
      * Under the scope a contextless count returns 0, and 0 reads as "nothing
      * held", which hands the customer their FULL limit as headroom. That is how
      * ContactCapacity failed.
+     *
+     * ─── ⚠️ THIS TEST CANNOT CURRENTLY FAIL, AND THAT IS WORTH KNOWING ──────
+     *
+     * Measured: removing the scope bypass from GaugeReader leaves this file
+     * entirely green. NONE of the seven gauge models carries BelongsToWorkspace
+     * yet — six sit in Phase 0's un-started slice 8 and User is NEVER_SCOPED —
+     * so the bypass branch never executes and there is no scope to fail closed.
+     *
+     * The bypass is therefore written for a future that has not arrived. It is
+     * kept because adding it later, once slice 8 has scoped these models, means
+     * a window in which every gauge silently under-counts and grants full
+     * headroom — and the guard test would be written after the damage.
+     *
+     * `the_bypass_becomes_load_bearing_when_slice_8_scopes_a_gauge_model` below
+     * is the tripwire: it fails the moment any gauge model gains the trait,
+     * forcing whoever does that to re-verify this test can actually fail.
      */
     #[Test]
     public function gauges_count_correctly_with_no_workspace_context(): void
@@ -184,6 +200,38 @@ class GaugeReaderTest extends TestCase
         $this->assertSame(3, $this->reader()->count('chatbots', $a),
             'The gauge returned 0 with no context. A gauge that under-counts grants unlimited '
             .'headroom — the fail-OPEN direction, and the one that costs money.');
+    }
+
+    /**
+     * ⚠️ TRIPWIRE for the test above, which is dormant until slice 8.
+     *
+     * The fail-open guard in GaugeReader only does anything once a gauge model
+     * is workspace-scoped. Today none is, so removing the guard changes nothing
+     * and no test notices — measured, not assumed.
+     *
+     * This asserts that state explicitly. When Phase 0 slice 8 scopes any of
+     * these models this test FAILS, which is the intended behaviour: it is the
+     * signal to confirm the bypass is live and that
+     * `gauges_count_correctly_with_no_workspace_context` can now genuinely fail.
+     *
+     * Delete this test at that point — after checking, not instead of checking.
+     */
+    #[Test]
+    public function the_bypass_becomes_load_bearing_when_slice_8_scopes_a_gauge_model(): void
+    {
+        $scoped = [];
+
+        foreach (GaugeSources::MAP as $key => $source) {
+            if (method_exists($source['model'], 'scopeWithoutWorkspaceScope')) {
+                $scoped[] = $key;
+            }
+        }
+
+        $this->assertSame([], $scoped,
+            'These gauge models are now workspace-scoped: '.implode(', ', $scoped).". \n"
+            ."GaugeReader's scope bypass has just become load-bearing. Confirm that\n"
+            ."gauges_count_correctly_with_no_workspace_context can now actually FAIL when the\n"
+            .'bypass is removed — until slice 8 it could not — and then delete this tripwire.');
     }
 
     // ══ Scope: the CLIENT-scoped gauge ═════════════════════════════════════
