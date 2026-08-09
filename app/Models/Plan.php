@@ -14,7 +14,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $name
  * @property string $slug
  * @property array<string, mixed>|null $features
- * @property array<string, int|null>|null $limits
+ *                                               ⚠️ `limits` is `mixed`-valued, not `int|null`, and deliberately so. It is a
+ *                                               JSON column: it round-trips whatever was written to it, and nothing in the
+ *                                               schema constrains the values. Declaring it narrower would be a claim the
+ *                                               database does not make — and it made PlanPackageSynthesizer's defensive
+ *                                               branch look like dead code to PHPStan, which is the annotation lying, not the
+ *                                               defence being unnecessary.
+ * @property array<string, mixed>|null $limits
  * @property bool $white_label_enabled
  * @property bool $enabled
  */
