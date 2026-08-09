@@ -2010,18 +2010,47 @@ holds the single limit-key → metric declaration so the route middleware's `cou
 senders' `track()` calls cannot drift again, and `QuotaGuard` holds the single "is this
 workspace at its limit" comparison so the HTTP path and the queued job ask it the same way.
 
-### Data migration
+### Data migration — ⚠️ DISCARD, NOT MERGE
 
-`whatsapp_messages` rows are **folded** into `messages_whatsapp` — summed, not overwritten,
-because `(workspace_id, metric, period)` is unique and a straight rename would either collide or
-silently discard whichever side arrived second. **A customer's usage must never go down because
-of a migration.** Irreversible by design: once folded the two contributions are one number, and
-splitting them back out would be a guess about what a customer is allowed to do. The recovery
-path is the backup taken before it ran.
+The first version of this migration **folded** the retired rows into `messages_whatsapp`,
+summing them so that no usage was "lost". That instinct was wrong, and correcting it produced
+the most transferable finding in this entry.
 
-Measured on the working database before writing it: `usage_meters` held **0 rows**, so the fold
-is a no-op today. Proved on real rows in the test database instead — 120 + 30 → 150, and a
-lone 55 → 55.
+**Merging two counters can push a workspace over its limit without the customer sending
+anything.**
+
+`whatsapp_messages` and `messages_whatsapp` were both written for the *same* campaign sends, so
+their sum double-counts the period. A workspace at 120 on one and 30 on the other has not sent
+150 messages — and a limit of 140 that neither figure breached is breached the instant the
+migration runs. The customer's first symptom is a 402 they did nothing to earn, produced by a
+refactor.
+
+A discard cannot do that. It can only move usage **down**, and usage moving down is a customer
+being under-charged for one period: recoverable, invisible, and vastly preferable to a lockout
+nobody can explain.
+
+Proved on real rows: 120 + 30 → **30** (not 150), and a lone 55 → **0**.
+
+### ⚠️ The general rule, for whoever hits this with real data
+
+Discarding is free *here* because the affected rows were test data and the working database held
+**0 rows** — measured before writing the migration, and again before running it. It will not
+always be free. When a meter migration has to reconcile two counters on a **live** database, in
+order of preference:
+
+1. **Wait for the period to roll.** `usage_meters` is keyed by `Ym`, so the problem **expires on
+   its own**. Ship the code change, let the current period finish on the old metric, and let the
+   new one start clean next period. This is almost always the right answer and it costs nothing
+   but patience.
+2. **Explicit reconciliation with an announcement.** If the numbers genuinely must be combined,
+   compute the merged figure, tell affected customers what their usage will read and why, and
+   give anyone pushed over the limit a grace period. **Reconciliation is a billing event.**
+3. **Never a silent merge inside a refactor** — which is exactly what the first version of this
+   migration was, and it looked entirely reasonable at the time.
+
+Irreversible by design. `down()` is empty: the discarded rows cannot be reconstructed and
+inventing them would be inventing usage. The recovery path is the backup taken immediately
+before it ran, not a `down()` that pretends to reverse it.
 
 ---
 
