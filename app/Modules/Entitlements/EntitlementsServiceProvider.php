@@ -2,6 +2,7 @@
 
 namespace App\Modules\Entitlements;
 
+use App\Modules\Entitlements\Console\Commands\ReportGaugeBreachesCommand;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -15,5 +16,11 @@ class EntitlementsServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->loadMigrationsFrom(__DIR__.'/database/migrations');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                ReportGaugeBreachesCommand::class,
+            ]);
+        }
     }
 }
