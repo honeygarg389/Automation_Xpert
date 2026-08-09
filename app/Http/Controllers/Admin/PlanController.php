@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Currency;
 use App\Models\Plan;
+use App\Modules\Entitlements\Support\PlanLimitKinds;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -13,12 +15,40 @@ use Inertia\Response;
 
 class PlanController extends Controller
 {
+    /**
+     * ⚠️ THE KEY SET IS DERIVED, NOT RETYPED. BUG-027.
+     *
+     * This used to return two keys, `users` and `storage`, hand-written. The
+     * admin form (`resources/js/Pages/Admin/Plans/PlanLimits.jsx`) has its own
+     * `LIMIT_KEYS` array with SIXTEEN, renders an input for each, and submits
+     * all sixteen.
+     *
+     * `validatePlan()` builds its rules from `array_keys(self::defaultLimits())`,
+     * and Laravel's `validate()` returns only attributes that HAVE rules. So
+     * fourteen keys arrived, had no rule, were dropped from `$validated`, and
+     * `mapValidatedToAttributes()` then replaced the plan's entire limits JSON
+     * with the two survivors.
+     *
+     * An administrator filled in every limit, saved, and fourteen vanished — and
+     * a missing key reads as `null`, which every consumer treats as UNLIMITED.
+     * Editing a plan GRANTED everything on it.
+     *
+     * The fix is not "add fourteen more literals here", which would leave two
+     * lists to drift apart again. `PlanLimitKinds::MAP` is the single
+     * declaration of which limit keys exist — it already backs the entitlement
+     * resolver, and slice 4 needs it too. Deriving from it means a new key is
+     * added in exactly one place and every consumer follows.
+     *
+     * The front end still declares its own list for labelling and ordering; the
+     * guard in PlanLimitKeyDivergenceTest asserts the two agree, so a future
+     * divergence fails the build instead of silently discarding a customer's
+     * limits.
+     *
+     * @return array<string, null>
+     */
     public static function defaultLimits(): array
     {
-        return [
-            'users' => null,
-            'storage' => null,
-        ];
+        return array_fill_keys(array_keys(PlanLimitKinds::MAP), null);
     }
 
     /** Enabled currencies for the plan form dropdown. */
@@ -70,7 +100,7 @@ class PlanController extends Controller
         ]);
     }
 
-    public function store(Request $request): \Illuminate\Http\RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
         $validated = $this->validatePlan($request, null);
         $validated['slug'] = $validated['slug'] ?: Str::slug($validated['name']);
@@ -90,7 +120,7 @@ class PlanController extends Controller
         ]);
     }
 
-    public function update(Request $request, Plan $plan): \Illuminate\Http\RedirectResponse
+    public function update(Request $request, Plan $plan): RedirectResponse
     {
         $validated = $this->validatePlan($request, $plan);
         $plan->update($this->mapValidatedToAttributes($validated));
@@ -98,14 +128,14 @@ class PlanController extends Controller
         return redirect()->route('admin.plans.index')->with('success', __('Plan updated successfully.'));
     }
 
-    public function destroy(Plan $plan): \Illuminate\Http\RedirectResponse
+    public function destroy(Plan $plan): RedirectResponse
     {
         $plan->delete();
 
         return redirect()->route('admin.plans.index')->with('success', __('Plan deleted successfully.'));
     }
 
-    public function duplicate(Plan $plan): \Illuminate\Http\RedirectResponse
+    public function duplicate(Plan $plan): RedirectResponse
     {
         $copy = $plan->replicate();
         $copy->name = $plan->name.' (Copy)';
@@ -118,7 +148,7 @@ class PlanController extends Controller
             ->with('openEditPlanId', $copy->id);
     }
 
-    public function reorder(Request $request): \Illuminate\Http\RedirectResponse
+    public function reorder(Request $request): RedirectResponse
     {
         $request->validate(['order' => ['required', 'array'], 'order.*' => ['integer', 'exists:plans,id']]);
 
