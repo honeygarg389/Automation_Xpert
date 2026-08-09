@@ -31,8 +31,27 @@ return [
     | false = report only (log the divergence, block nothing new)
     | true  = enforce against the effective plan
     |
+    | ─── FLIPPED TO true, 2026-08-09 ───────────────────────────────────────
+    |
+    | The cohort this would start refusing was measured directly against the
+    | working database, not inferred from the report-only log (which held only
+    | test-run entries):
+    |
+    |     clients 0 · workspaces 0 · users 0
+    |     subscriptions 0 · client_subscriptions 0 · usage_meters 0
+    |
+    | There is nobody to grandfather, because there is nobody. So the correct
+    | source becomes the shipped default NOW, while the cohort is provably
+    | empty. Deferring the flip to launch does not avoid the decision — it moves
+    | it to the one moment when it is expensive, which is exactly the migration
+    | this flag was built to make unnecessary.
+    |
+    | Report-only is NOT deleted. It stays as the fallback path: set the env var
+    | to false and the middleware reverts to activePlan() and resumes logging
+    | the divergence. That is the recovery route if the flip ever proves wrong.
+    |
     */
 
-    'enforce_effective_plan_source' => env('ENFORCE_EFFECTIVE_PLAN_SOURCE', false),
+    'enforce_effective_plan_source' => env('ENFORCE_EFFECTIVE_PLAN_SOURCE', true),
 
 ];

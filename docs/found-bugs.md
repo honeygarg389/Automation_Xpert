@@ -1726,8 +1726,9 @@ it three times and asserts 3.
 
 ## BUG-023 — `EnforceLimit` read the plan from a source that excludes every self-serve customer
 
-**Severity: HIGH — live. Found 2026-08-09. Corrected in REPORT-ONLY mode behind
-`ENFORCE_EFFECTIVE_PLAN_SOURCE`, by ruling.**
+**Severity: HIGH — live. Found 2026-08-09. Shipped report-only the same day, then
+FLIPPED ON once the cohort was measured. `ENFORCE_EFFECTIVE_PLAN_SOURCE` now defaults to
+`true`; report-only remains as the fallback.**
 
 The middleware resolved the plan through `Client::activePlan()`, which reads
 `client_subscriptions` only — the admin-assignment path, whose single writer is
@@ -1747,10 +1748,25 @@ behind any of the client's users' active subscriptions.
 Correcting the source does not restore intended behaviour — it **turns on enforcement for a
 cohort that has never been metered**, and the way they find out is a 402 mid-campaign.
 
-So the corrected source ships disabled. While `entitlements.enforce_effective_plan_source` is
-false the middleware enforces exactly as before, and additionally logs every request the
-corrected source *would* have refused, with workspace, plan, metric, usage and both limits.
-Size the cohort from those logs, then flip deliberately.
+So the corrected source shipped disabled, logging every request it *would* have refused.
+
+### The flip, and how the cohort was actually sized
+
+The report-only log turned out to be the wrong instrument: on this machine it contained only
+`testing.WARNING` entries from the suite's own runs. The cohort was measured directly instead:
+
+```
+clients 0 · workspaces 0 · users 0 · subscriptions 0 · client_subscriptions 0 · usage_meters 0
+```
+
+**Zero, because every cohort is zero** — no customer has ever existed here, consistent with
+`deployment-safety.md` box 4 (fresh VPS) still being open. That is not "we measured a live
+cohort and it was empty"; it is the absence of one, and the distinction matters: flipping later,
+after the first gateway-billed customer arrives, recreates precisely the migration this flag
+exists to avoid.
+
+So the default is now `true`. Report-only is retained, not deleted — setting the env var to
+`false` reverts the middleware to `activePlan()` and resumes the divergence log.
 
 Note this is a different cohort from BUG-022's. Fixing the meter alone made the middleware live
 for the **admin-assigned** customers — deliberately, and it is the smaller group, because
