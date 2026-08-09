@@ -1968,3 +1968,82 @@ a non-integer limit (otherwise "all 16 survive" is equally satisfied by validati
 and `null` must still be accepted, because `null` means unlimited deliberately.
 
 Stash-checked: restoring the two-key `defaultLimits()` fails 4 of the 6.
+---
+
+## BUG-028 — the WhatsApp message limit was fed by one path and checked on another
+
+**Severity: HIGH — live enforcement hole. Found and fixed 2026-08-09
+(`fix/message-metric-split`).**
+
+`SendCampaignMessageJob` wrote two meters for every WhatsApp campaign message —
+`messages_whatsapp` and `whatsapp_messages`. The duplication was not the defect. The defect was
+that the two halves of enforcement sat on **opposite paths**:
+
+| Path | Incremented `whatsapp_messages` | Checked against it |
+|---|---|---|
+| Campaign send | **yes** | no — launch is gated by `campaigns_per_month`, a count of *campaigns* |
+| Inbox reply / share-product | **no** — `InboxController` had zero `UsageMeter` calls | **yes**, via `limit:` middleware |
+
+So:
+
+- a workspace that used **only the inbox** never accumulated and could never be refused, however
+  many replies it sent;
+- a workspace that ran **campaigns** accumulated, and was then refused **on inbox replies** for
+  volume it had spent on campaigns;
+- campaign message volume was **never bounded at all**. One campaign to 50,000 recipients passed
+  a limit of "5 campaigns per month" without touching the message limit.
+
+### The half-fix that would have looked whole
+
+Unifying the metric alone — pointing everything at `messages_whatsapp` — makes campaigns count
+and leaves replies **still invisible**, because the inbox path had no `track()` call to
+re-point. It would have closed the naming split while leaving the enforcement hole exactly as
+it was, and the tests would have gone green.
+
+The fix therefore has three parts, and each is stash-checked separately: one metric; **both
+paths track it**; **both paths enforce against it**.
+
+### Why the channel-parameterised name won
+
+`messages_{channel}` generalises and `whatsapp_messages` does not — see BUG-029. `MessageMetrics`
+holds the single limit-key → metric declaration so the route middleware's `countKey` and the
+senders' `track()` calls cannot drift again, and `QuotaGuard` holds the single "is this
+workspace at its limit" comparison so the HTTP path and the queued job ask it the same way.
+
+### Data migration
+
+`whatsapp_messages` rows are **folded** into `messages_whatsapp` — summed, not overwritten,
+because `(workspace_id, metric, period)` is unique and a straight rename would either collide or
+silently discard whichever side arrived second. **A customer's usage must never go down because
+of a migration.** Irreversible by design: once folded the two contributions are one number, and
+splitting them back out would be a guess about what a customer is allowed to do. The recovery
+path is the backup taken before it ran.
+
+Measured on the working database before writing it: `usage_meters` held **0 rows**, so the fold
+is a no-op today. Proved on real rows in the test database instead — 120 + 30 → 150, and a
+lone 55 → 55.
+
+---
+
+## BUG-029 — `messages_sms` and `messages_email` are written and read by nothing
+
+**Severity: Low — dead data, not a live defect. Recorded 2026-08-09. NOT fixed deliberately.**
+
+`SendCampaignMessageJob` writes `messages_{channel}` for all three channels. Nothing reads
+`messages_sms` or `messages_email` — not the `limit:` middleware, not
+`HandleInertiaRequests::workspaceUsage()`'s metrics map, not the UI, not a report.
+
+Related, and the reason this is worth a number rather than a comment: **`sms_per_month` and
+`emails_per_month` are seeded on every plan, sold, and enforced nowhere.** There is no route
+carrying a `limit:` for either. So two paid-for limits are entirely fictional, while the meters
+that would feed them accumulate unread.
+
+### Why it is not fixed here
+
+Deleting the metrics and wiring the limits are opposite actions and only one can be right:
+
+- if the limits are meant to be real, the metrics are already correct and what is missing is the
+  enforcement points — a **behaviour change** that starts refusing SMS and email sends;
+- if the limits were aspirational, the metrics are dead weight and should go.
+
+That is a product decision, not a cleanup. Recorded so it is decided rather than discovered.

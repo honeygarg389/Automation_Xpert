@@ -11,6 +11,8 @@ use App\Modules\Broadcasting\Models\UsageMeter;
 use App\Modules\Broadcasting\Models\WorkspaceSmtpConfig;
 use App\Modules\Broadcasting\Services\CampaignPersonalizer;
 use App\Modules\Broadcasting\Services\Sms\SmsDriverManager;
+use App\Modules\Entitlements\Support\MessageMetrics;
+use App\Modules\Entitlements\Support\QuotaGuard;
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
@@ -109,6 +111,26 @@ class SendCampaignMessageJob implements ShouldQueue
             return;
         }
 
+        // ⚠️ ENFORCEMENT, on the path that sends the most volume.
+        //
+        // Campaign launch is gated by `campaigns_per_month` — a count of
+        // campaigns, not of messages. So message volume has never been bounded
+        // here: one campaign to 50,000 recipients passed a limit of "5 campaigns
+        // per month" without touching the message limit at all, while an inbox
+        // reply was refused against that same limit.
+        //
+        // Checked per message rather than at launch because the meter is
+        // per message, and because a campaign whose audience grows between
+        // launch and send would otherwise slip past a launch-time check.
+        if (app(QuotaGuard::class)->isChannelExceeded($campaign->workspace_id, $campaign->channel)) {
+            $recipient?->update([
+                'status' => 'failed',
+                'failed_reason' => 'plan_limit_reached',
+            ]);
+
+            return;
+        }
+
         try {
             $trackingToken = $campaign->channel === 'email' ? Str::random(32) : null;
             // Unsubscribe token is always generated for email — CAN-SPAM requires opt-out in every commercial email.
@@ -142,10 +164,11 @@ class SendCampaignMessageJob implements ShouldQueue
             // provider_message_id) can update the inbox row too.
             $this->syncToInbox($campaign, $contact, $sent);
 
-            UsageMeter::track($campaign->workspace_id, 'messages_'.$campaign->channel);
-            if ($campaign->channel === 'whatsapp') {
-                UsageMeter::track($campaign->workspace_id, 'whatsapp_messages');
-            }
+            // ONE metric. The `whatsapp_messages` duplicate that used to be
+            // written beside this is gone — it was a WhatsApp-only copy of this
+            // same counter, and the inbox path was checking IT while this path
+            // fed both. See MessageMetrics.
+            UsageMeter::track($campaign->workspace_id, MessageMetrics::forChannel($campaign->channel));
 
             Log::channel('json')->info('campaign.message.sent', [
                 'workspace_id' => $campaign->workspace_id,

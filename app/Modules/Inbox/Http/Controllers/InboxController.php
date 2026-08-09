@@ -7,6 +7,8 @@ use App\Events\MessageSent;
 use App\Events\TypingChanged;
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Modules\Broadcasting\Models\UsageMeter;
+use App\Modules\Entitlements\Support\MessageMetrics;
 use App\Modules\Inbox\Models\InboxLabel;
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
@@ -240,6 +242,21 @@ class InboxController extends Controller
             $message->update(['status' => 'failed', 'error_json' => ['message' => $sendError]]);
         }
 
+        // ⚠️ THE MISSING HALF. This path was CHECKED against the message limit
+        // by the `limit:` middleware and never INCREMENTED it — InboxController
+        // had no UsageMeter call at all. So inbox-only workspaces never
+        // accumulated and could not be refused however many replies they sent,
+        // while campaign users were refused here for volume spent elsewhere.
+        //
+        // Tracked only on a successful send, matching SendCampaignMessageJob: a
+        // message the provider rejected is not one the customer used.
+        if ($sendError === null) {
+            UsageMeter::track(
+                (int) $conversation->workspace_id,
+                MessageMetrics::forChannel($channel)
+            );
+        }
+
         $conversation->update(['last_message_at' => now()]);
 
         // SLA: set first_response_at on first outbound after inbound
@@ -341,6 +358,15 @@ class InboxController extends Controller
                 'error' => $sendError,
             ]);
             $message->update(['status' => 'failed', 'error_json' => ['message' => $sendError]]);
+        }
+
+        // Same missing half as reply(): this route also carries the `limit:`
+        // middleware and also never incremented the meter it is checked against.
+        if ($sendError === null) {
+            UsageMeter::track(
+                (int) $conversation->workspace_id,
+                MessageMetrics::forChannel($channel)
+            );
         }
 
         $conversation->update(['last_message_at' => now()]);

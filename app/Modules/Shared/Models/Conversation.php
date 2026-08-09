@@ -10,8 +10,21 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
+/**
+ * @property int $id
+ * @property string $uuid
+ * @property int $workspace_id
+ * @property int $contact_id
+ * @property int|null $channel_account_id
+ * @property string|null $channel
+ * @property string $status
+ * @property Carbon|null $last_inbound_at
+ * @property Carbon|null $last_message_at
+ * @property Carbon|null $first_response_at
+ */
 class Conversation extends Model
 {
     /**
