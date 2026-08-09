@@ -1899,8 +1899,8 @@ load-bearing for diagnosis and currently silent. That is its own pass.
 ## BUG-027 — editing a plan in the admin UI silently discards 14 of its 16 limit keys
 
 **Severity: HIGH — live, data-destroying, and it grants access rather than removing it.
-Found 2026-08-09 while sweeping every `plans.limits` write path. NOT fixed — needs its own
-`fix/` branch off master.**
+Found 2026-08-09 while sweeping every `plans.limits` write path. FIXED the same day on
+`fix/plan-limit-key-divergence`.**
 
 `Admin\PlanController::defaultLimits()` returns **two** keys:
 
@@ -1952,10 +1952,19 @@ implemented in two places, where fixing one closes nothing:
 **Zero tests** touch the plan update path — `grep -rln 'PlanController|admin.plans' tests/`
 returns nothing.
 
-### Proposed fix, one commit
+### The fix
 
-1. One source of truth for the key set, shared by the validator and the form, so the two
-   cannot drift again.
-2. A test submitting all 16 and asserting all 16 survive — with the positive control that a
-   plan edited *without* touching limits keeps the ones it had.
-3. Correct BUG-024's counts at the same time (done above).
+`defaultLimits()` now derives from `PlanLimitKinds::MAP` — the single declaration of which
+limit keys exist, which already backs the entitlement resolver and which slice 4 needs for
+gauge enforcement. Adding fourteen more literals would have left two lists to drift apart
+again, which is the whole disease.
+
+The front end keeps its own list for labels and ordering; a guard test parses `LIMIT_KEYS` out
+of `PlanLimits.jsx` and asserts set equality **in both directions**, so a future divergence
+fails the build rather than silently discarding a customer's limits.
+
+Six tests where there were zero, including two positive controls: validation must still REJECT
+a non-integer limit (otherwise "all 16 survive" is equally satisfied by validating nothing),
+and `null` must still be accepted, because `null` means unlimited deliberately.
+
+Stash-checked: restoring the two-key `defaultLimits()` fails 4 of the 6.
