@@ -6,6 +6,7 @@ use App\Models\Plan;
 use App\Models\Workspace;
 use App\Modules\Broadcasting\Models\UsageMeter;
 use App\Modules\Entitlements\Support\Entitlements;
+use App\Modules\Entitlements\Support\QuotaGuard;
 use App\Support\WorkspaceContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -96,7 +97,11 @@ class EnforceLimit
             return $next($request);
         }
 
-        $usage = UsageMeter::current($workspaceId, $meterKey);
+        // The comparison lives in QuotaGuard so the campaign job asks the same
+        // question the same way. Two places computing "is this workspace at its
+        // limit" is how the WhatsApp metric split survived: the inbox path
+        // checked a meter the campaign path was not feeding.
+        $usage = app(QuotaGuard::class)->usage($workspaceId, $meterKey);
 
         if ($usage >= $limit) {
             return $this->refuse($request, $limitKey, $limit, $usage);
