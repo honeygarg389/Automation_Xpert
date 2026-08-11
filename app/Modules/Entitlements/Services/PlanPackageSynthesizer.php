@@ -57,7 +57,29 @@ class PlanPackageSynthesizer
             rank: 0,
             quantity: 1,
             grants: $this->normaliseLimits($plan),
+            flags: $this->legacyFlags($plan),
         );
+    }
+
+    /**
+     * ⚠️ `plans.white_label_enabled` bridged in as a FEATURE grant.
+     *
+     * The column is the legacy source, exactly as `plans.limits` is: synthesized
+     * into the package so the resolver is the single authority and the partner
+     * ceiling can intersect it. A boolean column on `plans` has no partner
+     * dimension, so rule 6 was unenforceable for it — a partner who may not
+     * white-label could not cap a customer whose plan flag was true.
+     *
+     * The column is NOT removed. It is the seed, and it stays until a test
+     * proves nothing reads it — the same discipline plans.limits is under. It is
+     * annotated as DERIVED at the model and in the admin form so it cannot go on
+     * looking authoritative, which is the trap this codebase keeps producing.
+     *
+     * @return array<string, bool>
+     */
+    private function legacyFlags(Plan $plan): array
+    {
+        return $plan->white_label_enabled ? ['white_label' => true] : [];
     }
 
     /**

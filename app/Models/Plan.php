@@ -21,6 +21,20 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *                                               branch look like dead code to PHPStan, which is the annotation lying, not the
  *                                               defence being unnecessary.
  * @property array<string, mixed>|null $limits
+ *                                             ⚠️ @property bool $white_label_enabled — DERIVED, NOT AUTHORITATIVE.
+ *
+ * This column no longer decides anything. It is the legacy SEED for the
+ * `white_label` feature grant: PlanPackageSynthesizer bridges it into the
+ * synthesized package, and the entitlement resolver is the authority. Ask
+ * `Entitlements`/`Entitlement::allows('white_label')`, never this column.
+ *
+ * It is kept rather than dropped because it is still the source the bridge reads
+ * — the same position plans.limits is in — and it will be removed only once a
+ * test proves nothing reads it. Its only former reader, Plan::hasFeature(), was
+ * deleted in slice 3 (zero callers, returned false for everything else).
+ *
+ * A live column that no longer decides anything is the trap this codebase keeps
+ * finding, so it is labelled here rather than left to look authoritative.
  * @property bool $white_label_enabled
  * @property bool $enabled
  */

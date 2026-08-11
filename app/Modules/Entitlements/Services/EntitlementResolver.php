@@ -3,10 +3,12 @@
 namespace App\Modules\Entitlements\Services;
 
 use App\Models\Client;
+use App\Models\Partner;
 use App\Models\Workspace;
 use App\Modules\Entitlements\Models\AddOn;
 use App\Modules\Entitlements\Support\Entitlement;
 use App\Modules\Entitlements\Support\GrantBundle;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Phase 1, slice 2 — THE CANARY.
@@ -57,6 +59,7 @@ class EntitlementResolver
 
     public function __construct(
         private readonly PlanPackageSynthesizer $synthesizer = new PlanPackageSynthesizer,
+        private readonly CatalogBundleBuilder $catalog = new CatalogBundleBuilder,
     ) {}
 
     public function for(int $workspaceId): Entitlement
@@ -81,7 +84,113 @@ class EntitlementResolver
      */
     public function forClient(?Client $client): Entitlement
     {
-        return $this->fold($this->bundlesFor($client));
+        $customer = $this->fold($this->bundlesFor($client));
+
+        return $this->applyCeiling($customer, $client?->partner);
+    }
+
+    /**
+     * ⚠️ THE PARTNER CEILING. Rule 6: a reseller cannot sell what it does not
+     * hold, so the customer's entitlement is intersected with its partner's.
+     *
+     * Applied AFTER the fold, never inside it. The fold answers "what did this
+     * customer buy"; the ceiling answers "what is their reseller permitted to
+     * sell". Folding them together would make a partner grant a bundle — and a
+     * bundle can be SUMMED with the customer's plan, which is the exact opposite
+     * of capping. The dominant/additive split already guards that door; this
+     * would have opened a side one.
+     *
+     * ─── The three states, and only one of them intersects ──────────────────
+     *
+     *   no partner (direct customer)  -> returns the SAME instance, untouched
+     *   partner, unrestricted mode    -> returns the SAME instance, untouched
+     *   partner, ceiling mode         -> intersected
+     *
+     * Returning the identical object for the first two is deliberate: a test can
+     * assert `assertSame`, which a ceiling that merely happens to be a no-op
+     * cannot satisfy. With no partner grants an intersection looks exactly like
+     * skipping one, and that is the vacuity trap here.
+     */
+    public function applyCeiling(Entitlement $customer, ?Partner $partner): Entitlement
+    {
+        if ($partner === null || ! $partner->hasCeiling()) {
+            return $customer;
+        }
+
+        $bundles = $this->catalog->forPartner($partner);
+
+        // ⚠️ THE READ-TIME INVARIANT.
+        //
+        // `Partner::assertCeilingIsConfigured()` refuses to SAVE a partner into
+        // ceiling mode without grants. It cannot hold the invariant on its own,
+        // and not merely because someone might delete the grants afterwards
+        // without touching the partner row — a grant LAPSES BY DATE. `ends_at`
+        // passing is not a write to anything, so no model hook anywhere can
+        // observe it. Read time is the only place both sides are visible.
+        //
+        // The answer here must never be "unlimited". A ceiling that grants
+        // nothing IS the correct reading of an empty ceiling in ceiling mode, it
+        // fails CLOSED, and it is bounded: only entitlement-gated actions refuse,
+        // rather than every page 500ing as an exception would cause. Logged
+        // loudly because it is a misconfiguration, not a normal state.
+        if ($bundles === []) {
+            Log::channel('entitlements')->warning(
+                'entitlements.ceiling_empty: partner is in ceiling mode with no grants in force',
+                [
+                    'partner_id' => $partner->id,
+                    'partner_slug' => $partner->slug,
+                    'effect' => 'customers of this partner are entitled to nothing until a grant is in force',
+                ]
+            );
+
+            return new Entitlement;
+        }
+
+        return $this->intersect($customer, $this->fold($bundles));
+    }
+
+    /**
+     * Per key: min() for numbers, AND for booleans.
+     *
+     * ⚠️ NOT php's `min()`. `min(null, 5)` returns null, and null reads as
+     * UNLIMITED — so the built-in would turn a 5-message ceiling into no ceiling
+     * at all. Every comparison here is explicit for that reason.
+     *
+     * Key semantics, per the ruling:
+     *
+     *   ceiling value null  -> the partner explicitly holds this unlimited, so
+     *                          it does not cap: the customer keeps their value
+     *   ceiling key absent  -> the partner does not hold this at all, so they
+     *                          cannot resell it: the customer gets nothing
+     */
+    private function intersect(Entitlement $customer, Entitlement $ceiling): Entitlement
+    {
+        $ceilingLimits = $ceiling->limits();
+        $out = [];
+
+        foreach ($customer->limits() as $key => $customerValue) {
+            if (! array_key_exists($key, $ceilingLimits)) {
+                // Absent from the ceiling: not resellable. Dropped entirely
+                // rather than set to 0, so has() reports it as ungranted — which
+                // is what it is.
+                continue;
+            }
+
+            $ceilingValue = $ceilingLimits[$key];
+
+            $out[$key] = match (true) {
+                $ceilingValue === null => $customerValue,   // partner unlimited: no cap
+                $customerValue === null => $ceilingValue,   // customer unlimited: capped by partner
+                default => min($customerValue, $ceilingValue),
+            };
+        }
+
+        $flags = [];
+        foreach ($customer->flags() as $key => $on) {
+            $flags[$key] = $on && $ceiling->allows($key);   // AND
+        }
+
+        return new Entitlement($out, $flags);
     }
 
     private function resolve(int $workspaceId): Entitlement
@@ -152,6 +261,15 @@ class EntitlementResolver
         if ($packages !== []) {
             usort($packages, fn (GrantBundle $a, GrantBundle $b) => $b->rank <=> $a->rank);
             $limits = $packages[0]->grants;
+
+            // A package may carry boolean features too — today only the legacy
+            // white_label column, bridged in by PlanPackageSynthesizer. Dominant
+            // like the rest of the package: the winner's flags, not a merge.
+            foreach ($packages[0]->flags as $key => $on) {
+                if ($on) {
+                    $flags[$key] = true;
+                }
+            }
         }
 
         // ── 2. ADDITIVE: packs stack onto whatever the package established ───
