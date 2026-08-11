@@ -183,6 +183,21 @@ class Partner extends Model
      * `false` is not "no ceiling was configured" — it is "somebody decided this
      * partner is unrestricted". That distinction is the whole point of R-1.
      */
+    /**
+     * Whether any grant is in force right now.
+     *
+     * ⚠️ Status AND dates. A grant with `ends_at` in the past is not a ceiling,
+     * and nothing wrote a row when it lapsed — which is why the resolver checks
+     * this at read time rather than trusting the save-time rule.
+     */
+    public function hasGrantsInForce(): bool
+    {
+        return $this->entitlementGrants()
+            ->where('status', EntitlementGrant::STATUS_ACTIVE)
+            ->get()
+            ->contains(fn (EntitlementGrant $g) => $g->isInForce());
+    }
+
     public function hasCeiling(): bool
     {
         return $this->entitlement_mode === self::MODE_CEILING;

@@ -17,11 +17,13 @@ final class GrantBundle
      * @param  int  $rank  dominance order; meaningful only for `package`
      * @param  int  $quantity  multiplier; meaningful only for `pack`
      * @param  array<string, int|null>  $grants  key => value; null = unlimited
+     * @param  array<string, bool>  $flags  boolean features carried by a package
      */
     public function __construct(
         public readonly string $type,
         public readonly int $rank = 0,
         public readonly int $quantity = 1,
         public readonly array $grants = [],
+        public readonly array $flags = [],
     ) {}
 }

@@ -40,6 +40,12 @@ export default function AdminPlansEdit({ plan, currencies = [] }) {
                             <Input type="number" label={t('admin.websites_limit')} value={data.websites_limit ?? ''} onChange={(e) => setData('websites_limit', e.target.value ? parseInt(e.target.value, 10) : null)} />
                             <label className="flex items-center gap-2 text-neutral-900 dark:text-neutral-100"><input type="checkbox" checked={data.export_enabled ?? false} onChange={(e) => setData('export_enabled', e.target.checked)} className="rounded border-neutral-300 dark:border-neutral-600 text-brand-500" /><span className="text-sm">{t('admin.export_enabled')}</span></label>
                             <label className="flex items-center gap-2 text-neutral-900 dark:text-neutral-100"><input type="checkbox" checked={data.custom_domain_enabled ?? false} onChange={(e) => setData('custom_domain_enabled', e.target.checked)} className="rounded border-neutral-300 dark:border-neutral-600 text-brand-500" /><span className="text-sm">{t('admin.custom_domain_enabled')}</span></label>
+                            {/* ⚠️ DERIVED, NOT AUTHORITATIVE. This flag is the legacy SEED for the
+                                `white_label` entitlement grant — PlanPackageSynthesizer bridges it
+                                into the plan's synthesized package, and the entitlement resolver
+                                decides. Editing it changes what the grant is seeded from; nothing
+                                in the application reads this column to answer "may they
+                                white-label". Kept only until a test proves nothing reads it. */}
                             <label className="flex items-center gap-2 text-neutral-900 dark:text-neutral-100"><input type="checkbox" checked={data.white_label_enabled ?? false} onChange={(e) => setData('white_label_enabled', e.target.checked)} className="rounded border-neutral-300 dark:border-neutral-600 text-brand-500" /><span className="text-sm">{t('admin.white_label_enabled')}</span></label>
                             <Button type="submit" variant="primary" disabled={processing}>{t('common.save')}</Button>
                         </Card.Body>
