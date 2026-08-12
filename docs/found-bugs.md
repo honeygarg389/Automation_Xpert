@@ -2132,3 +2132,100 @@ interface change: distinguish the two states visibly (an explicit "Unlimited" to
 number, or a confirmation when `0` is entered), and say in the label what `0` does. That is a UI
 decision with a copy decision attached, not a billing fix, and it belongs with whoever owns the
 admin surface.
+
+---
+
+## BUG-031 — assigning a plan leaves the customer's gateway subscription charging
+
+**Severity: HIGH — live, and it bills real money. Recorded 2026-08-12. NOT fixed: the right
+behaviour is a business decision, not a code choice.**
+
+`Admin\ClientController::assignPlan()` cancels the customer's existing **`client_subscriptions`**
+rows and creates a new one. It never touches **`subscriptions`** — the gateway-billed table with
+15 live writers — and never calls `BillingGatewayInterface::cancel()`, which exists for exactly
+this purpose.
+
+So a customer paying through Stripe who is then assigned a plan by an administrator ends up
+with:
+
+| Row | State | Consequence |
+|---|---|---|
+| `subscriptions` (gateway) | still **active** | Stripe keeps charging for the old plan |
+| `client_subscriptions` (assigned) | **active** | this is the plan they actually get |
+
+`Client::effectivePlan()` prefers the admin assignment, so the customer receives the assigned
+plan's entitlements while being billed for the previous one. Two active subscriptions, two
+plans, one of them invisible to everyone except the payment processor.
+
+### Why it is not fixed here
+
+"Assign a plan to a customer who is already paying" has at least three defensible answers, and
+they differ in who loses money:
+
+1. **Cancel the gateway subscription.** Clean, and it silently stops revenue an administrator
+   may not have intended to stop — an upgrade would become a cancellation.
+2. **Refuse the assignment** while a gateway subscription is active, and require it to be
+   cancelled first. Safest, most annoying, and the most likely to be worked around.
+3. **Allow both and surface it** — assign, but warn loudly and show the double-billing in the
+   admin UI until someone resolves it.
+
+Whichever is chosen also needs a decision about **refunding the overlap**. That is a commercial
+call with a support-policy attached, so it gets its own branch and its own conversation rather
+than a fix appended to a technical slice.
+
+### What to check when fixing it
+
+`Client::effectivePlan()` already encodes the precedence, so the entitlement side is correct
+whatever is decided. The exposure is purely billing.
+
+---
+
+## BUG-032 — a refund leaves the subscription active
+
+**Severity: Medium — live. Recorded 2026-08-12. NOT fixed. ⚠️ This is a PREREQUISITE for
+Phase 1 slice 6 (add-on purchasing), not a scheduling preference.**
+
+Measured across all thirteen gateways: `refund()` contains **zero** references to `Subscription`.
+
+```
+CashfreeGateway   0     MyFatoorahGateway 0     RazorpayGateway  0     TapGateway    0
+MercadoPagoGateway 0    PaddleGateway     0     SquareGateway    0     XenditGateway 0
+MollieGateway     0     PayPalGateway     0     StripeGateway    0
+PaymobGateway     0     PaystackGateway   0
+```
+
+A refund moves money and changes nothing about what the customer may do. Today the blast radius
+is bounded: the customer keeps a subscription they have been refunded for, which is a revenue
+leak rather than a correctness failure.
+
+### ⚠️ Why this BLOCKS slice 6
+
+Add-on purchasing writes an `entitlement_grant` when a payment succeeds. If refunds revoke
+nothing, then **a refunded add-on keeps working forever** — and unlike a refunded subscription,
+which at least expires at the end of its period, a granted entitlement with no `ends_at` never
+does. Building purchasing on top of this inherits the gap and makes it permanent.
+
+The fix is small once decided — slice 5's `isInForce()` already reads `status` and dates, so
+setting `status = cancelled, ends_at = now()` makes the entitlement drop at the next resolve
+with no resolver change. What is missing is the decision about **whether a refund revokes at
+all** (a goodwill refund might not), and **whether the customer is told**. A silent revocation
+after a bank-initiated chargeback looks like a bug to the customer.
+
+### ⚠️ Correction to a related claim
+
+Webhook idempotency is **not** missing and does **not** block slice 6. Measured: all thirteen
+gateways call `WebhookIdempotencyService`, which does `insertOrIgnore` into
+`inbound_webhook_events` against a genuine `UNIQUE(provider, event_id)`:
+
+```
+inbound_webhook_events_provider_event_id_unique   provider   unique=YES
+inbound_webhook_events_provider_event_id_unique   event_id   unique=YES
+```
+
+Nor does any gateway stub `handleWebhook` — all thirteen implement it in 31–52 lines. Stripe
+additionally releases the idempotency lock on handler failure so a retry can reprocess, which
+is the correct behaviour and worth checking the other twelve against.
+
+One genuine trap nearby: `billing_events` carries a **non-unique** composite index on
+`(gateway, event_id)`. It is not the dedup mechanism — `inbound_webhook_events` is — but the
+name invites the assumption that it is.
