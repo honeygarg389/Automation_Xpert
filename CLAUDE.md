@@ -296,6 +296,13 @@ Rules:
 5. Partner billing — platform→partner subscriptions and usage slabs
 6. E-commerce pack, Google Business Profile, n8n/Make connectors, Calendly
 
+**Phase 1 slice 6 (add-on purchasing) is BLOCKED, not merely deferred.** It writes an
+`entitlement_grant` on payment success, and `refund()` in all thirteen gateways revokes
+nothing (BUG-032) — so a refunded add-on would work forever, where a refunded subscription at
+least expires with its period. The prerequisite is a decision about what a refund does to an
+entitlement, not more gateway code. Webhook idempotency is NOT a blocker: all thirteen gateways
+already dedup through `WebhookIdempotencyService` against a real unique constraint.
+
 ### Named items that must not be lost when a phase closes
 
 - **BUG-003 triage pass — immediately after Phase 0.** The heavy unguarded-nullable-key files
