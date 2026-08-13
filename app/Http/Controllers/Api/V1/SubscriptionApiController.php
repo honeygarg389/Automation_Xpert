@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\ClientSubscription;
 use App\Models\Subscription;
+use App\Modules\Entitlements\Support\Entitlements;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -41,14 +42,20 @@ class SubscriptionApiController extends Controller
     public function usage(Request $request): JsonResponse
     {
         $user = $request->user();
+        $entitlements = app(Entitlements::class);
         $plan = $user->effectiveSubscription()?->plan;
 
         return response()->json([
             'data' => [
                 'plan_name' => $plan?->name,
+                // Entitlement question: what may the CALLER do. Same plan source
+                // as the resolver, so the values are unchanged — and storage_gb
+                // stays null either way, because no plan carries that key
+                // (BUG-025). Preserved rather than quietly repointed at
+                // `storage`, which would change every customer's reported quota.
                 'limits' => $plan ? [
-                    'users' => $plan->limitValue('users'),
-                    'storage_gb' => $plan->limitValue('storage_gb'),
+                    'users' => $entitlements->limitForClient($user->client, 'users'),
+                    'storage_gb' => $entitlements->limitForClient($user->client, 'storage_gb'),
                 ] : null,
             ],
         ]);

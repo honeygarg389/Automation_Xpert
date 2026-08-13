@@ -9,6 +9,7 @@ use App\Models\SystemSetting;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Modules\Broadcasting\Models\UsageMeter;
+use App\Modules\Entitlements\Support\Entitlements;
 use App\Modules\Integrations\Services\CredentialResolver;
 use App\Services\I18n\I18nFileService;
 use App\Services\OnboardingService;
@@ -174,7 +175,22 @@ class HandleInertiaRequests extends Middleware
             return [];
         }
 
-        $limits = $plan?->limits ?? [];
+        // ⚠️ THE ENTITLEMENT, not the plan row. This is a per-customer question.
+        //
+        // The legacy expression read `$plan->limits` where $plan came from
+        // `activePlan()` — client_subscriptions only. For a self-serve customer
+        // that returns null, so the usage panel rendered NOTHING: no bars, no
+        // limits, no indication a limit existed. That is BUG-023's presentation
+        // half, left behind when the enforcement half was fixed, and routing
+        // this through the facade closes it.
+        //
+        // It also picks up client-held grants and the partner ceiling for free,
+        // because the resolver already folds both.
+        $limits = Entitlements::isEnabled()
+            ? app(Entitlements::class)
+                ->forWorkspace($workspaceId)->limits()
+            : ($plan?->limits ?? []);
+
         if (empty($limits)) {
             return [];
         }
@@ -188,6 +204,15 @@ class HandleInertiaRequests extends Middleware
 
         $usage = [];
         foreach ($limits as $limitKey => $limit) {
+            // ⚠️ Unlimited keys are SKIPPED from the usage panel, deliberately
+            // and unchanged. A progress bar needs a denominator, and "unlimited"
+            // has none — rendering one would require inventing a scale.
+            //
+            // This is a DISPLAY choice, not an entitlement one: the facade
+            // reports the key as granted-and-unlimited, and this panel chooses
+            // not to draw it. EnforceLimit's null-is-unlimited and this skip now
+            // agree on the underlying fact and differ only in presentation,
+            // which is the divergence slice 0 found.
             if ($limit === null) {
                 continue;
             }

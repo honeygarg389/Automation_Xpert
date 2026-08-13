@@ -7,6 +7,7 @@ use App\Models\ClientSubscription;
 use App\Models\Subscription;
 use App\Modules\Automation\Models\Automation;
 use App\Modules\Broadcasting\Models\Campaign;
+use App\Modules\Entitlements\Support\Entitlements;
 use App\Modules\Shared\Models\Contact;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
@@ -55,7 +56,14 @@ class DashboardController extends Controller
         }
 
         $teamMembersCount = $user->client ? $user->client->users()->count() : 1;
-        $teamMembersLimit = $effective?->plan?->limits['users'] ?? null;
+        // Entitlement question: how many seats may THIS client use. Same plan
+        // source as the resolver (effectiveSubscription), so this value does not
+        // change — but it now also reflects any seat pack the client holds and
+        // any partner ceiling above them, which the raw plan row cannot express.
+        $teamMembersLimit = Entitlements::isEnabled()
+            ? app(Entitlements::class)
+                ->limitForClient($user->client, 'users')
+            : ($effective?->plan?->limits['users'] ?? null);
 
         $workspacesCount = $user->accessibleWorkspaces()->count();
 

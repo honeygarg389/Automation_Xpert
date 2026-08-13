@@ -46,6 +46,18 @@ class PricingController extends Controller
                     'monthly_price_cents' => $monthlyCents,
                     'yearly_price_cents' => $yearlyCents,
                     'features' => is_array($plan->features) ? $plan->features : [],
+                    // ⚠️ CATALOG, NOT ENTITLEMENT — do not route this through the facade.
+                    //
+                    // This renders what a PRODUCT contains, for a visitor who may not be
+                    // authenticated and who is not yet a customer of anything. The
+                    // entitlement facade resolves *for a client*: it folds that client's
+                    // grants and intersects their partner's ceiling. There is no client
+                    // here, so asking it would either return nothing or, worse, silently
+                    // answer for whoever happens to be logged in — showing one customer's
+                    // negotiated limits on a public pricing page.
+                    //
+                    // `plans.limits` is the correct source for a catalog question, and it
+                    // stays the source until the catalog itself moves into add_on_grants.
                     'limits' => is_array($plan->limits) ? $plan->limits : [],
                     'white_label_enabled' => (bool) $plan->white_label_enabled,
                     'popular' => (bool) $plan->popular,

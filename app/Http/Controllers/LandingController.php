@@ -28,14 +28,26 @@ class LandingController extends Controller
                 ->orderBy('sort_order')
                 ->get()
                 ->map(fn ($p) => [
-                    'id'            => $p->id,
-                    'name'          => $p->name,
-                    'description'   => $p->description ?? '',
+                    'id' => $p->id,
+                    'name' => $p->name,
+                    'description' => $p->description ?? '',
                     'price_monthly' => round(($p->monthly_price_cents ?? 0) / 100, 2),
-                    'price_yearly'  => round(($p->yearly_price_cents ?? 0) / 100, 2),
-                    'features'      => is_array($p->features) ? $p->features : [],
-                    'is_featured'   => (bool) ($p->featured ?? $p->popular ?? false),
-                    'trial_days'    => $p->trial_days ?? 0,
+                    'price_yearly' => round(($p->yearly_price_cents ?? 0) / 100, 2),
+                    // ⚠️ CATALOG, NOT ENTITLEMENT — do not route this through the facade.
+                    //
+                    // This renders what a PRODUCT contains, for a visitor who may not be
+                    // authenticated and who is not yet a customer of anything. The
+                    // entitlement facade resolves *for a client*: it folds that client's
+                    // grants and intersects their partner's ceiling. There is no client
+                    // here, so asking it would either return nothing or, worse, silently
+                    // answer for whoever happens to be logged in — showing one customer's
+                    // negotiated limits on a public pricing page.
+                    //
+                    // `plans.limits` is the correct source for a catalog question, and it
+                    // stays the source until the catalog itself moves into add_on_grants.
+                    'features' => is_array($p->features) ? $p->features : [],
+                    'is_featured' => (bool) ($p->featured ?? $p->popular ?? false),
+                    'trial_days' => $p->trial_days ?? 0,
                 ])
                 ->values()
                 ->all();
@@ -51,10 +63,10 @@ class LandingController extends Controller
         }
 
         return Inertia::render('Welcome', [
-            'canLogin'    => Route::has('login'),
+            'canLogin' => Route::has('login'),
             'canRegister' => Route::has('register'),
-            'landing'     => LandingPageController::getPublicSettings(),
-            'plans'       => $this->plans(),
+            'landing' => LandingPageController::getPublicSettings(),
+            'plans' => $this->plans(),
         ]);
     }
 
@@ -66,8 +78,8 @@ class LandingController extends Controller
 
         return Inertia::render('marketing/Pricing', [
             'canRegister' => Route::has('register'),
-            'landing'     => LandingPageController::getPublicSettings(),
-            'plans'       => $this->plans(),
+            'landing' => LandingPageController::getPublicSettings(),
+            'plans' => $this->plans(),
         ]);
     }
 
@@ -79,7 +91,7 @@ class LandingController extends Controller
 
         return Inertia::render('marketing/Faq', [
             'canRegister' => Route::has('register'),
-            'landing'     => LandingPageController::getPublicSettings(),
+            'landing' => LandingPageController::getPublicSettings(),
         ]);
     }
 
@@ -91,7 +103,7 @@ class LandingController extends Controller
 
         return Inertia::render('marketing/UseCases', [
             'canRegister' => Route::has('register'),
-            'landing'     => LandingPageController::getPublicSettings(),
+            'landing' => LandingPageController::getPublicSettings(),
         ]);
     }
 
@@ -103,7 +115,7 @@ class LandingController extends Controller
 
         return Inertia::render('marketing/About', [
             'canRegister' => Route::has('register'),
-            'landing'     => LandingPageController::getPublicSettings(),
+            'landing' => LandingPageController::getPublicSettings(),
         ]);
     }
 
@@ -115,7 +127,7 @@ class LandingController extends Controller
 
         return Inertia::render('marketing/Integrations', [
             'canRegister' => Route::has('register'),
-            'landing'     => LandingPageController::getPublicSettings(),
+            'landing' => LandingPageController::getPublicSettings(),
         ]);
     }
 }
