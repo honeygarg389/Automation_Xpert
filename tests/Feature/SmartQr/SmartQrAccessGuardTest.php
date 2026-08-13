@@ -38,16 +38,40 @@ class SmartQrAccessGuardTest extends TestCase
         'app/Modules/SmartQr/Http/Controllers/Admin/',
     ];
 
-    #[Test]
-    public function no_code_queries_smart_qr_codes_outside_the_access_service(): void
+    /**
+     * ⚠️ ONE grep, shared by the assertion AND its control.
+     *
+     * The first version gave each test its own `shell_exec`. Blinding the main
+     * assertion then left it GREEN while the control passed from its own copy —
+     * so the control protected nothing. Measured, not reasoned: the stash-check
+     * that blinded the grep did not fail.
+     *
+     * Sharing it means a broken grep fails the control too, which is the only
+     * way a control can guard the assertion beside it.
+     *
+     * @return list<string>
+     */
+    private function rawQueryLines(): array
     {
         $hits = shell_exec(
             'grep -rn "SmartQrCode::" '.escapeshellarg(base_path('app')).' --include=*.php || true'
         );
 
+        return array_values(array_filter(explode("\n", (string) $hits)));
+    }
+
+    #[Test]
+    public function no_code_queries_smart_qr_codes_outside_the_access_service(): void
+    {
+        $lines = $this->rawQueryLines();
+
+        $this->assertNotEmpty($lines,
+            'The grep found no SmartQrCode:: query anywhere — not even the permitted ones. It '
+            .'is broken, so the assertion below would pass against any violation.');
+
         $offending = [];
 
-        foreach (array_filter(explode("\n", (string) $hits)) as $line) {
+        foreach ($lines as $line) {
             $path = str_replace(base_path().'/', '', explode(':', $line)[0]);
 
             foreach (self::ALLOWED as $allowed) {
@@ -75,16 +99,20 @@ class SmartQrAccessGuardTest extends TestCase
         ]));
     }
 
-    /** POSITIVE CONTROL: the guard can actually find something. */
+    /** POSITIVE CONTROL, using the SAME grep the assertion uses. */
     #[Test]
     public function the_guard_finds_the_permitted_queries(): void
     {
-        $hits = shell_exec(
-            'grep -rln "SmartQrCode::" '.escapeshellarg(base_path('app')).' --include=*.php || true'
-        );
+        $lines = $this->rawQueryLines();
 
-        $this->assertNotEmpty(trim((string) $hits),
+        $this->assertNotEmpty($lines,
             'The guard found no SmartQrCode:: query anywhere — including the ones that are '
             .'supposed to exist. Its grep is broken, so it would pass against any violation.');
+
+        $this->assertTrue(
+            (bool) array_filter($lines, fn ($l) => str_contains($l, 'SmartQrAccess.php')),
+            'SmartQrAccess itself no longer queries SmartQrCode. Either the service was gutted '
+            .'or the grep no longer matches the shape it looks for.'
+        );
     }
 }
