@@ -3,6 +3,7 @@
 namespace App\Modules\Entitlements\Support;
 
 use App\Models\Client;
+use App\Modules\Entitlements\Services\EntitlementCache;
 use App\Modules\Entitlements\Services\EntitlementResolver;
 
 /**
@@ -31,9 +32,13 @@ class Entitlements
         return (bool) config('entitlements.enabled', true);
     }
 
+    /**
+     * ⚠️ Goes through the cache, which is read-through: a miss computes and
+     * returns the real answer, never an empty one.
+     */
     public function forWorkspace(int $workspaceId): Entitlement
     {
-        return $this->resolver->for($workspaceId);
+        return app(EntitlementCache::class)->forWorkspace($workspaceId);
     }
 
     public function forClient(?Client $client): Entitlement

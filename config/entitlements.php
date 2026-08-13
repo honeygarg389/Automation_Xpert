@@ -79,4 +79,34 @@ return [
 
     'enabled' => env('ENTITLEMENTS_ENABLED', true),
 
+    /*
+    |--------------------------------------------------------------------------
+    | The materialized read model — ITS OWN BRAKE
+    |--------------------------------------------------------------------------
+    |
+    | Deliberately separate from `enabled`, because the two answer different
+    | questions. ENTITLEMENTS_ENABLED=false abandons the resolver entirely and
+    | reverts to reading plans.limits; this flag keeps the resolver and skips the
+    | table.
+    |
+    | Riding the existing flag would mean a cache-staleness incident forces the
+    | whole entitlement layer off — discarding every correct answer along with
+    | the stale ones. Wrong blast radius.
+    |
+    | With this false, Entitlements behaves exactly as it did before slice 7,
+    | which the slice-2 canary already covers.
+    |
+    */
+
+    'cache_enabled' => env('ENTITLEMENTS_CACHE_ENABLED', true),
+
+    /*
+    | Fallback lifetime, in minutes, for rows with NO computed boundary — an
+    | entitlement with no expiring grant and no ending subscription. Those have
+    | no moment at which they become wrong, so a flat window is honest there and
+    | only there.
+    */
+
+    'cache_fallback_ttl_minutes' => (int) env('ENTITLEMENTS_CACHE_TTL_MINUTES', 60),
+
 ];

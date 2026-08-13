@@ -2,6 +2,7 @@
 
 namespace App\Modules\Entitlements\Services;
 
+use App\Models\Client;
 use App\Models\Partner;
 use App\Modules\Entitlements\Models\EntitlementGrant;
 use App\Modules\Entitlements\Support\GrantBundle;
@@ -28,8 +29,34 @@ class CatalogBundleBuilder
      */
     public function forPartner(Partner $partner): array
     {
+        return $this->bundlesFor('partner_id', $partner->id);
+    }
+
+    /**
+     * Every grant a CLIENT holds in force.
+     *
+     * ⚠️ Added when the slice-7 cache tests found that customer-held grants were
+     * written by nobody and read by nobody. Slice 1 created the table, slice 5
+     * read only the PARTNER side for the ceiling, and the client side was never
+     * folded into the customer's own entitlement — so a purchased or
+     * admin-granted add-on would have conferred nothing.
+     *
+     * The tests caught it because they granted a pack and got the plan's number
+     * back. Nothing else would have: no code path writes a client grant yet, so
+     * the gap was invisible until something read one.
+     *
+     * @return list<GrantBundle>
+     */
+    public function forClient(Client $client): array
+    {
+        return $this->bundlesFor('client_id', $client->id);
+    }
+
+    /** @return list<GrantBundle> */
+    private function bundlesFor(string $column, int $id): array
+    {
         $grants = EntitlementGrant::query()
-            ->where('partner_id', $partner->id)
+            ->where($column, $id)
             ->where('status', EntitlementGrant::STATUS_ACTIVE)
             ->with('addOn.grants')
             ->get()

@@ -220,9 +220,20 @@ class EntitlementResolver
             ? $client->effectivePlan()
             : $client->activePlan();
 
-        $bundle = $this->synthesizer->forPlan($plan);
+        $bundles = [];
 
-        return $bundle ? [$bundle] : [];
+        if ($bundle = $this->synthesizer->forPlan($plan)) {
+            $bundles[] = $bundle;
+        }
+
+        // ⚠️ What the client HOLDS, on top of what their plan grants. Packs are
+        // additive and a package can outrank the plan's synthesized one — the
+        // fold decides, not this method.
+        //
+        // Absent until slice 7's tests granted a pack and got the plan's number
+        // back: slice 1 created the table, slice 5 read only the partner side,
+        // and nothing ever folded the client side in.
+        return array_merge($bundles, $this->catalog->forClient($client));
     }
 
     /**
