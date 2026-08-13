@@ -291,10 +291,7 @@ Rules:
 
 1. Phase 0 — `BelongsToWorkspace` global scope + partner hierarchy + isolation test suite
 2. Phase 1 — Add-on catalog + partner-aware entitlement resolver + materialized read model
-3. Smart QR module (partner-aware, entitlement-gated from birth) — **exactly two destination
-   types, `whatsapp` and `url`.** Review collection is explicitly NOT one of them; it belongs to
-   the Automation engine. See `docs/review-collection-scope.md`, which is written for whoever
-   builds review collection rather than for Smart QR.
+3. Smart QR module (partner-aware, entitlement-gated from birth)
 4. White-label surface — partner dashboard, branding, custom domains, hostname middleware
 5. Partner billing — platform→partner subscriptions and usage slabs
 6. E-commerce pack, Google Business Profile, n8n/Make connectors, Calendly

@@ -150,6 +150,39 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
      *           shape of User's above: what the column actually means, and what
      *           scoping it would break, measured rather than predicted.
      *
+     * ─── ⚠️ THE THIRD BRANCH: "NOT YET" — LIFECYCLE-OWNED ROWS ──────────────
+     *
+     * Some rows are PLATFORM-OWNED AT BIRTH and TENANT-OWNED LATER. For those
+     * the honest answer to the question above is neither yes nor no, but
+     * **"not yet"** — and no static classification is right for the whole life
+     * of the row.
+     *
+     * The worked example is `App\Modules\SmartQr\Models\SmartQrCode`. A QR
+     * code is printed before anyone knows which customer will receive it, is
+     * assigned later, and can be REASSIGNED. Scoping it fails closed, so an
+     * unassigned code would be invisible to every tenant AND to the Super Admin
+     * inventory screen that exists to manage exactly those rows. A nullable
+     * column does not help: NULL satisfies no equality comparison.
+     *
+     * The resolution is NOT an entry in this list. It is:
+     *
+     *   1. the lifecycle-owned table carries NO `workspace_id` at all, so it
+     *      never enters this guard's inventory — which is why SmartQrCode is
+     *      absent below rather than listed;
+     *   2. tenancy lives on a SEPARATE table whose rows never change owner
+     *      (`smart_qr_assignments`), and THAT model carries the trait normally;
+     *   3. because the lifecycle-owned model has no scope to protect it, a
+     *      dedicated build guard (`SmartQrAccessGuardTest`) fails on any raw
+     *      query outside its access service and the admin namespace.
+     *
+     * Point 3 is the load-bearing one. Removing a scope leaves nothing behind,
+     * and the resulting cross-tenant read is SILENT — so the protection must be
+     * enforced by the build rather than remembered by the next author.
+     *
+     * If you meet this shape again: do not reach for a nullable tenant column,
+     * and do not put the row in this list. Split the ownership from the artefact
+     * and guard the artefact.
+     *
      * Two worked examples of the "NO" side, neither of which reaches this list
      * because neither table has the column: `Partner` and `Client` are
      * platform/reseller-level and sit ABOVE the tenant boundary entirely.
