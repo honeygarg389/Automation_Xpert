@@ -283,6 +283,24 @@ Rules:
      surviving into check N+1 is how a green result becomes meaningless.
   4. `git checkout` cannot restore an untracked file at all. There is no undo.
 
+  **The same rule applies to `git checkout <branch>`, and it cost a whole session's work
+  being committed to the wrong branch.** Opening a Smart QR session with:
+
+  ```
+  git checkout -q feature/smart-qr 2>/dev/null || git checkout -q -b feature/smart-qr master
+  → fatal: a branch named 'feature/smart-qr' already exists
+  ```
+
+  The branch existed at master's tip, the `||` fallback swallowed the failure, and **every
+  commit for the rest of the session went to the branch that happened to be checked out
+  already**. It surfaced only when a push of `feature/smart-qr` uploaded a branch with 0
+  commits and 0 files, hours later.
+
+  So: **verify the RESULT of a checkout, not that the command returned.** `git rev-parse
+  --abbrev-ref HEAD` after switching, before the first commit. And never `2>/dev/null` a
+  git command whose failure changes which branch you are on — suppressing the error is
+  what made a loud failure silent.
+
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
   asking.
