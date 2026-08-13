@@ -2229,3 +2229,94 @@ is the correct behaviour and worth checking the other twelve against.
 One genuine trap nearby: `billing_events` carries a **non-unique** composite index on
 `(gateway, event_id)`. It is not the dedup mechanism — `inbound_webhook_events` is — but the
 name invites the assumption that it is.
+
+---
+
+## BUG-033 — a recorded blocker that was never real
+
+**Severity: none — this is a CORRECTION, recorded because a deletion leaves no citation.
+Measured 2026-08-12, corrected 2026-08-13.**
+
+The roadmap carried, as a High pre-launch item: *"No gateway webhook is idempotent; 7 of 15
+stub `handleWebhook` entirely."* Phase 1 slice 6 was recorded as **blocked on it**.
+
+Measured against `master`:
+
+| Claim | Measured |
+|---|---|
+| 15 gateways | **13** implement `BillingGatewayInterface` |
+| 7 stub `handleWebhook` | **0** — all 13 implement it, 31–52 lines each |
+| nothing is idempotent | **all 13** call `WebhookIdempotencyService` |
+
+`WebhookIdempotencyService::isNewEvent()` does `insertOrIgnore` into `inbound_webhook_events`,
+backed by a genuine unique constraint:
+
+```
+inbound_webhook_events_provider_event_id_unique   provider   unique=YES
+inbound_webhook_events_provider_event_id_unique   event_id   unique=YES
+```
+
+### The likely source of the confusion
+
+`billing_events` carries a composite index on `(gateway, event_id)` that is **NOT unique**:
+
+```
+billing_events_gateway_event_id_index   gateway    unique=NO
+billing_events_gateway_event_id_index   event_id   unique=NO
+```
+
+Its name reads exactly like a dedup key and it is not one. Anyone checking idempotency who found
+that index first would reasonably conclude there was none — the actual mechanism lives in a
+differently-named table.
+
+### Consequence
+
+**Slice 6's only blocker is BUG-032 (refunds revoke nothing).** Webhook idempotency does not
+block it and should not sit High on a pre-launch list.
+
+A finding that says "this was checked and is fine" is kept deliberately: without it, the next
+person to look at `billing_events` reaches the same wrong conclusion, and nothing records that
+the question was already answered.
+
+---
+
+## BUG-034 — Paddle and PayPal never release the idempotency lock on failure
+
+**Severity: HIGH — live, and it loses money silently. Recorded 2026-08-13. NOT fixed: belongs
+with BUG-032 on a billing branch, not in Smart QR.**
+
+`WebhookIdempotencyService::isNewEvent()` claims an event id before the handler runs. If the
+handler then throws, the claim must be **released** so the gateway's automatic retry can
+reprocess — otherwise the transient failure is permanently deduplicated and the event is lost.
+
+`StripeGateway` does this, and says why:
+
+> *"Release the idempotency lock so Stripe's automatic retry can reprocess this event;
+> otherwise a transient failure would be permanently deduped and the renewal lost."*
+
+Measured `release()` calls across all thirteen gateways:
+
+| Gateway | release() |
+|---|---|
+| Cashfree, MercadoPago, MyFatoorah, Paymob, Paystack, Razorpay, Square, Stripe, Tap, Xendit | 1 |
+| Mollie | 2 |
+| **Paddle** | **0** |
+| **PayPal** | **0** |
+
+Eleven of thirteen handle it. Two do not.
+
+### Why it is High
+
+The lost event is a **renewal**. A subscription that fails to renew because a webhook handler hit
+a transient error — a timeout, a deadlock, a momentary DB blip — will never be retried
+successfully, because the retry is silently discarded as a duplicate. The customer keeps their
+access and stops being charged, or is charged and not credited, depending on which event was
+lost. Nothing surfaces: the gateway sees a 500, retries, gets a 200 from the dedup path, and
+considers the matter closed.
+
+### Not fixed here
+
+The fix is small — mirror Stripe's `catch` block — but it belongs on a billing branch alongside
+BUG-032, and it wants one decision first: whether the release should be unconditional or limited
+to specific exception types. Releasing on a *permanent* failure means retrying something that
+will fail identically every time, which is its own kind of noise.
