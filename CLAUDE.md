@@ -301,7 +301,11 @@ Rules:
 nothing (BUG-032) — so a refunded add-on would work forever, where a refunded subscription at
 least expires with its period. The prerequisite is a decision about what a refund does to an
 entitlement, not more gateway code. Webhook idempotency is NOT a blocker: all thirteen gateways
-already dedup through `WebhookIdempotencyService` against a real unique constraint.
+already dedup through `WebhookIdempotencyService` against a real unique constraint — the
+"7 of 15 stub handleWebhook, nothing is idempotent" claim was measured false and is recorded
+as BUG-033, together with the non-unique `billing_events` index that probably caused it.
+Separately, BUG-034: Paddle and PayPal never RELEASE that lock on handler failure, so a
+transient error permanently dedups the event and the renewal is lost.
 
 ### Named items that must not be lost when a phase closes
 
