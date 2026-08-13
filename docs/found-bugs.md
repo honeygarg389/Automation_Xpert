@@ -2284,6 +2284,11 @@ the question was already answered.
 
 **Severity: HIGH — live, and it loses money silently. Recorded 2026-08-13. NOT fixed.**
 
+⚠️ **This finding CLOSES BY DELETION.** Paddle and PayPal are the only two offenders, and
+both are on the billing-gateway removal list (`docs/billing-gateway-cleanup.md`). If that
+removal lands first no code fix is needed — the defect leaves with the gateways. Do not spend
+a branch fixing it before checking whether the removal is scheduled.
+
 ⚠️ **CLOSES BY DELETION.** Paddle and PayPal are the only two offenders of thirteen, and both are
 on the gateway removal list — so the planned billing cleanup closes this finding without a code
 fix. See `docs/billing-gateway-cleanup.md`. If that removal does not happen, this reverts to a

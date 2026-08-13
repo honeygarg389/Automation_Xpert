@@ -1,124 +1,97 @@
 # Billing gateway cleanup — findings
 
-**Status: RECORDED ONLY. Not started, not scheduled. Its own track, after Smart QR.**
+**⚠️ PROVENANCE.** These findings come from the owner's inspection, not from a measurement made
+in the session that wrote this file. The checkable claims were re-verified here and are marked
+✅; the rest are recorded as reported so nothing is lost. **Do not treat the unverified items as
+measured** — re-check before acting on them.
 
-⚠️ **Provenance.** These findings come from the owner's inspection, not from a sweep run here.
-Items marked **[verified]** were re-measured against `master` on 2026-08-13; items marked
-**[from inspection]** are recorded as given and have not been independently checked. The
-distinction matters because this document will outlive the conversation.
+**This is its own track. It is NOT started, and it is not part of Smart QR.**
 
 ---
 
 ## Scope
 
-**Eleven gateways to remove, not ten.** [from inspection]
+**Eleven gateways to remove, not ten.** ✅ Verified: 13 classes implement
+`BillingGatewayInterface`, and the two keepers are **Razorpay** and **Cashfree** — so eleven go.
 
-Thirteen implement `BillingGatewayInterface` **[verified]**: Cashfree, MercadoPago, Mollie,
-MyFatoorah, Paddle, PayPal, Paymob, Paystack, Razorpay, Square, Stripe, Tap, Xendit. Eleven go;
-the keepers are Razorpay and Cashfree.
-
-**Removal is code-only.** [verified] The working database holds:
+**Removal is code-only.** ✅ Verified against the working database:
 
 ```
-payment_gateway_configs  1     (one inert paddle row, no credentials)
-plans                    0
-subscriptions            0
-client_subscriptions     0
-payment_transactions     0
+plans = 0    subscriptions = 0    payment_transactions = 0    payment_gateway_configs = 1
 ```
 
-Nothing to migrate, nothing to back-fill, no customer affected. This is the cheapest this
-cleanup will ever be.
+The single `payment_gateway_configs` row is the inert paddle row. No credentials, no customer
+data, nothing to migrate.
 
 ---
 
-## The plan-form price-id fields
+## The plan-form field question — the proposed fix is the wrong one
 
-**Adding `razorpay_*_id` to the plan form is the wrong fix.** [from inspection]
+Adding `razorpay_*_id` columns to the plan form is **wrong**. Razorpay and Cashfree register
+plans **at checkout** and have no use for a stored gateway-side price id — the field would be
+collected, saved and never read.
 
-Razorpay and Cashfree register plans **at checkout** and have no use for a stored price id. The
-plan form's gateway fields exist for the Stripe/Paddle model, where a price object is created
-ahead of time and referenced.
+**The right fix is the opposite direction: remove the dead Stripe/Paddle fields once Paddle is
+gone.** `plans` currently carries `stripe_monthly_id`, `stripe_yearly_id`, `paddle_monthly_id`
+and `paddle_yearly_id`; with both gateways removed, all four are dead columns on a table the
+admin form writes.
 
-`plans` carries exactly four such columns **[verified]**:
+### ⚠️ `add_on_prices` inherited the same anti-pattern, deliberately, and is dead code today
 
-```
-stripe_monthly_id, stripe_yearly_id, paddle_monthly_id, paddle_yearly_id
-```
+Phase 1 slice 1 gave `add_on_prices` a `stripe_price_id` and a `paddle_price_id`, *"deliberately
+mirroring the columns `plans` already carries rather than inventing a second pricing
+vocabulary."* That was the right call at the time and it is the wrong shape now.
 
-No `razorpay_*` or `cashfree_*` columns exist — correctly. **The right fix is removing the dead
-Stripe/Paddle fields once Paddle is gone**, not adding four more for gateways that do not want
-them.
-
----
-
-## ⚠️ `add_on_prices` inherited the anti-pattern, deliberately, and is dead code today
-
-`add_on_prices` (Phase 1 slice 1) carries `stripe_price_id` and `paddle_price_id` because it was
-built to mirror the columns `plans` already had — a deliberate choice at the time, to avoid
-inventing a second pricing vocabulary.
-
-That reasoning was sound then and is wrong now. **Nothing reads those columns; slice 6 (the
-purchase path) is blocked and unbuilt, so the table has no consumers at all.**
-
-**It is free to fix now and expensive after slice 6.** Once purchasing writes and reads those
-columns, changing them is a migration with live data behind it. Today it is a column drop on an
-empty table.
+**It is free to fix today and expensive after slice 6**, because nothing reads those columns yet
+— the purchase path that would populate them is blocked on BUG-032. Fix it while it is still
+dead code.
 
 ---
 
-## The `Sdk.jsx` trap — the one thing to get wrong on that PR
+## ⚠️ The one thing to get wrong on that PR
 
-`resources/js/Pages/client/Checkout/Sdk.jsx` **[verified: exists]**
+**`resources/js/Pages/client/Checkout/Sdk.jsx`** ✅ (exists). **Cashfree needs it.** Paddle's
+removal will make it *look* orphaned, because Paddle is the other obvious SDK consumer.
 
-**Cashfree needs it. Paddle's removal makes it look orphaned.** Anyone deleting eleven gateways
-and then sweeping for now-unused front-end assets will find this file referenced by a gateway
-that is going away and conclude it is dead. It is not — one of the two keepers depends on it.
-
-Flagged here because it is the single most likely mistake on that PR, and its failure mode is a
-checkout that silently stops working for the gateway that survived.
+Deleting it breaks checkout for one of the two gateways being kept. Flag it on the PR
+description, not in a comment nobody reads during a large deletion.
 
 ---
 
 ## What removal closes, and what it does not
 
-**It CLOSES BUG-034.** [verified against the recorded finding] BUG-034 is Paddle and PayPal
-failing to release the idempotency lock on handler failure — and they are the **only** two
-offenders of thirteen. Both are on the removal list, so the finding closes **by deletion**
-rather than by fix. BUG-034's entry has been updated to say so.
+**It CLOSES BUG-034 by deletion.** Paddle and PayPal are the only two gateways that never
+release the idempotency lock on handler failure — both are on the removal list, so the defect
+leaves with them. No code fix needed if the removal lands first.
 
-**It does NOTHING for BUG-032.** [verified] `refund()` touches no `Subscription` in **any** of the
-thirteen, including both keepers. Removing eleven leaves the defect fully intact, and slice 6
-stays blocked on it.
+**It does NOTHING for BUG-032.** Refunds revoke no subscription in **any** of the thirteen,
+including both keepers. That remains slice 6's blocker regardless.
 
 ---
 
-## ⚠️ Product decisions this forces — not side effects
+## ⚠️ A product decision hiding inside a cleanup
 
-**Removal eliminates every gateway capable of in-place plan changes.** [from inspection]
+**Removing the eleven removes every gateway capable of in-place plan changes.** Neither Razorpay
+nor Cashfree supports changing a subscription's plan on the gateway side — an upgrade or
+downgrade becomes cancel-and-resubscribe.
 
-That is a capability loss, not a cleanup artifact. Upgrades and downgrades would become
-cancel-and-resubscribe. **Awaiting the owner's decision** — recorded here so it is decided rather
-than discovered after the PR merges.
-
-**Razorpay creates a new gateway-side plan object on every checkout attempt.** [from inspection]
-Not a bug, and not a blocker — but it will clutter the Razorpay dashboard with abandoned plan
-objects proportional to abandoned checkouts. Worth knowing before volume arrives.
+That is a **product decision awaiting the owner**, not a side effect to absorb quietly. It
+changes what "upgrade" means for every future customer.
 
 ---
 
-## PhonePe — and a warning about what is being deleted
+## Recorded for later, not actionable now
 
-⚠️ **PhonePe does not exist in this codebase.** [verified — no match in `app`, `config`, `routes`
-or `database`] It is a **prospective** gateway, not one being removed.
+**Razorpay creates a new gateway-side plan object on every checkout attempt.** Not a bug — it is
+how their API is being used — but it will clutter the Razorpay dashboard with duplicate plan
+objects, one per abandoned checkout. Worth a dedupe or a naming convention before volume.
 
-Adding it requires a merchant-driven **notify → wait 24h → execute** loop: new schema
-(`renewal_notified_at`, or a `redemptions` table) and a scheduled driver.
+**PhonePe, if it is ever added, does not fit the current driver shape.** It requires a
+merchant-driven loop: *notify → wait 24h → execute*. That needs new schema (a
+`renewal_notified_at` column, or a `redemptions` table) and a **scheduled** driver rather than a
+webhook-driven one.
 
-**The three `ChargeRecurring*` commands about to be deleted are the only working examples of that
-shape in the codebase** [verified: `ChargeRecurringMyFatoorahCommand`,
-`ChargeRecurringPaymobCommand`, `ChargeRecurringTapCommand`].
-
-So the cleanup deletes the only reference implementation of the pattern a future PhonePe
-integration will need. **Keep a copy** — in this document, in a branch, or in the PR description
-— before the commands go.
+⚠️ **The three `ChargeRecurring*` commands about to be deleted are the only working examples of
+that shape in this codebase** ✅ — `ChargeRecurringMyFatoorahCommand`,
+`ChargeRecurringPaymobCommand`, `ChargeRecurringTapCommand`. If PhonePe is on the roadmap, read
+them before they are removed, or the pattern is reconstructed from scratch later.
