@@ -2282,8 +2282,13 @@ the question was already answered.
 
 ## BUG-034 — Paddle and PayPal never release the idempotency lock on failure
 
-**Severity: HIGH — live, and it loses money silently. Recorded 2026-08-13. NOT fixed: belongs
-with BUG-032 on a billing branch, not in Smart QR.**
+**Severity: HIGH — live, and it loses money silently. Recorded 2026-08-13. NOT fixed.**
+
+⚠️ **CLOSES BY DELETION.** Paddle and PayPal are the only two offenders of thirteen, and both are
+on the gateway removal list — so the planned billing cleanup closes this finding without a code
+fix. See `docs/billing-gateway-cleanup.md`. If that removal does not happen, this reverts to a
+fix on a billing branch alongside BUG-032 — which the removal does **not** close, because
+`refund()` touches no `Subscription` in either surviving gateway.
 
 `WebhookIdempotencyService::isNewEvent()` claims an event id before the handler runs. If the
 handler then throws, the claim must be **released** so the gateway's automatic retry can
