@@ -2137,8 +2137,30 @@ admin surface.
 
 ## BUG-031 — assigning a plan leaves the customer's gateway subscription charging
 
-**Severity: HIGH — live, and it bills real money. Recorded 2026-08-12. NOT fixed: the right
-behaviour is a business decision, not a code choice.**
+**Severity: HIGH → ⚠️ RAISED 2026-08-13. Still not fixed — the right behaviour remains a
+business decision, not a code choice — but it is no longer an edge case.** Recorded 2026-08-12.
+
+### ⚠️ Why the priority went up
+
+An owner ruling on 2026-08-13 accepted **in-place plan change as permanently out of scope**.
+Removing eleven of the thirteen gateways removes every gateway that implements a real
+`changePlan()` (Stripe, Mollie, Square, MercadoPago); both keepers return a hard
+"cancel and re-subscribe" error, because both require a fresh mandate authorization. See
+`docs/billing-gateway-cleanup.md`.
+
+The three supported upgrade paths are therefore: let the term run out and change at renewal;
+cancel and re-subscribe; **or, for special cases, the admin assigns the plan directly.**
+
+That third path is this bug. It was recorded as something an administrator might occasionally
+do by mistake. **It is now the business's intended route for special-request upgrades** — which
+means the double-billing below stops being an accident and becomes a designed-in outcome that
+nothing prevents, warns about, or reconciles.
+
+Nothing about the defect itself has changed. What changed is how often it is expected to fire.
+
+**Numbering note:** this defect was referred to as "BUG-035" when the ruling was given. There is
+no BUG-035 — this file ends at BUG-032 on `master` (BUG-033 and BUG-034 live only on
+`feature/smart-qr`). The assignPlan defect is **BUG-031**, and this is it.
 
 `Admin\ClientController::assignPlan()` cancels the customer's existing **`client_subscriptions`**
 rows and creates a new one. It never touches **`subscriptions`** — the gateway-billed table with
@@ -2197,6 +2219,20 @@ PaymobGateway     0     PaystackGateway   0
 A refund moves money and changes nothing about what the customer may do. Today the blast radius
 is bounded: the customer keeps a subscription they have been refunded for, which is a revenue
 leak rather than a correctness failure.
+
+### ⚠️ The gateway cleanup does NOT shrink this — verified 2026-08-13
+
+Removing eleven of the thirteen gateways (see `docs/billing-gateway-cleanup.md`) removes eleven
+copies of this defect and leaves the two that matter. **Both keepers are affected.**
+
+| Keeper | `refund()` | Touches `Subscription`? |
+|---|---|---|
+| Razorpay | `RazorpayGateway.php:351-382` — calls the API, sets `refunded_at`, `refunded_cents`, `status` | **no** |
+| Cashfree | `CashfreeGateway.php:389-424` — same | **no** |
+
+So this stays a hard prerequisite for slice 6 whether or not the cleanup ever runs, and the
+right time to fix it is **before** the removal, on two gateways rather than thirteen. Do not
+schedule it behind the cleanup.
 
 ### ⚠️ Why this BLOCKS slice 6
 
