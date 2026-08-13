@@ -103,6 +103,15 @@ class JobWorkspaceContextGuardTest extends TestCase
      * @var list<class-string>
      */
     private const NO_TENANT_DATA = [
+        // ⚠️ Spans EVERY workspace of one client, by explicit id, and writes a
+        // cache keyed per workspace id. A single workspace context would be
+        // wrong rather than merely unnecessary — it would silently reconcile one
+        // workspace of a client that has several, leaving the rest stale while
+        // the job reported success.
+        //
+        // Every read inside it is filtered by an explicit client_id or
+        // workspace_id, so there is no query relying on ambient context.
+        'App\Modules\Entitlements\Jobs\ReconcileWorkspaceEntitlements',
         'App\Jobs\DispatchWebhookJob',
         'App\Jobs\GenerateWorkspaceExportJob',
         'App\Modules\AI\Jobs\IndexDocumentJob',

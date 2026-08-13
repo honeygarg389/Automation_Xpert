@@ -119,14 +119,26 @@ class PartnerCeilingTest extends TestCase
     }
 
     /**
-     * ⚠️ No partner grant query is issued for a direct customer.
+     * ⚠️ No PARTNER-side lookup is issued for a direct customer.
      *
      * Without this, partner resolution could run and return nothing, and the
      * answer would be right for the wrong reason — which is how a later change
      * to the "nothing" case would silently start affecting direct customers.
+     *
+     * ─── This assertion was originally too broad ────────────────────────────
+     *
+     * It first asserted that resolving a direct customer touched
+     * `entitlement_grants` AT ALL. That was wrong, and slice 7 proved it: a
+     * direct customer can legitimately HOLD grants of their own — client_id set,
+     * partner_id null — and the resolver must read them. The intent was always
+     * "the partner ceiling must not run", so it now asserts on the partner
+     * predicate rather than on the table name.
+     *
+     * The over-broad version passed only because customer-held grants were, at
+     * the time, read by nobody.
      */
     #[Test]
-    public function resolving_a_direct_customer_touches_no_entitlement_grants(): void
+    public function resolving_a_direct_customer_issues_no_partner_side_lookup(): void
     {
         $c = $this->customer(['campaigns_per_month' => 100]);
 
@@ -137,11 +149,25 @@ class PartnerCeilingTest extends TestCase
 
         $this->resolver()->forClient($c['client']);
 
-        $touched = array_filter($queries, fn ($sql) => str_contains($sql, 'entitlement_grants'));
+        $partnerSide = array_filter(
+            $queries,
+            fn ($sql) => str_contains($sql, 'entitlement_grants') && str_contains($sql, 'partner_id')
+        );
 
-        $this->assertSame([], array_values($touched),
-            'A direct customer caused a partner-grant lookup. Direct customers are the majority '
+        $this->assertSame([], array_values($partnerSide),
+            'A direct customer caused a PARTNER-grant lookup. Direct customers are the majority '
             .'path and must not pay for, or be affected by, the partner tier.');
+
+        // POSITIVE CONTROL: the client side IS read, so the filter above is
+        // narrowing something real rather than matching nothing.
+        $clientSide = array_filter(
+            $queries,
+            fn ($sql) => str_contains($sql, 'entitlement_grants') && str_contains($sql, 'client_id')
+        );
+
+        $this->assertNotEmpty($clientSide,
+            'No client-grant lookup happened either, so the assertion above is vacuous — it '
+            .'would pass against a resolver that reads no grants at all.');
     }
 
     // ══ unrestricted mode ══════════════════════════════════════════════════
