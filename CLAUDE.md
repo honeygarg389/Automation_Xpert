@@ -160,6 +160,32 @@ Rules:
   (see `docs/test-suite-baseline.md`). A new failing test name that is not in that document
   is a regression and blocks the merge.
 
+## Verification must halt, not report
+
+⚠️ **A branch switch must be followed by an assertion that EXITS NON-ZERO on mismatch, in the
+same command** — not a check whose output is read and acted on.
+
+```bash
+git checkout -q -b <branch> master
+[ "$(git rev-parse --abbrev-ref HEAD)" = "<branch>" ] || { echo "WRONG BRANCH"; exit 1; }
+```
+
+**This rule is owed a mechanism because the prose version demonstrably failed.** Recorded
+2026-08-12 as "verify the result of a checkout, not that the command returned". On 2026-08-13 the
+same failure recurred **with the check run** — the output was printed, not acted on, and an entire
+session's commits landed on the wrong branch. On 2026-08-14 the hard-stop version met the same
+class of failure on first contact (`fatal: a branch named '…' already exists`) and prevented every
+subsequent operation: no cherry-pick, no reset, no push.
+
+The general form, which is the same principle already behind the `withoutWorkspaceScope('reason:
+…')` signature and the CI guards: **a step that must be remembered is not a control.** If a
+verification's failure mode is "the human reads the output and chooses to stop", it will
+eventually be read and not acted on. Make the failure abort the process.
+
+⚠️ **This belongs beside the checkout rule at `253936f` (on `feature/smart-qr`, unmerged).** When
+both land on master they should be reconciled into one place rather than left as two entries
+saying adjacent things — which is the duplicate-BUG-007 shape in prose.
+
 ## Working agreement
 
 - **Plan before code.** For any non-trivial task, inspect the actual repository first and
