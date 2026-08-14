@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 /**
  * ⚠️ A LIFECYCLE-OWNED ROW: platform-owned at birth, tenant-owned on assignment.
@@ -47,6 +48,7 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property string $public_token
  * @property string $status
  * @property int $batch_id
+ * @property Carbon|null $printed_at
  */
 class SmartQrCode extends Model
 {
