@@ -119,3 +119,89 @@ pixel-for-pixel. Client-side generation remains fine for the customer's on-scree
 This is the **first new package added in this work**. CLAUDE.md says do not add unnecessary
 packages; this one is necessary, and it was verified that the project contains no QR library and
 no internal helper (2FA only produces an `otpauth://` string and renders nothing).
+
+---
+
+## R-7 — The gauge filter lands in slice 3, not its own branch
+
+`smart_qr_max_assigned` must count **current** assignments only, and `GaugeReader` has no
+filtered-count support. That is Phase 1 code changing inside a Smart QR slice, which is the shape
+that produced the cross-branch tangle of 2026-08-13 — so it was escalated rather than absorbed.
+
+**Ruled: do it here.** Two measurements decided it:
+
+- **Inertness is provable by ABSENCE.** All seven existing `GaugeSources::MAP` entries carry
+  exactly `model` and `scope` — `0` entries carry any third key. A branch guarded on a `where`
+  key cannot execute for them.
+- **No other branch touches the files.** `master`, `docs/billing-findings`,
+  `docs/billing-gateway-cleanup` and `feature/entitlement-presentation` each modify
+  `GaugeSources.php` and `GaugeReader.php` **zero** times.
+
+### ⚠️ Two conditions on the implementation
+
+1. **Guard on the KEY's absence, with `isset()`** — not on truthiness. A future
+   `'where' => null` must still not fire the branch. Truthiness would treat an explicitly-null
+   filter as "no filter", which is the same conflation of *absent* and *null* that BUG-030 is
+   about.
+2. **The unmoved-seven test must discriminate.** "The seven are unchanged" passes trivially
+   against untouched code and proves nothing. The test must temporarily add a `where` to one of
+   the seven, prove its count **changes**, remove it, and prove it **returns**. Otherwise it is
+   the vacuous shape this project has caught eight times.
+
+### The discriminator for the assignment gauge
+
+`smart_qr_assignments` keeps history: a reassignment sets `unassigned_at` and leaves the row. So
+an **unfiltered** count returns every assignment the workspace has *ever* held.
+
+A workspace that held five codes and had all five reassigned away would read **5 used, 0 current**
+— at its limit while owning nothing. Worse, the count is monotonic, so a workspace that churns
+codes is permanently locked out.
+
+**The test:** `N = 2` current and `M = 3` ended assignments for one workspace.
+
+| Implementation | Returns |
+|---|---|
+| filtered (correct) | **2** |
+| unfiltered (wrong) | **5** |
+
+Distinct numbers, so it cannot pass by coincidence.
+
+---
+
+## R-8 — Over-limit assignment: refuse by default, override with a REQUIRED reason
+
+An admin assigning a QR to a workspace already at `smart_qr_max_assigned` is **refused**, with the
+count in the error.
+
+An **override** exists, and matches the shape CLAUDE.md rule 9 already establishes for manual
+entitlement grants:
+
+- permission-gated
+- **carries a REQUIRED reason, enforced at the signature — not a nullable column**
+- audit-logged
+
+⚠️ **The reason must be structurally required.** An optional reason is an empty reason six weeks
+later, and then nobody knows why a limit was broken. This is the same reasoning as
+`withoutWorkspaceScope('reason: …')` taking its argument rather than documenting it: a rule that
+depends on remembering is not a rule.
+
+Refusing by default keeps the limit meaningful; the override keeps admins from having to fight the
+tool for legitimate exceptions — and records which was which.
+
+---
+
+## R-9 — Modal, not the spec's ten-step wizard
+
+The spec (§6) describes assignment as ten sequential steps ending in "confirm" — a wizard.
+
+**Ruled: build it as a single modal form**, matching the existing admin surfaces.
+
+⚠️ Recorded as a **deliberate departure**, not a shortcut. This codebase contains no wizard
+component anywhere; introducing one to match a described UX means maintaining a pattern with a
+single caller, which is a cost paid forever for one screen. The spec was written without seeing
+the code — the same reason its batch field list omitted `failure_reason` (found in slice 2) and
+its "tenant/customer" needed R-1.
+
+The ten steps become the fields of one form. Nothing in the described flow requires sequencing:
+no step's options depend on a later step, and the only dependency — channel and user must belong
+to the chosen workspace — is a validation, not an ordering.
