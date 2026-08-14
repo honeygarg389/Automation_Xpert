@@ -3,6 +3,9 @@
 namespace App\Modules\SmartQr\Models;
 
 use App\Models\Concerns\BelongsToWorkspace;
+use App\Models\Workspace;
+use Database\Factories\SmartQrAssignmentFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -27,6 +30,18 @@ use Illuminate\Support\Str;
  */
 class SmartQrAssignment extends Model
 {
+    use HasFactory;
+
+    /**
+     * ⚠️ Module models live outside app/Models, so Laravel's convention
+     * resolves Database\\Factories\\Modules\\SmartQr\\Models\\…Factory and finds
+     * nothing. Named explicitly, as the AI and Social module models do.
+     */
+    protected static function newFactory(): SmartQrAssignmentFactory
+    {
+        return SmartQrAssignmentFactory::new();
+    }
+
     use BelongsToWorkspace;
 
     protected $fillable = [
@@ -60,6 +75,22 @@ class SmartQrAssignment extends Model
     public function isCurrent(): bool
     {
         return $this->unassigned_at === null;
+    }
+
+    /**
+     * ⚠️ Declared HERE, not on the trait.
+     *
+     * `BelongsToWorkspace` deliberately carries no `workspace` relation — it had
+     * two conflicting definitions once and they were removed, leaving the trait
+     * doing exactly one thing: applying the scope. Its docblock says a scoped
+     * model that needs the relation declares its own, in the place that uses it.
+     * The admin inventory screen is that place.
+     *
+     * @return BelongsTo<Workspace, $this>
+     */
+    public function workspace(): BelongsTo
+    {
+        return $this->belongsTo(Workspace::class);
     }
 
     /** @return BelongsTo<SmartQrCode, $this> */

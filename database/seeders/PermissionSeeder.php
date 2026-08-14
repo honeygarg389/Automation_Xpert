@@ -58,6 +58,18 @@ class PermissionSeeder extends Seeder
             // Integrations (third-party credential management)
             ['key' => 'view_integrations',   'name' => 'View Integrations',   'category' => 'Integrations', 'description' => 'View integration configurations'],
             ['key' => 'manage_integrations',  'name' => 'Manage Integrations', 'category' => 'Integrations', 'description' => 'Create, update and test third-party integration credentials'],
+
+            // QR Management (Smart QR slice 3)
+            //
+            // ⚠️ `override_qr_assignment_limit` is deliberately SEPARATE from
+            // `assign_qr_codes`. R-8 requires the over-limit path to be
+            // permission-gated, and folding it into the assign permission would
+            // mean everyone who can assign can also break the limit — which
+            // makes the limit advisory and the audit trail uninformative.
+            ['key' => 'view_qr_inventory', 'name' => 'View QR Inventory', 'category' => 'QR Management', 'description' => 'View Smart QR batches, inventory and assignments'],
+            ['key' => 'manage_qr_batches', 'name' => 'Manage QR Batches', 'category' => 'QR Management', 'description' => 'Create QR batches and trigger code generation'],
+            ['key' => 'assign_qr_codes', 'name' => 'Assign QR Codes', 'category' => 'QR Management', 'description' => 'Assign and unassign Smart QR codes to customer workspaces'],
+            ['key' => 'override_qr_assignment_limit', 'name' => 'Override QR Assignment Limit', 'category' => 'QR Management', 'description' => 'Assign QR codes beyond a workspace\'s plan limit. Requires a written reason and is audit-logged.'],
         ];
     }
 

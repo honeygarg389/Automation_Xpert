@@ -2,6 +2,8 @@
 
 namespace App\Modules\SmartQr\Models;
 
+use Database\Factories\SmartQrBatchFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
@@ -16,6 +18,18 @@ use Illuminate\Support\Str;
  */
 class SmartQrBatch extends Model
 {
+    use HasFactory;
+
+    /**
+     * ⚠️ Module models live outside app/Models, so Laravel's convention
+     * resolves Database\\Factories\\Modules\\SmartQr\\Models\\…Factory and finds
+     * nothing. Named explicitly, as the AI and Social module models do.
+     */
+    protected static function newFactory(): SmartQrBatchFactory
+    {
+        return SmartQrBatchFactory::new();
+    }
+
     protected $fillable = [
         'uuid', 'batch_number', 'batch_name', 'prefix', 'quantity', 'serial_start',
         'qr_type', 'status', 'generated_count', 'printed_count', 'default_message',

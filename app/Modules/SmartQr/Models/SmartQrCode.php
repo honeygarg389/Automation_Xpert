@@ -2,6 +2,9 @@
 
 namespace App\Modules\SmartQr\Models;
 
+use Database\Factories\SmartQrCodeFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use App\Models\Scopes\WorkspaceScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -45,6 +48,18 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  */
 class SmartQrCode extends Model
 {
+    use HasFactory;
+
+    /**
+     * ⚠️ Module models live outside app/Models, so Laravel's convention
+     * resolves Database\\Factories\\Modules\\SmartQr\\Models\\…Factory and finds
+     * nothing. Named explicitly, as the AI and Social module models do.
+     */
+    protected static function newFactory(): SmartQrCodeFactory
+    {
+        return SmartQrCodeFactory::new();
+    }
+
     protected $fillable = ['serial_number', 'public_token', 'batch_id', 'status', 'printed_at'];
 
     protected function casts(): array
@@ -83,11 +98,37 @@ class SmartQrCode extends Model
      * "Current" is `unassigned_at IS NULL` — not `status = active`, which is a
      * different question (a code can be assigned but deactivated).
      *
+     * ─── ⚠️ THE WORKSPACE SCOPE COMES OFF, AND IT HAS TO ────────────────────
+     *
+     * Found in slice 3, by an assertion failing: `isAssigned()` returned FALSE
+     * for a code that demonstrably had a current assignment row.
+     *
+     * `SmartQrAssignment` is workspace-scoped and the scope fails CLOSED, so
+     * with no ambient workspace context it ANDs `1 = 0` onto this relation and
+     * the code reports itself unassigned — to the admin inventory, to the
+     * assignment action's duplicate check, and to anything else asking the
+     * question outside a tenant request. "No code is ever assigned" is a
+     * dangerous answer for the one check standing between a code and two
+     * tenants holding it.
+     *
+     * ⚠️ "Which tenant currently holds this code" is inherently a CROSS-TENANT
+     * question — it is asked precisely when the answer is not yet known — and
+     * this model is lifecycle-owned, so it has no scope of its own to inherit.
+     * Bounding the relation would answer a different question than the one it
+     * is named for.
+     *
+     * The tenant boundary is NOT lost: `SmartQrAccess::boundedTo()` applies an
+     * explicit `workspace_id` to every customer-facing use of this relation, and
+     * that explicit filter always was the boundary — the scope on top of it was
+     * the H-2 shape that made the slice-1 canary return 0.
+     *
      * @return HasOne<SmartQrAssignment, $this>
      */
     public function currentAssignment(): HasOne
     {
-        return $this->hasOne(SmartQrAssignment::class)->whereNull('unassigned_at');
+        return $this->hasOne(SmartQrAssignment::class)
+            ->withoutGlobalScope(WorkspaceScope::class)
+            ->whereNull('unassigned_at');
     }
 
     public function isAssigned(): bool
