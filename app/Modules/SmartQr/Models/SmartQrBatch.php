@@ -20,6 +20,7 @@ class SmartQrBatch extends Model
         'uuid', 'batch_number', 'batch_name', 'prefix', 'quantity', 'serial_start',
         'qr_type', 'status', 'generated_count', 'printed_count', 'default_message',
         'notes', 'created_by_admin_id', 'generated_at', 'printed_at',
+        'failure_reason', 'failed_at',
     ];
 
     protected function casts(): array
@@ -27,7 +28,7 @@ class SmartQrBatch extends Model
         return [
             'quantity' => 'integer', 'serial_start' => 'integer',
             'generated_count' => 'integer', 'printed_count' => 'integer',
-            'generated_at' => 'datetime', 'printed_at' => 'datetime',
+            'generated_at' => 'datetime', 'printed_at' => 'datetime', 'failed_at' => 'datetime',
         ];
     }
 

@@ -34,6 +34,14 @@ class SmartQrAccessGuardTest extends TestCase
     private const ALLOWED = [
         'app/Modules/SmartQr/Services/SmartQrAccess.php',
         'app/Modules/SmartQr/Models/',
+        // ⚠️ Generation, and ONLY generation. A batch's codes are platform
+        // inventory at birth — there is no workspace to bound them to, which is
+        // precisely why SmartQrCode has no scope. Bounding this insert to a
+        // tenant would be incoherent, not safer.
+        //
+        // Narrow deliberately: the Actions directory is not blanket-allowed, so
+        // a future action that READS codes for a customer still fails this guard.
+        'app/Modules/SmartQr/Actions/GenerateQrBatchAction.php',
         'app/Http/Controllers/Admin/',
         'app/Modules/SmartQr/Http/Controllers/Admin/',
     ];
