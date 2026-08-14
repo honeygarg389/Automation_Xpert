@@ -25,6 +25,9 @@ import {
     Radio,
     Brain,
     Clock,
+    QrCode,
+    Layers,
+    Link2,
     LogOut,
 } from 'lucide-react';
 
@@ -37,6 +40,24 @@ const ADMIN_NAV_ITEMS = [
     { labelKey: 'admin.nav.payments', route: 'admin.payments.index', href: () => route('admin.payments.index'), icon: Receipt, permission: 'view_payment_gateways' },
     { labelKey: 'admin.nav.plans', route: 'admin.plans.index', href: () => route('admin.plans.index'), icon: Package, permission: 'view_plans' },
     { labelKey: 'admin.nav.coupons', route: 'admin.coupons.index', href: () => route('admin.coupons.index'), icon: Tag, permission: 'view_plans' },
+
+    // ── Smart QR (slice 3b) ──────────────────────────────────────────────
+    //
+    // ⚠️ FLAT ENTRIES, not the spec's "QR Management" GROUP.
+    //
+    // §2 describes a collapsible group with seven children. This sidebar has no
+    // grouping component — ADMIN_NAV_ITEMS is a flat list and every one of the
+    // ~22 existing entries is a single link. Introducing a nested/collapsible
+    // nav to match the described UX means maintaining a pattern with one caller,
+    // which is R-9's reasoning applied to navigation.
+    //
+    // ⚠️ Only the THREE screens that exist are listed. §2 also names Dashboard,
+    // Print Exports, Analytics and Settings — those are later slices, and a nav
+    // entry pointing at a route that does not exist throws in `route()` at
+    // render time, taking the whole admin layout down.
+    { labelKey: 'admin.nav.qr_batches', route: 'admin.qr.batches.index', href: () => route('admin.qr.batches.index'), icon: Layers, permission: 'view_qr_inventory' },
+    { labelKey: 'admin.nav.qr_inventory', route: 'admin.qr.inventory.index', href: () => route('admin.qr.inventory.index'), icon: QrCode, permission: 'view_qr_inventory' },
+    { labelKey: 'admin.nav.qr_assignments', route: 'admin.qr.assignments.index', href: () => route('admin.qr.assignments.index'), icon: Link2, permission: 'view_qr_inventory' },
     { labelKey: 'admin.tax_rates', route: 'admin.tax-rates.index', href: () => route('admin.tax-rates.index'), icon: Percent, permission: 'view_plans' },
     { labelKey: 'admin.payment_gateways', route: 'admin.payment-gateways.index', href: () => route('admin.payment-gateways.index'), icon: CreditCard, permission: 'view_payment_gateways' },
     { labelKey: 'admin.email', route: 'admin.email-system.index', href: () => route('admin.email-system.index'), icon: FileText, permission: 'view_email_settings' },

@@ -1,0 +1,85 @@
+import { Badge } from '@/Components/ui';
+import { useTranslation } from 'react-i18next';
+
+/**
+ * ⚠️ R-10 — TWO VOCABULARIES, AND THIS COMPONENT KEEPS THEM APART.
+ *
+ * `smart_qr_codes.status` is PHYSICAL (generated, printed, damaged, lost,
+ * retired). `smart_qr_assignments.status` is the mapping's liveness (active,
+ * inactive, ended). The spec gives one list; the codebase has two columns.
+ *
+ * ⚠️ There is deliberately NO `assigned` entry here. Whether a code is assigned
+ * is derived from the presence of `current_assignment` — the same question the
+ * DB's unique index over `current_code_id` answers — and never read from a
+ * status string. Rendering it as a status would put the second source of truth
+ * back on the screen even though it is absent from the database.
+ *
+ * Uses the shared Badge, whose variants are default/success/warning/danger/brand.
+ * No new colour tokens.
+ */
+
+const CODE_VARIANTS = {
+    generated: 'default',
+    printed: 'brand',
+    damaged: 'warning',
+    lost: 'warning',
+    retired: 'danger',
+};
+
+const ASSIGNMENT_VARIANTS = {
+    active: 'success',
+    inactive: 'warning',
+    ended: 'default',
+};
+
+const BATCH_VARIANTS = {
+    draft: 'default',
+    generating: 'brand',
+    generated: 'success',
+    printed: 'brand',
+    failed: 'danger',
+};
+
+export function CodeStatusBadge({ status }) {
+    const { t } = useTranslation();
+
+    return (
+        <Badge variant={CODE_VARIANTS[status] ?? 'default'} size="sm">
+            {t(`smart_qr.code_status.${status}`, status)}
+        </Badge>
+    );
+}
+
+export function AssignmentStatusBadge({ status }) {
+    const { t } = useTranslation();
+
+    return (
+        <Badge variant={ASSIGNMENT_VARIANTS[status] ?? 'default'} size="sm">
+            {t(`smart_qr.assignment_status.${status}`, status)}
+        </Badge>
+    );
+}
+
+export function BatchStatusBadge({ status }) {
+    const { t } = useTranslation();
+
+    return (
+        <Badge variant={BATCH_VARIANTS[status] ?? 'default'} size="sm">
+            {t(`smart_qr.batch_status.${status}`, status)}
+        </Badge>
+    );
+}
+
+/**
+ * ⚠️ DERIVED, never a stored status. Takes the current assignment (or its
+ * absence), not a string off the code row.
+ */
+export function AssignmentStateBadge({ currentAssignment }) {
+    const { t } = useTranslation();
+
+    return currentAssignment ? (
+        <Badge variant="success" size="sm">{t('smart_qr.assigned')}</Badge>
+    ) : (
+        <Badge variant="default" size="sm">{t('smart_qr.unassigned')}</Badge>
+    );
+}

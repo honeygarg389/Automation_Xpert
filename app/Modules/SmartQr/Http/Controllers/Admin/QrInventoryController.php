@@ -4,6 +4,7 @@ namespace App\Modules\SmartQr\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Scopes\WorkspaceScope;
+use App\Models\Workspace;
 use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Support\SmartQrStatus;
@@ -89,6 +90,35 @@ class QrInventoryController extends Controller
                 ->orderByDesc('id')
                 ->get(['id', 'batch_number', 'batch_name']),
             'statuses' => SmartQrStatus::CODE_STATUSES,
+
+            // ⚠️ ADDED IN SLICE 3b, and it is a gap 3a did not notice.
+            //
+            // The assignment modal's target picker is a WORKSPACE picker (R-1),
+            // and nothing on this page supplied the list — 3a asserted the props
+            // it returned rather than the props the screen needed, which is a
+            // limitation of testing a controller without its consumer.
+            //
+            // Client name travels with it because admins navigate by
+            // organisation even though the value posted is the workspace id.
+            // The label is built here, not in React, so "which client owns this
+            // workspace" has one definition.
+            //
+            // ⚠️ Unpaginated, and that is a known ceiling: at a few thousand
+            // workspaces this payload becomes the largest thing on the page and
+            // should become a searchable async picker — the same call
+            // `assignments.options` already makes per workspace. Left simple
+            // deliberately rather than building a search endpoint no installation
+            // needs yet.
+            'workspaces' => Workspace::query()
+                ->with('client:id,name')
+                ->orderBy('name')
+                ->get(['id', 'name', 'client_id'])
+                ->map(fn (Workspace $w) => [
+                    'id' => $w->id,
+                    'name' => $w->name,
+                    'client_name' => $w->client?->name,
+                ])
+                ->values(),
         ]);
     }
 

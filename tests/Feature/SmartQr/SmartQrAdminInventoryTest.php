@@ -26,33 +26,6 @@ class SmartQrAdminInventoryTest extends TestCase
 {
     use RefreshDatabase;
 
-    /**
-     * ⚠️ `withoutVite()` — and it is a SCOPE marker, not a convenience.
-     *
-     * Slice 3a ships the routes, controllers, permissions and Inertia props.
-     * The React page components under `resources/js/Pages/Admin/SmartQr/` are
-     * slice 3b, per CLAUDE.md's "schema is one task, the service layer is
-     * another, UI is another".
-     *
-     * Without this, every Inertia GET here fails on "Unable to locate file in
-     * Vite manifest" — a missing asset, not a failing controller. Asserting the
-     * PROPS is what this file is for; whether a component renders them is 3b's
-     * question.
-     *
-     * ⚠️ These calls come OUT when 3b lands. A `withoutVite()` left in place
-     * after the pages exist would hide a genuinely broken page reference.
-     */
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->withoutVite();
-
-        // ⚠️ Same scope marker, second half. Inertia's assertInertia() also
-        // checks the page component FILE exists. Slice 3a asserts the PROPS a
-        // controller returns; the components that consume them are 3b.
-        config(['inertia.testing.ensure_pages_exist' => false]);
-    }
-
     private function adminWith(array $keys): AdminUser
     {
         $admin = AdminUser::factory()->create();
