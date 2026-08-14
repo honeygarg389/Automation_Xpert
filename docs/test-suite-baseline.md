@@ -2,7 +2,10 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **1,163 tests, 39,637 assertions, 0 failures, 1 documented skip.**
+> The suite passes: **1,164 tests, 39,650 assertions, 0 failures, 1 documented skip.**
+>
+> **Front-end: 19 vitest tests, 2 files.** Previously ZERO ran — `setup.js` held JSX under a
+> `.js` extension so vite refused to transform it. Fixed in Smart QR slice 3b.
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
 > failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
@@ -35,7 +38,8 @@ with its own full-suite run:
 | `54f965a` — **BUG-022/023** plan limits never enforced | 9 rewritten + 5 new limit tests | **966** |
 | Phase 1 slices 1–7 + Smart QR slices 1–2 | catalog, resolver, cache, QR schema + generation | 1128 |
 | `d4b5e80` — **Smart QR slice 3a**, admin batches / inventory / assignment | 18 assignment + 16 inventory/batch tests | 1162 |
-| **Smart QR slice 3b**, admin React pages + QR navigation | 1 test for the `workspaces` prop the modal needed | **1163** |
+| **Smart QR slice 3b**, admin React pages + QR navigation | 1 test for the `workspaces` prop the modal needed | 1163 |
+| Smart QR slice 3b fixes — three walkthrough UI defects | 1 PHP (`qr_type` end to end) + **8 vitest** | **1164** + 19 JS |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
