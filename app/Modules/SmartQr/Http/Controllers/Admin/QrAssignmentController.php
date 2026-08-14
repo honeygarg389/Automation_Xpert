@@ -3,14 +3,16 @@
 namespace App\Modules\SmartQr\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Scopes\WorkspaceScope;
 use App\Models\Workspace;
 use App\Modules\SmartQr\Actions\AssignQrCodesAction;
 use App\Modules\SmartQr\Actions\UnassignQrCodeAction;
 use App\Modules\SmartQr\Http\Requests\AssignQrCodesRequest;
+use App\Modules\SmartQr\Http\Requests\UpdateQrAssignmentRequest;
 use App\Modules\SmartQr\Models\SmartQrAssignment;
 use App\Modules\SmartQr\Services\SmartQrAssignmentCapacity;
 use App\Modules\SmartQr\Services\SmartQrAssignmentValidator;
+use App\Services\AuditLogService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -54,7 +56,7 @@ class QrAssignmentController extends Controller
      * R-9's modal fetches this when a workspace is picked. Ten steps become ten
      * fields of one form — nothing in the described flow requires sequencing.
      */
-    public function optionsFor(Workspace $workspace, Request $request): \Illuminate\Http\JsonResponse
+    public function optionsFor(Workspace $workspace, Request $request): JsonResponse
     {
         return response()->json([
             'channels' => $this->validator->channelsFor($workspace)
@@ -116,6 +118,40 @@ class QrAssignmentController extends Controller
             count($assignments),
             ['count' => count($assignments)]
         ));
+    }
+
+    /**
+     * ⚠️ EDIT lives HERE, on the assignment — not on the code.
+     *
+     * `name`, `qr_type`, `default_message`, the dates and active/inactive are
+     * all columns of `smart_qr_assignments`, because they are PER-TENANT
+     * settings: the same physical sticker means "Front counter" to one customer
+     * and something else to the next one who holds it. Putting the form on the
+     * code would edit a row shared across every tenant that ever held it, and
+     * a reassignment would silently inherit the previous tenant's labels.
+     *
+     * Nothing editable here belongs to `smart_qr_codes` — see
+     * UpdateQrAssignmentRequest for what is deliberately absent and why.
+     */
+    public function update(UpdateQrAssignmentRequest $request, string $uuid): RedirectResponse
+    {
+        $assignment = SmartQrAssignment::withoutWorkspaceScope(
+            'reason: the admin edits assignments across all tenants; a scoped bind would 404 on '
+            .'a row that exists and the permission check would never run'
+        )->where('uuid', $uuid)->firstOrFail();
+
+        $before = $assignment->only(['name', 'qr_type', 'default_message', 'status', 'starts_at', 'expires_at']);
+        $assignment->update($request->validated());
+
+        app(AuditLogService::class)->logAdmin(
+            'smart_qr.assignment_updated',
+            SmartQrAssignment::class,
+            $assignment->id,
+            ['workspace_id' => $assignment->workspace_id, 'before' => $before, 'after' => $request->validated()],
+            $request->user('admin'),
+        );
+
+        return back()->with('success', __('QR details updated.'));
     }
 
     public function destroy(string $uuid, UnassignQrCodeAction $action, Request $request): RedirectResponse

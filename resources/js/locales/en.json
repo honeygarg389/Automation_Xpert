@@ -35,7 +35,8 @@
         "deleting": "Deleting…",
         "dismiss": "Dismiss",
         "view": "View",
-        "settings": "Settings"
+        "settings": "Settings",
+        "type_to_confirm": "Type {{word}} to confirm"
     },
     "nav": {
         "home": "Home",
@@ -4088,6 +4089,17 @@
             "generated": "Generated",
             "failed": "Failed",
             "printed": "Printed"
-        }
+        },
+        "delete_codes": "Delete",
+        "retire_codes": "Retire",
+        "delete_batch": "Delete batch",
+        "retire_batch": "Retire batch",
+        "rename_batch": "Rename batch",
+        "edit_qr": "Edit QR details",
+        "delete_batch_body": "This permanently deletes the batch and all {{count}} of its codes. Only possible because none have been printed or assigned. This cannot be undone.",
+        "delete_codes_body": "This permanently deletes {{count}} code(s). Only codes that were never printed and never assigned can be deleted. This cannot be undone.",
+        "retire_batch_body": "Retiring keeps every row. The codes stay in inventory, can no longer be assigned, and a scan will say the QR is no longer active.",
+        "retire_confirm": "Retire this batch and all its codes?",
+        "save": "Save changes"
     }
 }

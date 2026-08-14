@@ -31,6 +31,17 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         Route::get('/batches/{batch}', [QrBatchController::class, 'show'])
             ->name('batches.show')->middleware('permission:view_qr_inventory');
 
+        // ⚠️ Rename, delete and retire all gate on manage_qr_batches — the same
+        // key that creates them. Deleting is destructive but it is refused
+        // outright for anything printed or ever assigned, so the dangerous case
+        // is unreachable rather than permission-gated.
+        Route::patch('/batches/{batch}', [QrBatchController::class, 'update'])
+            ->name('batches.update')->middleware('permission:manage_qr_batches');
+        Route::delete('/batches/{batch}', [QrBatchController::class, 'destroy'])
+            ->name('batches.destroy')->middleware('permission:manage_qr_batches');
+        Route::post('/batches/{batch}/retire', [QrBatchController::class, 'retire'])
+            ->name('batches.retire')->middleware('permission:manage_qr_batches');
+
         // ── Inventory (§5) ─────────────────────────────────────────────────
         Route::get('/inventory', [QrInventoryController::class, 'index'])
             ->name('inventory.index')->middleware('permission:view_qr_inventory');
@@ -38,6 +49,8 @@ Route::middleware(['web', 'auth:admin', 'demo'])
             ->name('inventory.mark-printed')->middleware('permission:manage_qr_batches');
         Route::post('/inventory/change-status', [QrInventoryController::class, 'changeStatus'])
             ->name('inventory.change-status')->middleware('permission:manage_qr_batches');
+        Route::delete('/inventory', [QrInventoryController::class, 'destroy'])
+            ->name('inventory.destroy')->middleware('permission:manage_qr_batches');
 
         // ── Assignment (§6) ────────────────────────────────────────────────
         Route::get('/assignments', [QrAssignmentController::class, 'index'])
@@ -51,6 +64,11 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         // SmartQrAssignment's route key is `uuid` AND the model is
         // workspace-scoped, so implicit binding would 404 on a row that exists
         // and the permission check would never run.
+        // Editing per-tenant QR details. `assign_qr_codes`, not a new key:
+        // whoever may put a code in a tenant's hands may relabel it.
+        Route::patch('/assignments/{assignment}', [QrAssignmentController::class, 'update'])
+            ->name('assignments.update')->middleware('permission:assign_qr_codes');
+
         Route::delete('/assignments/{assignment}', [QrAssignmentController::class, 'destroy'])
             ->name('assignments.destroy')->middleware('permission:assign_qr_codes');
     });

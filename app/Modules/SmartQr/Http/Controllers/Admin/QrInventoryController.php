@@ -7,7 +7,9 @@ use App\Models\Scopes\WorkspaceScope;
 use App\Models\Workspace;
 use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Models\SmartQrCode;
+use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Support\SmartQrStatus;
+use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -159,5 +161,50 @@ class QrInventoryController extends Controller
         SmartQrCode::whereIn('id', $data['code_ids'])->update(['status' => $data['status']]);
 
         return back()->with('success', __('Status updated.'));
+    }
+
+    /**
+     * ⚠️ DELETE selected codes — refused for any that were printed or assigned.
+     *
+     * All-or-nothing, matching R-11's shape on the assignment path: a partial
+     * delete would report failure while some rows were already gone, and there
+     * is no undo for a deleted row.
+     */
+    public function destroy(Request $request, SmartQrDeletability $rule): RedirectResponse
+    {
+        $data = $request->validate([
+            'code_ids' => ['required', 'array', 'min:1'],
+            'code_ids.*' => ['integer', 'exists:smart_qr_codes,id'],
+        ]);
+
+        $codes = SmartQrCode::whereIn('id', $data['code_ids'])->get();
+
+        $blocked = $codes
+            ->map(fn (SmartQrCode $c) => [$c->serial_number, $rule->blockingReason($c)])
+            ->filter(fn ($pair) => $pair[1] !== null);
+
+        if ($blocked->isNotEmpty()) {
+            $shown = $blocked->take(5)->map(fn ($p) => "{$p[0]} ({$p[1]})")->implode(', ');
+            $more = $blocked->count() > 5 ? ' and '.($blocked->count() - 5).' more' : '';
+
+            return back()->withErrors(['code_ids' => __(
+                ':count of the selected codes have been printed or assigned (:shown:more) and '
+                .'cannot be deleted. Retire them instead — deleting destroys assignment history '
+                .'and leaves printed stickers unexplainable.',
+                ['count' => $blocked->count(), 'shown' => $shown, 'more' => $more]
+            )]);
+        }
+
+        app(AuditLogService::class)->logAdmin(
+            'smart_qr.codes_deleted',
+            SmartQrCode::class,
+            null,
+            ['count' => $codes->count(), 'serials' => $codes->pluck('serial_number')->all()],
+            $request->user('admin'),
+        );
+
+        SmartQrCode::whereIn('id', $data['code_ids'])->delete();
+
+        return back()->with('success', __(':count code(s) deleted.', ['count' => $codes->count()]));
     }
 }

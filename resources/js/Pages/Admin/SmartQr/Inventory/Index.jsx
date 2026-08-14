@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, Pagination, Select } from '@/Components/ui';
-import { QrCode, Link2, Printer } from 'lucide-react';
+import { Button, Card, ConfirmDestructiveModal, Pagination, Select } from '@/Components/ui';
+import { QrCode, Link2, Printer, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge } from '../QrStatusBadge';
 import AssignQrModal from '../AssignQrModal';
@@ -38,6 +38,7 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
 
     const [selected, setSelected] = useState([]);
     const [assignOpen, setAssignOpen] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
 
     const rows = useMemo(() => codes?.data ?? [], [codes]);
 
@@ -224,6 +225,11 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
                                 />
                             </>
                         )}
+                        {canManage && (
+                            <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => setDeleteOpen(true)}>
+                                <Trash2 className="mr-1.5 h-4 w-4" /> {t('smart_qr.delete_codes')}
+                            </Button>
+                        )}
                         <button
                             type="button"
                             onClick={() => setSelected([])}
@@ -308,6 +314,26 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
                     <Pagination data={codes} />
                 </Card>
             </div>
+
+            {/* ⚠️ Typed confirmation, because a delete has no undo. The server
+                refuses anything printed or ever assigned regardless — this gate
+                is about the codes that ARE deletable. */}
+            {canManage && (
+                <ConfirmDestructiveModal
+                    show={deleteOpen}
+                    onClose={() => setDeleteOpen(false)}
+                    title={t('smart_qr.delete_codes')}
+                    body={t('smart_qr.delete_codes_body', { count: selected.length })}
+                    onConfirm={() => {
+                        router.delete(route('admin.qr.inventory.destroy'), {
+                            data: { code_ids: selected },
+                            preserveScroll: true,
+                            onSuccess: clearSelection,
+                        });
+                        setDeleteOpen(false);
+                    }}
+                />
+            )}
 
             {canAssign && (
                 <AssignQrModal

@@ -51,6 +51,12 @@ class SmartQrAccessGuardTest extends TestCase
         // Still named file-by-file, not by directory: a future action that READS
         // codes on a customer's behalf must still fail this guard.
         'app/Modules/SmartQr/Actions/AssignQrCodesAction.php',
+        // ⚠️ Slice 3c. Decides whether a code may be DELETED, which is a
+        // platform-lifecycle question about inventory — "was this ever printed,
+        // was it ever held by anyone" — not a tenant read. Bounding it to a
+        // workspace would answer a different question and, worse, report every
+        // assigned code deletable.
+        'app/Modules/SmartQr/Services/SmartQrDeletability.php',
         'app/Http/Controllers/Admin/',
         'app/Modules/SmartQr/Http/Controllers/Admin/',
     ];
