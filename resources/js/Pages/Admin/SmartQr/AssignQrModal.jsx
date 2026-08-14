@@ -18,12 +18,22 @@ import axios from 'axios';
  * an ordering. It is expressed here by the pickers being empty until a workspace
  * is chosen, which is a data dependency, not a wizard.
  *
+ * ⚠️ R-3 — the placement vocabulary. An OWNER RULING made after the spec, which
+ * carries a `qr_type` field but never enumerates its values. Kept as a plain
+ * string in the database precisely so this list can change without a migration —
+ * editing this array is the whole change.
+ *
  * ⚠️ R-1 — the target is a WORKSPACE, not a client. Admins think in clients, so
  * the picker is grouped client -> workspace, but the value posted is the
  * workspace id, because that is the operational tenant boundary and the only
  * level at which "the channel belongs to the tenant" is well-defined.
  */
-export default function AssignQrModal({ show, onClose, codeIds = [], workspaces = [] }) {
+const QR_TYPES = [
+    'Counter', 'Table', 'Reception', 'Staff', 'Packaging',
+    'Storefront', 'Event', 'Product', 'Custom',
+];
+
+export default function AssignQrModal({ show, onClose, onAssigned, codeIds = [], workspaces = [] }) {
     const { t } = useTranslation();
     const permissions = usePage().props.auth?.permissions ?? [];
 
@@ -103,7 +113,12 @@ export default function AssignQrModal({ show, onClose, codeIds = [], workspaces 
 
         post(route('admin.qr.assignments.store'), {
             preserveScroll: true,
-            onSuccess: () => { reset(); onClose(); },
+            // ⚠️ onSuccess only — so a REFUSED assignment (over limit, dead
+            // channel, cross-tenant user) leaves the modal open with the fields
+            // and the ticked rows intact, and the admin corrects one field
+            // instead of starting over. Nothing was written, so the selection is
+            // still exactly the set they meant.
+            onSuccess: () => { reset(); onAssigned?.(); onClose(); },
         });
     };
 
@@ -196,24 +211,38 @@ export default function AssignQrModal({ show, onClose, codeIds = [], workspaces 
                             error={errors.name}
                         />
 
-                        {/* ⚠️ R-3 — a free-text placement label, not an enum.
-                            The vocabulary (Counter, Table, Reception, …) was an
-                            owner ruling made after the spec, stored as a plain
-                            string so it can change without a migration. A <select>
-                            here would pin it in the UI instead. */}
-                        <Input
+                        {/* ⚠️ A REAL <Select>, replacing a <datalist>. Two defects,
+                            one cause.
+                            
+                            The first version used an <Input list="…"> + <datalist>.
+                            That was the ONLY datalist in this codebase — a
+                            divergent pattern, which is exactly what reuse rules
+                            forbid — and its dropdown is drawn by the browser
+                            rather than by the app, so it rendered offset from the
+                            trigger and matched nothing else in the admin.
+                            
+                            It also explains a second report: QR TYPE showing "—"
+                            on an assigned row. A datalist LOOKS like a dropdown
+                            but is a free-text box with suggestions — clicking it
+                            and picking nothing leaves the field empty, and the
+                            value was never entered. (The persistence itself is
+                            fine: `the_qr_type_is_persisted_and_reaches_the_inventory_screen`
+                            proves the value survives the modal, the action, the
+                            eager load and the render.)
+                            
+                            ⚠️ R-3 IS NOT VIOLATED. R-3 governs the DATABASE — the
+                            column stays a plain string so the vocabulary can
+                            change without a migration. It does not require the
+                            picker to be free text; changing this list is a
+                            one-line edit here, no schema change either way. */}
+                        <Select
                             label={t('smart_qr.field_qr_type')}
                             value={data.qr_type}
                             onChange={(e) => setData('qr_type', e.target.value)}
                             placeholder={t('smart_qr.qr_type_placeholder')}
-                            list="smart-qr-types"
+                            options={QR_TYPES}
                             error={errors.qr_type}
                         />
-                        <datalist id="smart-qr-types">
-                            {['Counter', 'Table', 'Reception', 'Staff', 'Packaging', 'Storefront', 'Event', 'Product', 'Custom'].map((v) => (
-                                <option key={v} value={v} />
-                            ))}
-                        </datalist>
 
                         <Input
                             type="date"

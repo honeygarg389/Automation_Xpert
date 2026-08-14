@@ -216,6 +216,42 @@ class SmartQrAdminAssignmentTest extends TestCase
             'The other workspace lost its existing assignment — the rollback went too far.');
     }
 
+    /**
+     * ⚠️ qr_type survives the assignment AND reaches the inventory screen.
+     *
+     * Raised from a browser walkthrough: the QR TYPE column read "—" on an
+     * assigned row. This crosses the seam the last two defects lived in — the
+     * value is posted by a modal, written by an action, re-read through an
+     * eager load, and rendered from a nested relation. Any one of those four
+     * could drop it and the other three would still look correct.
+     */
+    #[Test]
+    public function the_qr_type_is_persisted_and_reaches_the_inventory_screen(): void
+    {
+        $t = $this->tenant();
+        $admin = $this->adminWith(['assign_qr_codes', 'view_qr_inventory']);
+        $ids = $this->codes(1);
+
+        $this->actingAs($admin, 'admin')
+            ->post(route('admin.qr.assignments.store'), $this->payload($t, $ids, [
+                'qr_type' => 'Reception',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        // 1. Written to the row.
+        $this->assertDatabaseHas('smart_qr_assignments', [
+            'smart_qr_code_id' => $ids[0],
+            'qr_type' => 'Reception',
+        ]);
+
+        // 2. And reaches the screen — the half a database assertion cannot see.
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('codes.data.0.current_assignment.qr_type', 'Reception'));
+    }
+
     // ══ ⚠️ R-14 — MEMBERSHIP, NOT PRIMARY WORKSPACE ════════════════════════
 
     /**

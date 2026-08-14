@@ -71,11 +71,34 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
         router.get(route('admin.qr.inventory.index'), {}, { preserveState: true });
     };
 
+    /**
+     * ⚠️ THE SELECTION IS CLEARED ON SUCCESS, AND DELIBERATELY KEPT ON FAILURE.
+     *
+     * Raised from a browser walkthrough: after assigning, the ticked rows stayed
+     * ticked. They had been acted on and no longer belonged to the selection, but
+     * the UI still offered them — so a second action could be fired at rows whose
+     * state had already changed underneath it.
+     *
+     * The two halves are opposite on purpose:
+     *
+     *   SUCCESS — clear. The rows have moved on; keeping them ticked invites
+     *             acting on them twice.
+     *   FAILURE — KEEP. Nothing was written (R-11 makes the whole batch atomic),
+     *             so the admin's selection is still exactly the set they meant.
+     *             Clearing it would make them re-tick forty rows to correct one
+     *             field.
+     *
+     * Inertia's `onSuccess` fires only on a 2xx with no validation errors, which
+     * gives that split for free — but it is stated here because it reads like an
+     * omission otherwise.
+     */
+    const clearSelection = () => setSelected([]);
+
     const bulk = (routeName, payload = {}) => {
         if (selected.length === 0) return;
         router.post(route(routeName), { code_ids: selected, ...payload }, {
             preserveScroll: true,
-            onSuccess: () => setSelected([]),
+            onSuccess: clearSelection,
         });
     };
 
@@ -216,7 +239,14 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
                         <table className="min-w-full text-sm">
                             <thead>
                                 <tr className="border-b border-neutral-200 dark:border-neutral-700 text-left text-neutral-500 dark:text-neutral-400">
-                                    <th className="pb-2 pr-4">
+                                    {/* ⚠️ px-4, not pr-4. With no LEFT padding the
+                                        checkbox sits flush against the container
+                                        edge and `overflow-x-auto` clips its
+                                        keyboard-focus ring. Matches the padding
+                                        Pages/Contacts/Index.jsx uses on its own
+                                        select column (`px-4 py-3 w-10`), which is
+                                        why that table does not clip. */}
+                                    <th className="w-10 px-4 pb-2">
                                         <input
                                             type="checkbox"
                                             checked={allAssignableSelected}
@@ -237,7 +267,7 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
                             <tbody>
                                 {rows.map((code) => (
                                     <tr key={code.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                                        <td className="py-3 pr-4">
+                                        <td className="px-4 py-3">
                                             <input
                                                 type="checkbox"
                                                 checked={selected.includes(code.id)}
@@ -283,6 +313,11 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
                 <AssignQrModal
                     show={assignOpen}
                     onClose={() => setAssignOpen(false)}
+                    // ⚠️ The modal owns the request, so only it knows the
+                    // assignment succeeded — the selection lives here. Without
+                    // this callback the rows stayed ticked after assignment,
+                    // which is the defect this fixes.
+                    onAssigned={clearSelection}
                     codeIds={selected}
                     workspaces={workspaces}
                 />
