@@ -205,3 +205,214 @@ its "tenant/customer" needed R-1.
 The ten steps become the fields of one form. Nothing in the described flow requires sequencing:
 no step's options depend on a later step, and the only dependency — channel and user must belong
 to the chosen workspace — is a validation, not an ordering.
+
+---
+
+## R-5 — AMENDED: the gauge lands in TWO declarations, not one
+
+R-5's table said `smart_qr_max_assigned` "slots into `GaugeSources`". That is half the wiring
+and the record should not read as though it were all of it.
+
+`plans.limits` carries no kind and no unit, so `PlanLimitKinds::MAP` is what declares a key to
+BE a gauge. Without an entry there:
+
+- `PlanLimitKinds::kindOf('smart_qr_max_assigned')` returns `null`, so nothing downstream knows
+  it is a cardinality limit rather than a per-period counter;
+- `GaugeReaderTest::every_gauge_is_either_sourced_or_explicitly_excluded` iterates
+  `PlanLimitKinds::keysOfKind('gauge')`, so the key would never be checked for having a source
+  at all — the guard that exists to stop a gauge going silently unenforced would not see it.
+
+**Ruled: both.** `PlanLimitKinds::MAP` declares the kind and unit; `GaugeSources::MAP` declares
+the model, the tenant boundary and — new in this slice — the filter.
+
+---
+
+## R-7 — AMENDED: the tripwire is NARROWED, and condition 2 was not implementable as written
+
+Two things R-7 did not anticipate, both found by reading the code it applies to.
+
+### (a) The tripwire fires here, and its own instruction is wrong for this case
+
+`GaugeReaderTest::the_bypass_becomes_load_bearing_when_slice_8_scopes_a_gauge_model` asserts
+that NO model in `GaugeSources::MAP` carries `scopeWithoutWorkspaceScope`. `SmartQrAssignment`
+uses `BelongsToWorkspace`. So adding `smart_qr_max_assigned` to `MAP` fails that test
+immediately — designed to fire when Phase 0 slice 8 CONVERTS an existing gauge model, firing
+instead because a new model arrived already scoped.
+
+Its docblock says "delete this test at that point". **That instruction is wrong here.** The
+other six models are still unscoped, so `gauges_count_correctly_with_no_workspace_context`
+— which seeds `chatbots` — still cannot fail. Deleting the tripwire would erase the
+MEASUREMENT that fact represents.
+
+**Ruled: narrow it to the still-unscoped six**, and take the other half of the observation:
+**re-point `gauges_count_correctly_with_no_workspace_context` at `smart_qr_max_assigned`.**
+It is the first gauge where `GaugeReader`'s scope bypass is LIVE, so the re-point converts a
+dormant test into one that genuinely fails when the bypass is removed. Both tests carry an
+inline note saying why they changed.
+
+### (b) Condition 2 required a seam that did not exist
+
+R-7 condition 2: the unmoved-seven test must "temporarily add a `where` to one of the seven,
+prove its count changes, remove it, prove it returns."
+
+**That was not implementable against the code as written.** `GaugeSources::MAP` is a `const` on
+a `final` class — nothing can mutate it, and no test double can replace it, because
+`GaugeReader` called the static directly.
+
+The alternative was a test asserting only "the seven are unchanged", which passes trivially
+against untouched code — the exact vacuous shape condition 2 exists to forbid.
+
+**Ruled: add the seam.** `GaugeReader::sourceFor(string $key): ?array` is a protected method
+returning `GaugeSources::for($key)`, and the discriminator test subclasses `GaugeReader` to
+override it. This is production code shaped by a test, deliberately and with the reason stated
+at the method. The name is neutral — it describes what it does, not that a test uses it.
+
+---
+
+## R-10 — `codes.status` is PHYSICAL only; "assigned" is derived, never stored
+
+The spec (§5) gives ONE status list: `generated, printed, assigned, active, inactive, damaged,
+lost, retired`. Slice 1 built TWO status columns, because those values answer two different
+questions about two different rows.
+
+**Ruled:**
+
+| Column | Vocabulary | Answers |
+|---|---|---|
+| `smart_qr_codes.status` | `generated, printed, damaged, lost, retired` | what happened to the physical sticker |
+| `smart_qr_assignments.status` | `active, inactive, ended` | whether the tenant's mapping is live |
+| — *(nothing)* | `assigned` | **derived** from the current-assignment index |
+
+**Storing `assigned` would be a second source of truth beside a DB-ENFORCED one.** Whether a
+code is assigned is already answered, exactly and atomically, by the unique index over the
+`current_code_id` generated column. A status string maintained in application code beside it
+would disagree the first time an assignment was written by a seeder, a raw insert, or a request
+that failed between the two writes — and then someone would "fix" whichever one they found
+first.
+
+This is the same reasoning R-4 used to keep `workspace_id` off `smart_qr_codes`, and the shape
+this codebase has been bitten by repeatedly: `accessibleWorkspaces()` vs `isAccessibleBy()`,
+`whatsapp_global` vs `whatsapp_msg`, `PlanLimits.jsx` vs `defaultLimits()`, `activePlan()` vs
+`effectiveSubscription()`.
+
+---
+
+## R-11 — Bulk assignment is ALL-OR-NOTHING, in one transaction, with the count in the error
+
+§6 step 1 is "select one or more QR codes", so five codes may be assigned to a workspace with
+three slots remaining. R-8 ruled the refusal; it did not rule the multiplicity.
+
+**Ruled: refuse all five. One transaction. The error names current, limit and requested.**
+
+Partial assignment is the worst outcome available. The admin believes five landed, three did,
+and nobody finds out until a customer reports a QR that goes nowhere — silent, and discovered
+by the customer rather than by us. Refusing five is loud, immediate and recoverable.
+
+⚠️ **The test must discriminate.** "An error was returned" passes against partial assignment,
+because the partial implementation errors too — after committing three rows. The assertion is
+**zero rows written**.
+
+---
+
+## R-12 — `assigned_count` is DERIVED, never stored
+
+The spec's §4 batch field list names `assigned_count`. Slice 1 did not build the column.
+
+**Ruled: keep it derived** — a `withCount` over current assignments, computed at read time.
+
+A stored counter must be incremented on assign and decremented on unassign, by every path that
+ever writes an assignment, forever. It will drift, and **drift in a count nobody checks is
+invisible** — the number stays plausible and stops being true. The derived count cannot drift,
+because there is nothing to keep in step.
+
+### ⚠️ This is the THIRD time the spec's field lists have been wrong against its own requirements
+
+Recorded together so the pattern is visible rather than rediscovered a fourth time:
+
+| # | What the spec did | Found in |
+|---|---|---|
+| 1 | asks for "record failure reason if a batch generation partially fails", omits `failure_reason` from the §4 field list | slice 2 |
+| 2 | assigns to "tenant/customer" in a codebase with both a client and a workspace | R-1 |
+| 3 | lists `assigned_count` as a stored batch field where a derived count is correct | slice 3 |
+
+Plus the §13-vs-§25 self-contradiction (R-2) and the single status list that is really two
+(R-10). **The spec is a requirements document, not a schema.** Its field lists are read as
+intent, and checked against its own requirements before they are built.
+
+---
+
+## R-13 — `smart_qr_max_assigned` = 50 on ALL THREE seeded tiers  ⚠️ OWNER RULING
+
+⚠️ **This supersedes two earlier proposals, and the record shows the progression deliberately —
+the equality across tiers will read as an oversight otherwise.**
+
+| # | Values | Source | Status |
+|---|---|---|---|
+| 1 | Starter 5 / Pro 50 / Business 1000 | proposed in the slice-3 plan | **superseded** |
+| 2 | *(the owner's message recalled this as 5/50/5000; no 5000 value was ever proposed)* | — | n/a |
+| 3 | **Starter 50 / Pro 50 / Business 50** | **OWNER** | **current** |
+
+**The ruling: 50 on every seeded tier.** Not a platform-wide hard cap sitting above the plan —
+a plan limit that happens to hold the same value on all three tiers today.
+
+**Why the number is not a tier differentiator.** 50 is a business decision about the Business
+Kit product: it is how many codes a customer of that product is expected to hold. It is not a
+technical ceiling and it is not a way to sell an upgrade. Making it differ by tier would encode
+a pricing decision nobody has made.
+
+**Why it lives in `plans.limits` rather than in code.** From there the owner can raise it for
+one plan, create a new plan carrying a different value, or sell an add-on that grants more —
+none of which needs a code change or a deploy. A hard cap above the plan would need one, and
+would also make the R-8 override meaningless, since code cannot be overridden by a permission.
+
+**The R-8 override remains the escape hatch for the individual exception.** "This customer
+needs 60" is answered by a permission-gated assignment carrying a reason required at the
+signature and written to the audit log — without touching the seeder, the plan, or the code.
+
+### ⚠️ Business now carries a finite value where every other limit on that tier is `null`
+
+That is deliberate, it is the departure ruled for, and **it is the owner's number, not the
+implementer's.** A gate that cannot fire is not a gate: leaving Business unlimited would make
+R-8's refusal unreachable for exactly the customers most likely to hold many codes, which is
+how BUG-024's nine unenforceable keys happened.
+
+---
+
+## R-14 — Assignment membership is decided by `Workspace::isAccessibleBy()`
+
+§6 requires "validate that assigned user belongs to the selected tenant". This codebase has
+**four** candidate answers, and CLAUDE.md records that two of them have already diverged into a
+complete bypass once.
+
+| Candidate | Where | What it actually means |
+|---|---|---|
+| `users.workspace_id` | column; `Workspace::users()` | the user's PRIMARY workspace — one value, not membership |
+| `workspace_user` pivot | `Workspace::members()` | raw rows, **never revoked** — `syncWithoutDetaching`, nothing detaches |
+| `User::accessibleWorkspaces()` | `User.php` | owned ∪ pivot, filtered by `client_id` |
+| `Workspace::isAccessibleBy()` | `Workspace.php` | `client_id` check, then owner, then pivot |
+
+**Ruled: `Workspace::isAccessibleBy($user)`.**
+
+- It answers the question actually being asked — one user, one workspace, boolean — rather than
+  building a collection to search.
+- It carries the `client_id` control, so a stale pivot row from a former organisation grants
+  nothing. The raw pivot does not.
+- It is what `WorkspacePolicy::view` uses, so the QR validator and workspace authorization
+  cannot drift into being two answers to one question.
+- It needs no scope bypass: `members()` is a `belongsToMany` to `User`, which is never
+  workspace-scoped.
+
+**`users.workspace_id` is rejected, and this is the trap.** It reads simpler and is wrong: a
+legitimate member whose PRIMARY workspace is a different one would be silently refused, and the
+admin would see a valid user missing from the picker with no explanation.
+
+⚠️ **One test carries this**: `a_member_whose_primary_workspace_is_different_is_accepted`. It is
+the only test that fails if someone later re-implements membership as `users.workspace_id`.
+
+### ⚠️ The channel check is the OPPOSITE shape
+
+`ChannelAccount` DOES use `BelongsToWorkspace`, and an admin request carries no workspace
+context — so a plain query fails CLOSED and rejects every channel, including the correct one.
+It must drop the scope explicitly and state `workspace_id` itself: the H-2 shape
+`SmartQrAccess::boundedTo()` documents, and the same fail-closed direction that made the
+slice-1 canary return 0.

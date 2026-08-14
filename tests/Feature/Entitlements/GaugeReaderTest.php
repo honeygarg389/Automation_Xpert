@@ -62,9 +62,64 @@ class GaugeReaderTest extends TestCase
         return app(GaugeReader::class);
     }
 
+    /**
+     * A batch to hang generated codes off. Smart QR codes are platform
+     * inventory, so this takes no workspace — that is the whole of R-4.
+     */
+    private function qrBatch(): int
+    {
+        return (int) DB::table('smart_qr_batches')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'batch_number' => 'AX-BK-'.Str::upper(Str::random(8)),
+            'batch_name' => 'Gauge fixture',
+            'prefix' => 'GA',
+            'quantity' => 100,
+            'serial_start' => 1,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
+    /**
+     * One assignment row, current unless `$unassignedAt` is given.
+     *
+     * ⚠️ Written with the query builder, not the model, so the workspace scope
+     * plays no part in the FIXTURE. A fixture that depended on the thing under
+     * test would make these counts unfalsifiable.
+     */
+    private function qrAssignment(Workspace $workspace, int $batchId, ?string $unassignedAt = null): void
+    {
+        $codeId = DB::table('smart_qr_codes')->insertGetId([
+            'serial_number' => 'GA-'.Str::upper(Str::random(10)),
+            'public_token' => bin2hex(random_bytes(16)),
+            'batch_id' => $batchId,
+            'status' => 'generated',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+
+        DB::table('smart_qr_assignments')->insert([
+            'uuid' => (string) Str::uuid(),
+            'smart_qr_code_id' => $codeId,
+            'workspace_id' => $workspace->id,
+            'status' => $unassignedAt === null ? 'active' : 'ended',
+            'assigned_at' => now()->subDay(),
+            'unassigned_at' => $unassignedAt,
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+    }
+
     /** Insert `$n` rows of a gauge's owning table for a workspace. */
     private function seedGauge(string $key, Workspace $workspace, int $n): void
     {
+        if ($key === 'smart_qr_max_assigned') {
+            $batchId = $this->qrBatch();
+
+            for ($i = 0; $i < $n; $i++) {
+                $this->qrAssignment($workspace, $batchId);
+            }
+
+            return;
+        }
+
         $table = (new (GaugeSources::MAP[$key]['model']))->getTable();
 
         for ($i = 0; $i < $n; $i++) {
@@ -104,7 +159,13 @@ class GaugeReaderTest extends TestCase
     {
         $gauges = PlanLimitKinds::keysOfKind('gauge');
 
-        $this->assertCount(9, $gauges, 'Expected 9 gauge keys in PlanLimitKinds.');
+        // ⚠️ 9 -> 10: `smart_qr_max_assigned` joined in Smart QR slice 3. The
+        // key is NAMED rather than the number bumped, so a future key arriving
+        // by accident still fails this line instead of quietly making 11.
+        $this->assertCount(10, $gauges, 'Expected 10 gauge keys in PlanLimitKinds.');
+        $this->assertContains('smart_qr_max_assigned', $gauges,
+            'The Smart QR assignment gauge lost its PlanLimitKinds entry. Without it the key '
+            .'has no declared kind, and this test would stop checking it has a source at all.');
 
         foreach ($gauges as $key) {
             $this->assertTrue(
@@ -114,7 +175,9 @@ class GaugeReaderTest extends TestCase
             );
         }
 
-        $this->assertCount(7, GaugeSources::MAP, '9 gauges minus storage and inbox_agents.');
+        // ⚠️ 7 -> 8, same reason, same naming.
+        $this->assertCount(8, GaugeSources::MAP, '10 gauges minus storage and inbox_agents.');
+        $this->assertArrayHasKey('smart_qr_max_assigned', GaugeSources::MAP);
         $this->assertArrayHasKey('storage', GaugeSources::EXCLUDED);
         $this->assertArrayHasKey('inbox_agents', GaugeSources::EXCLUDED);
     }
@@ -172,66 +235,276 @@ class GaugeReaderTest extends TestCase
      * held", which hands the customer their FULL limit as headroom. That is how
      * ContactCapacity failed.
      *
-     * ─── ⚠️ THIS TEST CANNOT CURRENTLY FAIL, AND THAT IS WORTH KNOWING ──────
+     * ─── ⚠️ RE-POINTED IN SMART QR SLICE 3, AND NOW IT CAN ACTUALLY FAIL ────
      *
-     * Measured: removing the scope bypass from GaugeReader leaves this file
-     * entirely green. NONE of the seven gauge models carries BelongsToWorkspace
-     * yet — six sit in Phase 0's un-started slice 8 and User is NEVER_SCOPED —
-     * so the bypass branch never executes and there is no scope to fail closed.
+     * This test used to seed `chatbots`, and in that form it was DORMANT:
+     * measured, removing the scope bypass from GaugeReader left the whole file
+     * green, because none of the seven gauge models carried BelongsToWorkspace —
+     * six sit in Phase 0's un-started slice 8 and User is NEVER_SCOPED. There
+     * was no scope to fail closed, so the bypass branch never executed.
      *
-     * The bypass is therefore written for a future that has not arrived. It is
-     * kept because adding it later, once slice 8 has scoped these models, means
-     * a window in which every gauge silently under-counts and grants full
-     * headroom — and the guard test would be written after the damage.
+     * `smart_qr_max_assigned` changed that. `SmartQrAssignment` uses
+     * BelongsToWorkspace from birth, so it is the FIRST gauge where the bypass
+     * is live — and re-pointing this test at it converts a test that could not
+     * fail into one that does.
      *
-     * `the_bypass_becomes_load_bearing_when_slice_8_scopes_a_gauge_model` below
-     * is the tripwire: it fails the moment any gauge model gains the trait,
-     * forcing whoever does that to re-verify this test can actually fail.
+     * The `chatbots` assertion is kept below as the control: it still cannot
+     * fail today, and the contrast between the two is the point.
      */
     #[Test]
     public function gauges_count_correctly_with_no_workspace_context(): void
     {
         $a = $this->tenant()['workspace'];
         $this->seedGauge('chatbots', $a, 3);
+        $this->seedGauge('smart_qr_max_assigned', $a, 4);
 
         WorkspaceContext::flush();
         $this->assertNull(WorkspaceContext::id(), 'Precondition: no workspace context.');
 
+        // ⚠️ THE LIVE ONE. SmartQrAssignment is workspace-scoped, so without the
+        // bypass the scope fails closed here and this returns 0.
+        $this->assertSame(4, $this->reader()->count('smart_qr_max_assigned', $a),
+            'The Smart QR gauge returned 0 with no workspace context — the scope failed closed '
+            .'and the bypass in GaugeReader is gone. 0 reads as "nothing held", which grants '
+            .'the FULL limit as headroom: the fail-OPEN direction, and the one that costs '
+            .'money. This is the first gauge where that bypass is load-bearing.');
+
+        // The control, still dormant: no scope exists on AiChatbot to fail.
         $this->assertSame(3, $this->reader()->count('chatbots', $a),
             'The gauge returned 0 with no context. A gauge that under-counts grants unlimited '
             .'headroom — the fail-OPEN direction, and the one that costs money.');
     }
 
     /**
-     * ⚠️ TRIPWIRE for the test above, which is dormant until slice 8.
+     * ⚠️ TRIPWIRE — NARROWED IN SMART QR SLICE 3, NOT DELETED.
      *
-     * The fail-open guard in GaugeReader only does anything once a gauge model
-     * is workspace-scoped. Today none is, so removing the guard changes nothing
-     * and no test notices — measured, not assumed.
+     * It originally asserted that NO gauge model was workspace-scoped, and said
+     * to delete it when one became so. Slice 3 made one so — `SmartQrAssignment`
+     * carries BelongsToWorkspace from birth — but deleting on that signal would
+     * have been wrong, for a reason the original could not have anticipated.
      *
-     * This asserts that state explicitly. When Phase 0 slice 8 scopes any of
-     * these models this test FAILS, which is the intended behaviour: it is the
-     * signal to confirm the bypass is live and that
-     * `gauges_count_correctly_with_no_workspace_context` can now genuinely fail.
+     * The tripwire fired for the wrong event. It was written for Phase 0 slice 8
+     * CONVERTING an existing gauge model; what actually happened is a NEW model
+     * arriving already scoped. Those are different, and the difference matters:
+     * the seven below are still unscoped, so this test still records a live
+     * MEASUREMENT — that for those seven, removing GaugeReader's bypass changes
+     * nothing and no test notices.
      *
-     * Delete this test at that point — after checking, not instead of checking.
+     * Deleting it would have erased that measurement while leaving the seven
+     * exactly as unprotected as before.
+     *
+     * So: narrowed to the still-unscoped seven. It fails the day slice 8 scopes
+     * any of them, which is still the intended signal — go and confirm that
+     * `gauges_count_correctly_with_no_workspace_context` covers the newly-scoped
+     * model too, then remove it from this list.
+     *
+     * `smart_qr_max_assigned` is deliberately EXCLUDED: it is the one gauge
+     * where the bypass is already load-bearing, and the test above now proves it.
      */
     #[Test]
-    public function the_bypass_becomes_load_bearing_when_slice_8_scopes_a_gauge_model(): void
+    public function the_bypass_is_still_dormant_for_the_seven_unscoped_gauges(): void
     {
+        $expectedUnscoped = [
+            'users', 'whatsapp_accounts', 'whatsapp_templates',
+            'knowledge_bases', 'chatbots', 'social_accounts', 'automations',
+        ];
+
+        // Control: the list has not silently drifted out of MAP.
+        foreach ($expectedUnscoped as $key) {
+            $this->assertArrayHasKey($key, GaugeSources::MAP,
+                "Gauge '{$key}' left GaugeSources::MAP, so this tripwire is watching a key that "
+                .'no longer exists and would pass however the remaining gauges are scoped.');
+        }
+
         $scoped = [];
 
-        foreach (GaugeSources::MAP as $key => $source) {
-            if (method_exists($source['model'], 'scopeWithoutWorkspaceScope')) {
+        foreach ($expectedUnscoped as $key) {
+            if (method_exists(GaugeSources::MAP[$key]['model'], 'scopeWithoutWorkspaceScope')) {
                 $scoped[] = $key;
             }
         }
 
         $this->assertSame([], $scoped,
             'These gauge models are now workspace-scoped: '.implode(', ', $scoped).". \n"
-            ."GaugeReader's scope bypass has just become load-bearing. Confirm that\n"
-            ."gauges_count_correctly_with_no_workspace_context can now actually FAIL when the\n"
-            .'bypass is removed — until slice 8 it could not — and then delete this tripwire.');
+            ."GaugeReader's scope bypass has just become load-bearing for them. Confirm that\n"
+            ."gauges_count_correctly_with_no_workspace_context covers the newly-scoped model —\n"
+            .'it currently proves the bypass only through smart_qr_max_assigned — then drop the '
+            ."key from this list.\n");
+
+        // ⚠️ THE POSITIVE HALF. Without this, the assertion above would pass if
+        // `method_exists` were broken or the trait renamed, and the narrowing
+        // would look like a measurement while proving nothing.
+        $this->assertTrue(
+            method_exists(GaugeSources::MAP['smart_qr_max_assigned']['model'], 'scopeWithoutWorkspaceScope'),
+            'SmartQrAssignment is no longer workspace-scoped. It is the one gauge model that IS, '
+            .'and this check is what proves the detection above can distinguish the two.'
+        );
+    }
+
+    // ══ ⚠️ R-7 — THE FILTERED GAUGE ════════════════════════════════════════
+
+    /**
+     * ⚠️ THE DISCRIMINATOR. Filtered returns 2; unfiltered returns 5.
+     *
+     * `smart_qr_assignments` keeps history — a reassignment sets `unassigned_at`
+     * and leaves the row, because R-4 needs the old period to survive. So an
+     * unfiltered count returns every assignment the workspace has EVER held.
+     *
+     * A workspace holding 2 codes with 3 previously reassigned away would read
+     * 5 used / 0 current: at its limit while owning nothing. And because the
+     * count only grows, a workspace that churns codes is permanently locked out.
+     *
+     * N=2 and M=3 are chosen so the two implementations return DISTINCT numbers.
+     * Equal counts would let the wrong one pass by coincidence.
+     */
+    #[Test]
+    public function the_assignment_gauge_counts_only_current_assignments(): void
+    {
+        $ws = $this->tenant()['workspace'];
+        $batch = $this->qrBatch();
+
+        for ($i = 0; $i < 2; $i++) {
+            $this->qrAssignment($ws, $batch);                                  // current
+        }
+
+        for ($i = 0; $i < 3; $i++) {
+            $this->qrAssignment($ws, $batch, now()->subHour()->toDateTimeString());  // ended
+        }
+
+        $this->assertSame(5, (int) DB::table('smart_qr_assignments')->where('workspace_id', $ws->id)->count(),
+            'Precondition: 5 assignment rows exist, 2 of them current.');
+
+        $this->assertSame(2, $this->reader()->count('smart_qr_max_assigned', $ws),
+            'The assignment gauge returned the workspace\'s ENTIRE assignment history rather '
+            .'than its current holdings. 5 means the unassigned_at filter is missing: the count '
+            .'is then monotonic, so a workspace that reassigns codes is permanently at its '
+            .'limit while owning nothing.');
+    }
+
+    /** …and it releases when a code is reassigned away, which a counter could not. */
+    #[Test]
+    public function the_assignment_gauge_releases_on_reassignment(): void
+    {
+        $ws = $this->tenant()['workspace'];
+        $batch = $this->qrBatch();
+
+        $this->qrAssignment($ws, $batch);
+        $this->qrAssignment($ws, $batch);
+
+        $this->assertSame(2, $this->reader()->count('smart_qr_max_assigned', $ws));
+
+        DB::table('smart_qr_assignments')
+            ->where('workspace_id', $ws->id)
+            ->limit(1)
+            ->update(['unassigned_at' => now(), 'status' => 'ended']);
+
+        $this->assertSame(1, $this->reader()->count('smart_qr_max_assigned', $ws),
+            'Ending an assignment did not free the slot. A gauge must go DOWN, which is why '
+            .'this cannot be a usage_meter (BUG-024).');
+    }
+
+    /** The filtered gauge is still a tenant boundary, not just a filter. */
+    #[Test]
+    public function the_assignment_gauge_ignores_another_workspaces_assignments(): void
+    {
+        $a = $this->tenant()['workspace'];
+        $b = $this->tenant()['workspace'];
+        $batch = $this->qrBatch();
+
+        $this->qrAssignment($a, $batch);
+        $this->qrAssignment($b, $batch);
+        $this->qrAssignment($b, $batch);
+
+        $this->assertSame(1, $this->reader()->count('smart_qr_max_assigned', $a),
+            'The assignment gauge counted another workspace\'s codes.');
+        $this->assertSame(2, $this->reader()->count('smart_qr_max_assigned', $b));
+    }
+
+    /**
+     * ⚠️ THE UNMOVED-SEVEN TEST, AND IT DISCRIMINATES.
+     *
+     * "The seven are unchanged" passes trivially against untouched code and
+     * proves nothing — the vacuous shape R-7 condition 2 exists to forbid. So
+     * this adds a `where` to one of the seven, proves its count CHANGES, removes
+     * it, and proves it RETURNS.
+     *
+     * `GaugeSources::MAP` is a const on a final class and cannot be mutated,
+     * which is why `GaugeReader::sourceFor()` exists as a seam. Overriding it
+     * here is the only way this test can fail for the right reason.
+     */
+    #[Test]
+    public function the_where_branch_is_inert_for_the_seven_but_would_not_be_if_they_declared_one(): void
+    {
+        $ws = $this->tenant()['workspace'];
+        $this->seedGauge('chatbots', $ws, 3);
+
+        // Two of the three are given a name the filter will exclude.
+        DB::table('ai_chatbots')->where('workspace_id', $ws->id)->limit(2)
+            ->update(['name' => 'FILTERED-OUT']);
+
+        // 1. Absent `where` — the branch does not run.
+        $this->assertSame(3, $this->reader()->count('chatbots', $ws),
+            'Baseline: with no `where` declared, all three rows count.');
+
+        // 2. ⚠️ A `where` IS declared. If the branch were dead, this would still
+        //    return 3 and the inertness claim would be unfalsifiable.
+        $filtered = new class extends GaugeReader
+        {
+            protected function sourceFor(string $key): ?array
+            {
+                $source = GaugeSources::for($key);
+
+                if ($key === 'chatbots' && $source !== null) {
+                    $source['where'] = ['name' => 'FILTERED-OUT'];
+                }
+
+                return $source;
+            }
+        };
+
+        $this->assertSame(2, $filtered->count('chatbots', $ws),
+            'Declaring a `where` on chatbots did not change its count. The filter branch in '
+            .'GaugeReader is dead code, so "the seven are unaffected" is true for the wrong '
+            .'reason and proves nothing about them.');
+
+        // 3. Removed again — the count returns. Proves step 2 changed the
+        //    declaration and not the rows.
+        $this->assertSame(3, $this->reader()->count('chatbots', $ws),
+            'The count did not return to 3 after the filter was removed, so step 2 mutated the '
+            .'data rather than the declaration and this test measured the wrong thing.');
+    }
+
+    /**
+     * ⚠️ An explicitly-NULL filter must NOT fire the branch.
+     *
+     * R-7 condition 1: guard on the key's ABSENCE with `isset()`, never on
+     * truthiness. `array_key_exists` would treat `'where' => null` as a declared
+     * filter and iterate null — the same conflation of absent and null that
+     * BUG-030 is about.
+     */
+    #[Test]
+    public function an_explicitly_null_where_is_treated_as_no_filter(): void
+    {
+        $ws = $this->tenant()['workspace'];
+        $this->seedGauge('chatbots', $ws, 3);
+
+        $nullFilter = new class extends GaugeReader
+        {
+            protected function sourceFor(string $key): ?array
+            {
+                $source = GaugeSources::for($key);
+
+                if ($key === 'chatbots' && $source !== null) {
+                    $source['where'] = null;
+                }
+
+                return $source;
+            }
+        };
+
+        $this->assertSame(3, $nullFilter->count('chatbots', $ws),
+            "A 'where' => null fired the filter branch. Absent and null are different: the "
+            .'guard must be isset(), not array_key_exists() and not truthiness.');
     }
 
     // ══ Scope: the CLIENT-scoped gauge ═════════════════════════════════════

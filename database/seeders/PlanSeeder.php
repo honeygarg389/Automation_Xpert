@@ -45,6 +45,22 @@ class PlanSeeder extends Seeder
                     'lead_credits_per_month' => 200,
                     // Automations
                     'automations' => 3,
+                    // ⚠️ R-13 (OWNER) — 50 on ALL THREE tiers, identical by
+                    // decision and not by oversight. 50 is a business decision
+                    // about the Business Kit product, not a technical ceiling
+                    // and not a tier differentiator.
+                    //
+                    // It lives here rather than in code so the owner can raise
+                    // it for one plan, add a plan carrying a different value, or
+                    // sell an add-on — none of which needs a deploy. A hard cap
+                    // above the plan would need one, and would make the R-8
+                    // override meaningless, since code cannot be overridden by a
+                    // permission.
+                    //
+                    // The individual exception is the R-8 override, not an edit
+                    // here: permission-gated, reason required at the signature,
+                    // audit-logged.
+                    'smart_qr_max_assigned' => 50,
                 ],
                 'white_label_enabled' => false,
                 'sort_order' => 1,
@@ -80,6 +96,22 @@ class PlanSeeder extends Seeder
                     'social_posts_per_month' => 200,
                     'lead_credits_per_month' => 2000,
                     'automations' => 20,
+                    // ⚠️ R-13 (OWNER) — 50 on ALL THREE tiers, identical by
+                    // decision and not by oversight. 50 is a business decision
+                    // about the Business Kit product, not a technical ceiling
+                    // and not a tier differentiator.
+                    //
+                    // It lives here rather than in code so the owner can raise
+                    // it for one plan, add a plan carrying a different value, or
+                    // sell an add-on — none of which needs a deploy. A hard cap
+                    // above the plan would need one, and would make the R-8
+                    // override meaningless, since code cannot be overridden by a
+                    // permission.
+                    //
+                    // The individual exception is the R-8 override, not an edit
+                    // here: permission-gated, reason required at the signature,
+                    // audit-logged.
+                    'smart_qr_max_assigned' => 50,
                 ],
                 'white_label_enabled' => false,
                 'sort_order' => 2,
@@ -115,6 +147,13 @@ class PlanSeeder extends Seeder
                     'social_posts_per_month' => null,
                     'lead_credits_per_month' => null,
                     'automations' => null,
+                    // ⚠️ R-13 (OWNER) — FINITE, where every other limit on this
+                    // tier is null. That is the deliberate departure: a gate
+                    // that cannot fire is not a gate, and leaving Business
+                    // unlimited would make R-8's refusal unreachable for exactly
+                    // the customers most likely to hold many codes. That is how
+                    // BUG-024's nine unenforceable keys happened.
+                    'smart_qr_max_assigned' => 50,
                 ],
                 'white_label_enabled' => true,
                 'sort_order' => 3,

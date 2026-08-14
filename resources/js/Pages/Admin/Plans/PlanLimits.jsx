@@ -18,6 +18,11 @@ const LIMIT_KEYS = [
     'social_posts_per_month',
     'lead_credits_per_month',
     'automations',
+    // ⚠️ Must be listed here, not only in PlanSeeder. `setAllUnlimited` below
+    // rebuilds `limits` from LIMIT_KEYS alone, so a seeded key missing from this
+    // array is silently deleted from every plan the first time an admin clicks
+    // it. Related to BUG-027.
+    'smart_qr_max_assigned',
 ];
 
 const LABELS = {
@@ -37,6 +42,7 @@ const LABELS = {
     social_posts_per_month: 'Social Posts / mo',
     lead_credits_per_month: 'Lead Credits / mo',
     automations: 'Automations',
+    smart_qr_max_assigned: 'Smart QR Codes Assigned',
 };
 
 const DEFAULT_LIMITS = Object.fromEntries(LIMIT_KEYS.map((k) => [k, null]));
