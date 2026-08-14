@@ -2379,3 +2379,107 @@ Tests: `SmartQrAdminInventoryTest::an_overlapping_serial_range_is_refused_at_bat
 with `an_adjacent_non_overlapping_range_is_accepted` as the positive control — 101 starting
 exactly where 1..100 ends must be allowed, since a continuing print run is the whole reason
 `serial_start` exists.
+
+---
+
+## BUG-036 — editing a plan's limits never invalidates the entitlement cache
+
+- **Severity:** Medium — silent, time-bounded, and it makes an admin action appear to do nothing
+- **Status:** **NOT FIXED.** Found 2026-08-14 while writing a browser walkthrough for Smart QR
+  slice 3b. Recorded deliberately rather than fixed — see "Not fixed here".
+- **Files:** `app/Http/Controllers/Admin/PlanController.php` (the write),
+  `app/Modules/Entitlements/EntitlementsServiceProvider.php` (the five invalidators),
+  `app/Modules/Entitlements/Listeners/InvalidateEntitlementCache.php`
+- **User-facing:** Indirectly — customers keep their old limits; the admin sees no error.
+
+### What is affected
+
+**Any limit edited through `Admin\PlanController`.** All 17 keys, including
+`smart_qr_max_assigned`. The controller writes `plans.limits` and dispatches nothing —
+measured: **zero** `dispatch(` or `event(` calls in the whole file.
+
+### The observable
+
+The customer keeps being enforced against the **old** limit for up to
+`entitlements.cache_fallback_ttl_minutes` (`ENTITLEMENTS_CACHE_TTL_MINUTES`, default **60**),
+because `EntitlementCache` serves the materialised `workspace_entitlements` row until it ages
+past that TTL.
+
+Both directions are wrong and one of them costs money:
+
+| Edit | Until the TTL expires |
+|---|---|
+| limit raised | customer still refused at the old, lower ceiling — looks like the admin's change did nothing |
+| limit lowered | customer still permitted above the new ceiling |
+
+Nothing surfaces. No error, no log line, no failed job. The admin saves the plan, sees the new
+number in the form, and the system enforces the old one.
+
+### ⚠️ THIS IS NOT "AN EVENT WITH NO DISPATCHER", AND THE TRUE SHAPE IS WORSE
+
+The first reading of this — stated in conversation before it was checked — was that
+`PlanChanged` is listened to but never dispatched. **That is wrong**, and the correction matters
+because it changes what a reader should look for.
+
+`PlanChanged` **is** dispatched — once, from `StripeGateway::changePlan` (line ~569). So anyone
+auditing "is PlanChanged wired up?" finds a dispatcher and moves on. Measured across the five
+invalidators:
+
+| Event | Dispatchers |
+|---|---|
+| `SubscriptionStarted` | 15 |
+| `SubscriptionRenewed` | 14 |
+| `SubscriptionCancelled` | 2 |
+| `SubscriptionExpired` | 2 |
+| `PlanChanged` | **1** — `StripeGateway::changePlan` only |
+
+The real defect is **semantic, not a missing wire**. `PlanChanged` means *"this subscriber moved
+from one plan to another"* — its constructor is
+`(User $user, Subscription $subscription, Plan $oldPlan, Plan $newPlan)`. A plan **definition**
+edit has no user, no subscription and no "old plan", so `PlanController` **structurally cannot**
+dispatch it even if someone tried. The event's own shape forbids the reuse.
+
+**There is no event in this codebase for "a plan's definition changed."**
+
+### Why the fix is not one line
+
+`InvalidateEntitlementCache` resolves a **single** `client_id` and dispatches
+`ReconcileWorkspaceEntitlements` for that one client. All five invalidators are per-customer.
+
+A plan-definition edit affects **every subscriber of that plan** — a fan-out over N clients,
+which none of the existing five can express. So the fix needs a new event carrying a `plan_id`
+and a listener that reconciles every client subscribed to it, in batches. That is a design
+decision about blast radius on a shared table, not a missing `dispatch()` call.
+
+### The workaround, and why it is not a fix
+
+`php artisan entitlements:reconcile` rebuilds the read model immediately.
+
+⚠️ **A workaround that requires an operator to remember is not a fix.** It is the same class of
+rule CLAUDE.md rejects when it insists `withoutWorkspaceScope()` take its reason as an argument
+rather than a comment: correctness that depends on somebody recalling a second step is
+correctness that will lapse. The admin editing the plan is precisely the person who does not
+know the command exists.
+
+### ⚠️ Found by writing a WALKTHROUGH, not by a test — and no test could have caught it
+
+There is no test that edits a plan **through the controller** and then **reads an entitlement**.
+The two halves are covered separately and both pass:
+
+- `PlanLimitKeyDivergenceTest` posts to the controller and asserts the limits **column**
+- the Entitlements tests resolve entitlements from plans written **directly by a factory**
+
+The cache sits between them and is exercised by neither. The defect lives exactly in the seam —
+which is why writing a set of instructions for a human to follow found it, and 1,163 passing
+tests did not.
+
+That is the second finding in two slices from the same category. Slice 3b's other one was a
+controller returning props the screen needed but never received. Both are gaps a test asserting
+one layer cannot see, and both surfaced only when something end-to-end was assembled.
+
+### Not fixed here
+
+Deliberately out of scope: it is Phase 1 billing-layer work, it needs the fan-out decision
+above, and it wants a test that crosses the seam — post to `PlanController`, then read
+`Entitlements::limitForWorkspace()` and assert the **new** number. Writing that test first is
+the right start, because it currently fails and nothing else does.

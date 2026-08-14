@@ -385,6 +385,15 @@ scheduled, all would die quietly when Phase 0 closes:
 
   The cost of the wrong note was real: `EnforceLimit` was written against `activePlan()`, so
   every gateway-billed customer has been exempt from every plan limit since launch. See BUG-023.
+- **BUG-036**: editing a plan's limits through `Admin\PlanController` never invalidates the
+  entitlement cache, so the OLD limits stay enforced for up to
+  `entitlements.cache_fallback_ttl_minutes` (default 60) — silently, in both directions.
+  ⚠️ Not "an event with no dispatcher": `PlanChanged` IS dispatched, from `StripeGateway`, but it
+  means *"this subscriber moved between plans"* and its constructor requires a User and a
+  Subscription — so a plan-DEFINITION edit structurally cannot dispatch it. There is no event for
+  "a plan's definition changed", and the fix is a fan-out over every subscriber, not a
+  `dispatch()` call. `entitlements:reconcile` is the workaround; a workaround an operator must
+  remember is not a fix. See `docs/found-bugs.md` BUG-036.
 - **BUG-002**: 10 pre-existing PHPStan `property.notFound` errors in `app/Modules/Social`.
   Fix properly with `@property` annotations, or baseline as a *tracked decision* — not as a
   side effect of not looking. See `docs/found-bugs.md`.
