@@ -436,3 +436,52 @@ context — so a plain query fails CLOSED and rejects every channel, including t
 It must drop the scope explicitly and state `workspace_id` itself: the H-2 shape
 `SmartQrAccess::boundedTo()` documents, and the same fail-closed direction that made the
 slice-1 canary return 0.
+
+---
+
+## R-15 — Flat sidebar entries, and only for screens that exist
+
+Spec §2 asks for a **"QR Management" group** in the Super Admin navigation with seven children:
+Dashboard, QR Batches, QR Inventory, Assignments, Print Exports, Analytics, Settings.
+
+**Ruled: three flat entries.** Two separate reasons, and both are measurements of the code
+rather than preferences.
+
+### (a) There is no grouped-nav pattern to reuse
+
+`ADMIN_NAV_ITEMS` in `AdminLayout.jsx` is a **flat array**, and all ~22 existing entries are
+single links. There is no nested, collapsible, or sectioned nav component anywhere in this
+admin. Building one to match a described UX means maintaining a pattern with **one caller** —
+R-9's reasoning, applied to navigation instead of a form.
+
+### (b) ⚠️ Four of the seven screens do not exist, and a nav entry for one would CRASH
+
+`route('admin.qr.analytics.index')` throws at render time when the route is undefined — and
+`useAdminNav()` runs inside `AdminLayout`, so the throw takes down **every admin page**, not
+just the QR ones. A placeholder entry is not a harmless stub here; it is a site-wide outage.
+
+Dashboard, Print Exports, Analytics and Settings arrive with the slices that build them.
+
+### The permission gate is the READ key, deliberately
+
+All three entries gate on `view_qr_inventory`. The other three keys — `manage_qr_batches`,
+`assign_qr_codes`, `override_qr_assignment_limit` — gate **actions inside** the pages, which is
+where 3b applies them (create-batch button, bulk actions, assign button, override block).
+
+Gating navigation on a write permission would hide the list from a read-only admin who is
+explicitly allowed to see it, and the routes themselves already require `view_qr_inventory` to
+GET. One key, matching what the route demands.
+
+---
+
+## R-16 — Batch creation is a modal on the list, not a `Batches/Create` page
+
+3a exposes `batches.index`, `batches.store` (**POST**) and `batches.show`. There is no GET
+`batches.create` route, so a create *page* would have nothing to route to — it would require
+adding a route for a screen whose entire content is six fields.
+
+**Ruled: a modal over the batch list**, matching `Admin/Clients/Index`, whose add/edit flows are
+`Modal` + `Modal.Header/Body/Footer`.
+
+Same reasoning as R-9 once more: the alternative introduces a navigation step this admin does
+not otherwise have, for a form that fits in a dialog.

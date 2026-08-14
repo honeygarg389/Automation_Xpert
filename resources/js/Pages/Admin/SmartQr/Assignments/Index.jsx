@@ -26,7 +26,10 @@ export default function SmartQrAssignmentsIndex({ assignments }) {
     const canAssign = permissions.includes('assign_qr_codes');
 
     const rows = assignments?.data ?? [];
-    const showingAll = new URLSearchParams(window.location.search).get('current') === 'all';
+    // ⚠️ Read from Inertia's page URL rather than window.location: no browser
+    // global, and it stays correct under Inertia's client-side navigation, where
+    // window.location can lag a partial visit.
+    const showingAll = (page.url ?? '').includes('current=all');
 
     const unassign = (assignment) => {
         if (! confirm(t('smart_qr.unassign_confirm', { serial: assignment.code?.serial_number }))) return;

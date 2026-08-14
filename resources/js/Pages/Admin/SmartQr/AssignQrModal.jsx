@@ -31,11 +31,19 @@ export default function AssignQrModal({ show, onClose, codeIds = [], workspaces 
     // not thereby allowed to break a workspace's limit.
     const canOverride = permissions.includes('override_qr_assignment_limit');
 
-    const [options, setOptions] = useState({ channels: [], users: [], capacity: null });
-    const [loadingOptions, setLoadingOptions] = useState(false);
+    /**
+     * ⚠️ The fetched payload carries WHICH workspace it belongs to.
+     *
+     * That is what lets "still loading" be DERIVED rather than tracked in a
+     * second state variable set synchronously inside the effect — which is both
+     * a cascading render and a lint error (react-hooks/set-state-in-effect).
+     * Stale responses are ignored for free: if the answer is for a workspace the
+     * admin has already moved away from, it simply never becomes `ready`.
+     */
+    const EMPTY_OPTIONS = { channels: [], users: [], capacity: null };
+    const [fetched, setFetched] = useState({ forWorkspace: null, ...EMPTY_OPTIONS });
 
-    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
-        code_ids: [],
+    const { data, setData, post, transform, processing, errors, reset, clearErrors } = useForm({
         workspace_id: '',
         channel_account_id: '',
         assigned_user_id: '',
@@ -49,11 +57,6 @@ export default function AssignQrModal({ show, onClose, codeIds = [], workspaces 
         override_reason: '',
     });
 
-    // Keep the selection in the form in step with what the table has ticked.
-    useEffect(() => {
-        setData('code_ids', codeIds);
-    }, [codeIds]);
-
     /**
      * Channels, users and the capacity numbers for the chosen workspace.
      *
@@ -62,27 +65,25 @@ export default function AssignQrModal({ show, onClose, codeIds = [], workspaces 
      * put the whole platform's data into one page payload.
      */
     useEffect(() => {
-        if (! data.workspace_id) {
-            setOptions({ channels: [], users: [], capacity: null });
-            return;
-        }
+        if (! data.workspace_id) return;
 
         let cancelled = false;
-        setLoadingOptions(true);
 
         axios
             .get(route('admin.qr.assignments.options', { workspace: data.workspace_id }), {
                 params: { requested: codeIds.length },
             })
             .then(({ data: payload }) => {
-                if (! cancelled) setOptions(payload);
-            })
-            .finally(() => {
-                if (! cancelled) setLoadingOptions(false);
+                if (! cancelled) setFetched({ forWorkspace: data.workspace_id, ...payload });
             });
 
         return () => { cancelled = true; };
     }, [data.workspace_id, codeIds.length]);
+
+    // Derived, not stored — see the note on `fetched` above.
+    const ready = data.workspace_id !== '' && String(fetched.forWorkspace) === String(data.workspace_id);
+    const options = ready ? fetched : EMPTY_OPTIONS;
+    const loadingOptions = data.workspace_id !== '' && ! ready;
 
     const capacity = options.capacity;
 
@@ -94,6 +95,12 @@ export default function AssignQrModal({ show, onClose, codeIds = [], workspaces 
 
     const submit = (e) => {
         e.preventDefault();
+
+        // ⚠️ The selection lives in the TABLE, not in this form's state. Syncing
+        // it with an effect meant a setState on every selection change; transform
+        // merges it at submit time instead, which is what it is for.
+        transform((current) => ({ ...current, code_ids: codeIds }));
+
         post(route('admin.qr.assignments.store'), {
             preserveScroll: true,
             onSuccess: () => { reset(); onClose(); },

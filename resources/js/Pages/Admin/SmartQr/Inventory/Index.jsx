@@ -39,7 +39,7 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
     const [selected, setSelected] = useState([]);
     const [assignOpen, setAssignOpen] = useState(false);
 
-    const rows = codes?.data ?? [];
+    const rows = useMemo(() => codes?.data ?? [], [codes]);
 
     // ⚠️ Selection is by CODE ID, and only unassigned codes are selectable for
     // assignment. An assigned code is refused server-side ("unassign it first"),

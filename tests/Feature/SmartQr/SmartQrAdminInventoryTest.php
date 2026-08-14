@@ -269,6 +269,34 @@ class SmartQrAdminInventoryTest extends TestCase
             ->assertInertia(fn ($page) => $page->has('codes.data', 2));
     }
 
+    /**
+     * ⚠️ The assignment modal's WORKSPACE picker needs this list (R-1), and
+     * slice 3a did not return it.
+     *
+     * Found by building the screen, not by reading the controller: a controller
+     * test asserts the props that ARE returned, and cannot notice a prop the
+     * consumer needs and never receives. The page would have rendered an empty
+     * workspace dropdown and no test would have failed.
+     *
+     * The client name travels with it because admins navigate by organisation
+     * even though the value posted is the workspace id — built server-side so
+     * "which client owns this workspace" has one definition.
+     */
+    #[Test]
+    public function the_inventory_supplies_the_workspaces_the_assignment_modal_needs(): void
+    {
+        ['workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $admin = $this->adminWith(['view_qr_inventory']);
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('workspaces', 1)
+                ->where('workspaces.0.id', $workspace->id)
+                ->where('workspaces.0.client_name', $client->name));
+    }
+
     /** Serial search, because §5 lists it first. */
     #[Test]
     public function the_inventory_can_be_searched_by_serial(): void
