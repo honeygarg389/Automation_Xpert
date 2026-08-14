@@ -113,8 +113,10 @@ class EntitlementResolverCanaryTest extends TestCase
         // ⚠️ Anti-vacuity. Without these two the loop is satisfied by a resolver
         // that returns null for everything AND a seeder that limits nothing —
         // both sides agreeing on emptiness rather than on logic.
-        $this->assertSame(48, $keysChecked,
-            'Expected 16 keys x 3 plans. A different number means the seeder changed and this '
+        // ⚠️ 48 -> 51: 17 keys x 3 plans. `smart_qr_max_assigned` was seeded on
+        // all three tiers in slice 3 (R-13), so the product moved by exactly 3.
+        $this->assertSame(51, $keysChecked,
+            'Expected 17 keys x 3 plans. A different number means the seeder changed and this '
             .'test is no longer covering what it claims to.');
 
         $this->assertGreaterThanOrEqual(30, $nonNullChecked,
@@ -186,7 +188,11 @@ class EntitlementResolverCanaryTest extends TestCase
 
         $seeded = collect(Plan::all())->flatMap(fn (Plan $p) => array_keys($p->limits ?? []))->unique();
 
-        $this->assertCount(16, $seeded, 'Expected 16 distinct seeded limit keys.');
+        $this->assertCount(17, $seeded, 'Expected 17 distinct seeded limit keys.');
+        $this->assertContains('smart_qr_max_assigned', $seeded,
+            'The Smart QR limit is not seeded. R-13 requires a finite value on every tier so '
+            .'R-8\'s refusal is reachable in a real installation — a gate that cannot fire is '
+            .'not a gate.');
 
         foreach ($seeded as $key) {
             $this->assertArrayHasKey($key, PlanPackageSynthesizer::LEGACY_KEYS,
@@ -196,8 +202,9 @@ class EntitlementResolverCanaryTest extends TestCase
 
         $kinds = collect(PlanPackageSynthesizer::LEGACY_KEYS)->countBy('kind');
         $this->assertSame(7, $kinds['counter'] ?? 0, 'Expected 7 counters.');
-        $this->assertSame(9, $kinds['gauge'] ?? 0,
-            'Expected 9 gauges — BUG-024 originally recorded 7 and missed `automations`.');
+        $this->assertSame(10, $kinds['gauge'] ?? 0,
+            'Expected 10 gauges — BUG-024 originally recorded 7 and missed `automations`; \n'
+            .'`smart_qr_max_assigned` is the tenth, added in Smart QR slice 3.');
     }
 
     // ══ Legacy values: refuse rather than guess ════════════════════════════

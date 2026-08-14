@@ -2,9 +2,9 @@
 
 namespace App\Modules\SmartQr\Models;
 
+use App\Models\Scopes\WorkspaceScope;
 use Database\Factories\SmartQrCodeFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use App\Models\Scopes\WorkspaceScope;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -45,9 +45,12 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
  * @property int $id
  * @property string $serial_number
  * @property string $public_token
+ * @property string $status
+ * @property int $batch_id
  */
 class SmartQrCode extends Model
 {
+    /** @use HasFactory<SmartQrCodeFactory> */
     use HasFactory;
 
     /**

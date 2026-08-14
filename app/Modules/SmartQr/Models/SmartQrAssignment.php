@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -27,9 +28,14 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property int $workspace_id
  * @property int $smart_qr_code_id
+ * @property string|null $uuid
+ * @property Carbon|null $assigned_at
+ * @property Carbon|null $unassigned_at
+ * @property string $status
  */
 class SmartQrAssignment extends Model
 {
+    /** @use HasFactory<SmartQrAssignmentFactory> */
     use HasFactory;
 
     /**

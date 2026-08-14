@@ -56,6 +56,7 @@ class AssignQrCodesAction
      * The normal path: refuses when the workspace is at its limit.
      *
      * @param  list<int>  $codeIds
+     * @param  array<string, mixed>  $attributes
      * @return list<SmartQrAssignment>
      *
      * @throws RuntimeException when refused — nothing is written
@@ -82,6 +83,7 @@ class AssignQrCodesAction
      * required HERE, by the signature, so no caller can reach this without one.
      *
      * @param  list<int>  $codeIds
+     * @param  array<string, mixed>  $attributes
      * @param  string  $overrideReason  REQUIRED. Why this limit is being broken.
      * @return list<SmartQrAssignment>
      */
@@ -104,6 +106,7 @@ class AssignQrCodesAction
 
     /**
      * @param  list<int>  $codeIds
+     * @param  array<string, mixed>  $attributes
      * @return list<SmartQrAssignment>
      */
     private function write(

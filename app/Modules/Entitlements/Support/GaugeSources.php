@@ -113,9 +113,14 @@ final class GaugeSources
          * that churns codes is permanently locked out.
          *
          * `unassigned_at IS NULL` is the current-period filter, the same
-         * predicate `SmartQrCode::currentAssignment()` and the DB's unique index
-         * over `current_code_id` use. One definition of "current", three
-         * consumers.
+         * predicate the code model's currentAssignment relation and the DB's
+         * unique index over `current_code_id` use. One definition of "current",
+         * three consumers.
+         *
+         * ⚠️ That relation is named without its class prefix deliberately:
+         * `SmartQrAccessGuardTest` is a TEXT scan and would flag this comment
+         * as a raw query. Over-reporting is the safe direction for that guard,
+         * so the comment moves rather than the guard.
          */
         'smart_qr_max_assigned' => [
             'model' => SmartQrAssignment::class,

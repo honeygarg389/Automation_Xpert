@@ -5,6 +5,7 @@ namespace App\Modules\SmartQr\Rules;
 use App\Modules\SmartQr\Models\SmartQrBatch;
 use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
+use Illuminate\Translation\PotentiallyTranslatedString;
 
 /**
  * ⚠️ THE GAP SLICE 2 FOUND AND DEFERRED TO THIS SLICE.
@@ -42,7 +43,7 @@ class SerialRangeAvailable implements ValidationRule
     ) {}
 
     /**
-     * @param  Closure(string): void  $fail
+     * @param  Closure(string|\Stringable): (PotentiallyTranslatedString)  $fail
      */
     public function validate(string $attribute, mixed $value, Closure $fail): void
     {

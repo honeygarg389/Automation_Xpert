@@ -7,6 +7,7 @@ use App\Models\Scopes\WorkspaceScope;
 use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Support\SmartQrStatus;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -97,7 +98,7 @@ class QrInventoryController extends Controller
      * ⚠️ A PHYSICAL transition, so it moves `codes.status` (R-10). It says
      * nothing about whether the code is assigned, and must not.
      */
-    public function markPrinted(Request $request)
+    public function markPrinted(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'code_ids' => ['required', 'array', 'min:1'],
@@ -117,7 +118,7 @@ class QrInventoryController extends Controller
      * Restricted to the physical vocabulary by Rule::in, so no caller can post
      * `assigned` and create the second source of truth R-10 forbids.
      */
-    public function changeStatus(Request $request)
+    public function changeStatus(Request $request): RedirectResponse
     {
         $data = $request->validate([
             'code_ids' => ['required', 'array', 'min:1'],

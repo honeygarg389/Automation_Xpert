@@ -15,9 +15,15 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $batch_number
  * @property string $prefix
+ * @property string|null $uuid
+ * @property int $quantity
+ * @property int $serial_start
+ * @property string $status
+ * @property string|null $failure_reason
  */
 class SmartQrBatch extends Model
 {
+    /** @use HasFactory<SmartQrBatchFactory> */
     use HasFactory;
 
     /**

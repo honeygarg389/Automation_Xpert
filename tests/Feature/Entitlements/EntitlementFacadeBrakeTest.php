@@ -164,7 +164,8 @@ class EntitlementFacadeBrakeTest extends TestCase
             }
         }
 
-        $this->assertSame(48, $compared, 'Expected 16 keys x 3 plans.');
+        $this->assertSame(51, $compared, 'Expected 17 keys x 3 plans — smart_qr_max_assigned was seeded on all three tiers \n'
+            .'in Smart QR slice 3 (R-13), so the product moved by exactly 3.');
         $this->assertGreaterThanOrEqual(30, $finite,
             'Almost every comparison was null against null — two empty answers agreeing, not '
             .'two paths agreeing.');

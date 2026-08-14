@@ -42,6 +42,15 @@ class SmartQrAccessGuardTest extends TestCase
         // Narrow deliberately: the Actions directory is not blanket-allowed, so
         // a future action that READS codes for a customer still fails this guard.
         'app/Modules/SmartQr/Actions/GenerateQrBatchAction.php',
+        // ⚠️ Slice 3, and admitted for the SAME narrow reason as generation:
+        // assignment is a platform act. It resolves a code by id to hand it to
+        // a tenant, at a moment when the code belongs to nobody — there is no
+        // workspace to bound the lookup to, and bounding it to the RECEIVING
+        // workspace would be circular.
+        //
+        // Still named file-by-file, not by directory: a future action that READS
+        // codes on a customer's behalf must still fail this guard.
+        'app/Modules/SmartQr/Actions/AssignQrCodesAction.php',
         'app/Http/Controllers/Admin/',
         'app/Modules/SmartQr/Http/Controllers/Admin/',
     ];
