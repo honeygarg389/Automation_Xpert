@@ -2,7 +2,7 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **948 tests, 38,839 assertions, 0 failures, 1 documented skip.**
+> The suite passes: **1,162 tests, 39,622 assertions, 0 failures, 1 documented skip.**
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
 > failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
@@ -10,8 +10,8 @@
 >
 > **But read the caveat below before treating green as assurance.**
 
-**Current number recorded:** 2026-08-07, on `master` at `473d583`, after the three hard-gate
-security merges. Every figure here is measured, not carried forward.
+**Current number recorded:** 2026-08-14, on `feature/smart-qr` at `d4b5e80`, after Smart QR
+slice 3a. Previously 2026-08-07 on `master` at `473d583`. Every figure here is measured, not carried forward.
 
 **The 1 skip is documented and deliberate**, not a silent hole:
 `CredentialNotInExceptionMessageTest::test_the_places_scraper_does_not_persist_the_key_to_the_job_error_column`
@@ -34,6 +34,8 @@ with its own full-suite run:
 | Phase 0 — `BelongsToWorkspace`, slices 1–9 + BUG-019 | scope, guards, brake, job context | 949 |
 | `25c9476` — partner tier data layer | 9 partner-tier tests | 957 |
 | `54f965a` — **BUG-022/023** plan limits never enforced | 9 rewritten + 5 new limit tests | **966** |
+| Phase 1 slices 1–7 + Smart QR slices 1–2 | catalog, resolver, cache, QR schema + generation | 1128 |
+| `d4b5e80` — **Smart QR slice 3a**, admin batches / inventory / assignment | 18 assignment + 16 inventory/batch tests | **1162** |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
