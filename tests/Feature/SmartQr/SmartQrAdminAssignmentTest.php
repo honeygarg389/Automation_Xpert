@@ -123,6 +123,24 @@ class SmartQrAdminAssignmentTest extends TestCase
      *
      * So the assertion is the ROW COUNT, not the error. Asserting only that an
      * error came back passes against the partial implementation.
+     *
+     * ─── ⚠️ WHAT THIS TEST ACTUALLY DETECTS, MEASURED ───────────────────────
+     *
+     * Two mutations were run against it, and they did NOT give the same answer:
+     *
+     *   1. capacity check moved INSIDE the loop, transaction kept
+     *      -> this test stays GREEN. The transaction rolls the three back, so
+     *         zero rows is still the observable.
+     *   2. capacity check inside the loop AND the transaction removed
+     *      -> this test FAILS, which is the intended detection.
+     *
+     * So this assertion pins the TRANSACTION. The up-front check is pinned by
+     * `an_over_limit_assignment_is_refused_with_the_counts_in_the_message`,
+     * which failed under mutation 1 — the per-code check produces a bare
+     * "limit reached" without the numbers R-8 requires.
+     *
+     * Both safeguards are therefore covered, but by different tests, and saying
+     * this one covers both would be the dressing-up this project keeps catching.
      */
     #[Test]
     public function five_codes_into_three_slots_assigns_zero_not_three(): void
