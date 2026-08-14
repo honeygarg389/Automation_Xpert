@@ -325,19 +325,39 @@ ever writes an assignment, forever. It will drift, and **drift in a count nobody
 invisible** — the number stays plausible and stops being true. The derived count cannot drift,
 because there is nothing to keep in step.
 
-### ⚠️ This is the THIRD time the spec's field lists have been wrong against its own requirements
+### ⚠️ FIVE measured discrepancies between the spec and itself, or the spec and the code
 
-Recorded together so the pattern is visible rather than rediscovered a fourth time:
+Recorded in one table so the pattern is visible rather than rediscovered a sixth time. Every
+row was found by building the thing, not by reading the document again.
 
 | # | What the spec did | Found in |
 |---|---|---|
 | 1 | asks for "record failure reason if a batch generation partially fails", omits `failure_reason` from the §4 field list | slice 2 |
 | 2 | assigns to "tenant/customer" in a codebase with both a client and a workspace | R-1 |
-| 3 | lists `assigned_count` as a stored batch field where a derived count is correct | slice 3 |
+| 3 | lists `assigned_count` as a stored batch field where a derived count is correct | R-12 |
+| 4 | gives ONE §5 status list for what are two columns with two lifetimes | R-10 |
+| 5 | **§6 requires preventing assignment to "inactive or disconnected" channels. There is no `disconnected` state.** | slice 3a |
 
-Plus the §13-vs-§25 self-contradiction (R-2) and the single status list that is really two
-(R-10). **The spec is a requirements document, not a schema.** Its field lists are read as
-intent, and checked against its own requirements before they are built.
+Plus the §13-vs-§25 self-contradiction (R-2), which is a sixth of a different kind — the spec
+contradicting itself outright rather than mismatching the code.
+
+#### On #5, because the fix is not the obvious one
+
+`channel_accounts.status` is `enum('active','inactive','error')` — **measured**, after the
+first version of the slice-3a test wrote `'disconnected'` and MySQL truncated it to `''`.
+
+⚠️ **The rule is written as "must be `active`", not "must not be `disconnected`",** and that is
+the whole point. A deny-list phrased from the spec's vocabulary would have tested against a
+value that cannot occur and let `'error'` through — a channel in a genuine failure state,
+pointed at by a printed sticker, passing validation because the spec named a state this system
+does not have.
+
+The test asserts BOTH non-active values for the same reason: naming only one would leave the
+other untested, and "not active" is the actual rule.
+
+**The spec is a requirements document, not a schema, and not a description of this codebase.**
+Its field lists and its vocabulary are read as intent, and checked against the code before
+anything is built from them.
 
 ---
 

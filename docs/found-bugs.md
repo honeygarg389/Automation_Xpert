@@ -2320,3 +2320,62 @@ The fix is small — mirror Stripe's `catch` block — but it belongs on a billi
 BUG-032, and it wants one decision first: whether the release should be unconditional or limited
 to specific exception types. Releasing on a *permanent* failure means retrying something that
 will fail identically every time, which is its own kind of noise.
+
+---
+
+## BUG-035 — overlapping batch serial ranges collided mid-generation — ✅ FIXED
+
+- **Severity:** Medium — safe failure, but late, cryptic, and it left a half-generated batch
+- **Status:** **FIXED in Smart QR slice 3a** (`d3b5fa5`, branch `feature/smart-qr`).
+  Found 2026-08-13 during slice 2, fixed 2026-08-14.
+- **Files:** `app/Modules/SmartQr/Rules/SerialRangeAvailable.php` (new),
+  `app/Modules/SmartQr/Http/Requests/StoreQrBatchRequest.php`
+- **User-facing:** No — Super Admin only.
+
+### ⚠️ It lived in a TEST DOCBLOCK and nowhere else
+
+This entry exists because the defect was surfaced by
+`QrBatchGenerationTest::overlapping_serial_ranges_collide_at_generation_time`, which described
+it accurately, named slice 3's admin surface as the place to fix it — and was the **only**
+record of it anywhere. It was not in this document, not in the roadmap, and not in
+`CLAUDE.md`.
+
+A defect recorded only in the test that demonstrates it is a defect nobody schedules. The test
+passes, so nothing draws attention to it; and it reads as an intentional property of the system
+rather than an outstanding one. Recorded here as much for that as for the bug.
+
+### The defect
+
+`smart_qr_codes.serial_number` is **globally unique**, so a batch's
+`prefix` + `serial_start` + `quantity` defines a range no other batch may share. Nothing
+prevented an administrator creating two batches with prefix `AX` both starting at 1.
+
+The failure was **safe but late**. Generation chunks at 100 codes with one transaction per
+chunk, so on a 500-code batch the collision may not surface until the fifth chunk — after four
+have committed. What the operator saw:
+
+- a batch stuck in a failed state holding 400 of its 500 codes
+- a raw duplicate-key message in `failure_reason`
+
+rather than *"that serial range is already taken by batch AX-BK-0826"*, which is knowable
+before a single row is written.
+
+### The fix, and what it is NOT
+
+`SerialRangeAvailable`, applied to `serial_start` in `StoreQrBatchRequest`. It refuses a range
+overlapping any existing batch's under the same prefix, naming the conflicting batch and both
+ranges.
+
+⚠️ **It is a TOCTOU check, and the unique index remains the guarantee.** Two admins submitting
+overlapping batches concurrently both pass the rule: it reads, then the row is written, and
+nothing holds a lock in between. The rule converts a late cryptic failure into an immediate
+readable one — it does not replace the constraint.
+
+`overlapping_serial_ranges_collide_at_generation_time` is therefore left **passing and
+unchanged**, deliberately: it proves generation still fails safely when the validation is
+bypassed, which is the case the rule cannot cover.
+
+Tests: `SmartQrAdminInventoryTest::an_overlapping_serial_range_is_refused_at_batch_creation`,
+with `an_adjacent_non_overlapping_range_is_accepted` as the positive control — 101 starting
+exactly where 1..100 ends must be allowed, since a continuing print run is the whole reason
+`serial_start` exists.
