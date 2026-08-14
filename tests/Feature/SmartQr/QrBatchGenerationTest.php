@@ -291,6 +291,27 @@ class QrBatchGenerationTest extends TestCase
      * So the discriminator is `count == 0`, not "an exception was thrown": the
      * exception is thrown either way, and a test asserting only that would pass
      * with the transaction removed. That is the vacuous shape.
+     *
+     * ─── ⚠️ AND THIS TEST IS STILL VACUOUS FOR THE TRANSACTION. MEASURED. ───
+     *
+     * Stash-check: removing `DB::transaction` leaves this whole file GREEN.
+     *
+     * The reason is that a chunk is written by ONE multi-row `insert`, and a
+     * single INSERT statement is already atomic in InnoDB — if any row violates
+     * a constraint the entire statement fails and nothing lands. The "no
+     * orphans" property is therefore guaranteed by the STATEMENT, not by the
+     * transaction, and no assertion about orphaned rows can tell the two apart.
+     *
+     * What the transaction actually buys is binding the insert to the
+     * `generated_count` increment that follows it: without it, a failure between
+     * the two would leave the counter disagreeing with the rows. That is a
+     * narrow window this suite cannot inject a failure into, so it is stated
+     * here rather than asserted falsely.
+     *
+     * Keeping the transaction is still correct — the day a chunk becomes more
+     * than one statement, it is the only thing standing between a partial write
+     * and a consistent one. But this test does not prove it, and saying it does
+     * would be exactly the dressing-up this project keeps catching.
      */
     #[Test]
     public function a_failure_mid_chunk_leaves_no_orphaned_codes(): void
