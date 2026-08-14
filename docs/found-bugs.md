@@ -2483,3 +2483,145 @@ Deliberately out of scope: it is Phase 1 billing-layer work, it needs the fan-ou
 above, and it wants a test that crosses the seam — post to `PlanController`, then read
 `Entitlements::limitForWorkspace()` and assert the **new** number. Writing that test first is
 the right start, because it currently fails and nothing else does.
+
+---
+
+## BUG-037 — the translation key scanner destroys locale files on every fresh install
+
+- **Severity:** High — silent data loss in files that ship in the repo, and it corrupts
+  **deployed** installs, not just working copies
+- **Status:** **NOT FIXED.** Found 2026-08-14 during Smart QR slice 3c.
+- **Files:** `app/Services/I18n/TranslationKeyScanner.php` (root cause),
+  `app/Services/I18n/I18nFileService.php` (`unflatten`, the destruction),
+  `database/seeders/TranslationSeeder.php`, `app/Services/Install/InstallerService.php`
+- **User-facing:** Yes — missing and wrong UI strings, in every language.
+
+### ⚠️ IT AFFECTS DEPLOYED INSTALLS, BEFORE ANYONE LOGS IN
+
+`InstallerService::seedCore()` calls `Artisan::call('i18n:seed-defaults')`, which runs
+`TranslationSeeder`. **Every fresh install rewrites `resources/js/locales/*.json` and destroys
+part of them as its first act** — before an administrator account exists, let alone before
+anyone opens the admin panel.
+
+This is the part that makes it more than a developer annoyance. The locale files are tracked in
+the repo, so the shipped English dictionary is correct; the installer then damages the copy on
+disk, and nothing reports it.
+
+### Root cause — one regex that is not anchored
+
+`TranslationKeyScanner::discoverKeys()` runs five patterns. **Four are anchored to a function
+name** — `t(…)`, `i18n.t(…)`, `@lang(…)`, `__(…)`. The fifth (line 81) is context-free:
+
+```
+/['"`]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)['"`]\s*(?:\)|,|\s)/
+```
+
+It matches **any quoted dotted string** followed by `)`, `,` or whitespace. So
+`route('admin.clients.index')` is harvested as a translation key, along with every other route
+name, axios path and dotted literal in `resources/js`. Measured: **3,605 keys returned**, of
+which a large share are not translation keys at all.
+
+`keyToDefaultEnglish()` then supplies a value with `Str::title(lastSegment)`. Executed:
+`Str::title('2fa')` === `"2Fa"` — the exact value observed in the damaged file.
+
+### The destruction is in `unflatten()`, and it runs in BOTH directions
+
+The humanised value is not written *over* the parent. It is added as a **sibling flat key**,
+and `I18nFileService::unflatten()` then collapses the tree by last-write-wins. Measured against
+`en.json`:
+
+| | Case | Count |
+|---|---|---|
+| **A** | the discovered key **is** an object → the string overwrites it, children destroyed | **4** — `client.profile.2fa`, `client.profile.sessions`, `client.inbox.setup`, `client.segments.contacts` |
+| **B** | the discovered key's **ancestor** is a leaf string → the object overwrites the string | **25** — `admin.clients`, `admin.plans`, `admin.payments`, `admin.admins`, `client.workspaces`, … |
+
+**B's 25 matches the 25 destroyed leaves exactly.** `unflatten()` performs this silently: it
+reassigns `$ref[$part]` with no check that it is discarding a populated node.
+
+### Eight call sites, four files — fixing the seeder closes one of four
+
+`I18nFileService::putFlatDictionary()` is the only function that writes, but it is reached from:
+
+| Caller | Sites |
+|---|---|
+| `Admin/TranslationController` | 3 (lines 28, 47, 89) — the admin Translations screen |
+| `Console/Commands/I18nScanCommand` | 2 (lines 43, 55) |
+| `database/seeders/TranslationSeeder` | 2 (lines 38, 52) |
+| `Admin/LocaleController:100` | 1, via `createLocaleFile()` — "add a language" |
+
+Plus `I18nSeedDefaultsCommand`, which constructs `TranslationSeeder` directly. **Saving a
+translation in the admin UI and adding a language are equally live paths.** This is the
+BUG-006 shape: fixing the first site found closes nothing while looking correct.
+
+### ⚠️ Non-English is WORSE than data loss — it reads as translated
+
+`FallbackTranslationProvider::translate()` returns `null`, and the seeder does:
+
+```php
+$flat[$flatKey] = $translated ?? $enVal;
+```
+
+So any key missing from a target locale is filled with **the English string**, sitting in
+`hi.json` / `ar.json` / `zh.json` looking like a translation. Combined with the collision above,
+a destroyed Hindi key is refilled with English on the next run.
+
+Collisions measured per locale: **hi 24, ar 24, zh 29.**
+
+One real mitigation: a populated translation that *differs* from English is protected by
+`if (($flat[$key] ?? '') === '' || $flat[$key] === $enVal)`. The damage is confined to keys the
+collision destroyed — which is exactly the set that then gets English.
+
+### It predates all of our work
+
+`TranslationKeyScanner.php` and `TranslationSeeder.php` both date to **`4ec7e3e`, 2026-08-03 —
+the initial WhatsMine import — and are untouched since.** We found this; we did not cause it.
+
+Smart QR surfaced it only because the slice-3b browser walkthrough instructed the owner to run
+`php artisan db:seed`, which is what triggered it, twice. See the correction below.
+
+### ⚠️ CORRECTION TO THE SLICE-3B WALKTHROUGH INSTRUCTIONS
+
+**Step 1 of that walkthrough said `php artisan db:seed`. That is what corrupted the locale
+files, both times.** `DatabaseSeeder` calls `TranslationSeeder`. The instruction was wrong and
+should not be repeated until this bug is fixed.
+
+**A safe setup sequence, until then** — the full seeder list minus `TranslationSeeder`:
+
+```bash
+php artisan migrate
+php artisan db:seed --class=Database\\Seeders\\UserSeeder
+php artisan db:seed --class=Database\\Seeders\\PermissionSeeder
+php artisan db:seed --class=Database\\Seeders\\RoleSeeder
+php artisan db:seed --class=Database\\Seeders\\CurrencySeeder
+php artisan db:seed --class=Database\\Seeders\\LocaleSeeder
+php artisan db:seed --class=Database\\Seeders\\PlanSeeder
+php artisan db:seed --class=Database\\Seeders\\PaymentGatewayConfigSeeder
+php artisan db:seed --class=Database\\Seeders\\EmailTemplateSeeder
+php artisan db:seed --class=Database\\Seeders\\IntegrationConfigSeeder
+php artisan db:seed --class=Database\\Seeders\\SmtpConfigurationSeeder
+php artisan db:seed --class=Database\\Seeders\\LandingPageSeeder
+php artisan db:seed --class=Database\\Seeders\\CmsPageSeeder
+php artisan db:seed --class=Database\\Seeders\\DemoSeeder
+```
+
+`LocaleSeeder` is safe — it writes the `locales` table, not the JSON files. `DemoSeeder`
+provides the workspaces and active WhatsApp channels the Smart QR walkthrough needs.
+
+**If `db:seed` is run by accident**, the locale files are tracked, so the damage is reverted
+with `git checkout -- resources/js/locales/` — check `git status` first, because that command
+also discards any legitimate translation edits made since the last commit.
+
+### Not fixed here — and the fix spans three places
+
+1. **The regex.** Anchor pattern 5 to a function name, or delete it — the other four already
+   cover the real call shapes.
+2. **`unflatten()`'s silent last-write-wins.** It must refuse to overwrite a populated node with
+   a scalar (or a scalar with a node) rather than doing it quietly. This is the safety net: even
+   with the regex fixed, one bad key should not be able to delete a subtree.
+3. **The English-into-foreign-locale fallback.** Writing `$enVal` into `hi.json` produces content
+   that looks translated and is not. Leaving the key absent is the honest failure.
+
+**And it needs a test that nothing today performs:** run `TranslationSeeder` against a fixture
+locale set and assert that **no leaf count decreases** for any locale. Every existing i18n test
+checks reading or flattening in isolation; none runs the seeder and re-counts the file
+afterwards, which is precisely why this survived from the initial import.

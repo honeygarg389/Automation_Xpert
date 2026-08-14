@@ -385,6 +385,14 @@ scheduled, all would die quietly when Phase 0 closes:
 
   The cost of the wrong note was real: `EnforceLimit` was written against `activePlan()`, so
   every gateway-billed customer has been exempt from every plan limit since launch. See BUG-023.
+- **BUG-037**: ⚠️ **`php artisan db:seed` CORRUPTS `resources/js/locales/*.json`.** Do not run it
+  until this is fixed — see `docs/found-bugs.md` BUG-037 for a safe seeder sequence.
+  `TranslationKeyScanner`'s fifth regex is unanchored and harvests `route('admin.clients.index')`
+  as a translation key; `I18nFileService::unflatten()` then silently collapses real nested keys
+  (4 one way, 25 the other). **It affects deployed installs** — `InstallerService::seedCore()`
+  runs `i18n:seed-defaults`, so a fresh install damages en.json before anyone logs in. Non-English
+  is worse than loss: the English string is written into hi/ar/zh and reads as translated.
+  Predates all our work (`4ec7e3e`).
 - **BUG-036**: editing a plan's limits through `Admin\PlanController` never invalidates the
   entitlement cache, so the OLD limits stay enforced for up to
   `entitlements.cache_fallback_ttl_minutes` (default 60) — silently, in both directions.
