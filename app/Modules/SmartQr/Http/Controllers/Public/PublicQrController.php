@@ -4,6 +4,7 @@ namespace App\Modules\SmartQr\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
 use App\Modules\SmartQr\Jobs\RecordQrScanJob;
+use App\Modules\SmartQr\Services\SmartQrAttribution;
 use App\Modules\SmartQr\Services\SmartQrRedirectResolver;
 use App\Modules\SmartQr\Services\SmartQrScanFingerprint;
 use App\Modules\SmartQr\Support\QrRedirectOutcome;
@@ -39,6 +40,7 @@ class PublicQrController extends Controller
     public function __construct(
         private readonly SmartQrRedirectResolver $resolver,
         private readonly SmartQrScanFingerprint $fingerprint,
+        private readonly SmartQrAttribution $attribution,
     ) {}
 
     public function __invoke(Request $request, string $token): RedirectResponse|Response
@@ -47,12 +49,16 @@ class PublicQrController extends Controller
         $outcome = $resolved['outcome'];
 
         if ($outcome === QrRedirectOutcome::REDIRECT) {
-            $this->recordScan($request, (int) $resolved['assignment']->id);
+            $assignmentId = (int) $resolved['assignment']->id;
+
+            $this->recordScan($request, $assignmentId);
+
+            $message = $this->withAttributionReference($assignmentId, (string) $resolved['message']);
 
             // ⚠️ away(), not redirect(): wa.me is off-domain, and redirect()
             // would treat it as a path on this host.
             return redirect()->away(
-                $this->resolver->deepLink($resolved['phone'], (string) $resolved['message'])
+                $this->resolver->deepLink($resolved['phone'], $message)
             );
         }
 
@@ -98,6 +104,44 @@ class PublicQrController extends Controller
                 'assignment_id' => $assignmentId,
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * ⚠️ §9's reference token — A SYNCHRONOUS WRITE ON THE REDIRECT PATH.
+     *
+     * This REVERSES slice 4's shape, deliberately and with a reason. Slice 4's
+     * rule was "read, redirect, defer every write" — but the token must be
+     * DURABLE BEFORE the redirect is issued, or there is a window in which the
+     * customer sends a message quoting a reference that does not exist yet, and
+     * their attribution is lost with no way to recover it. A queued insert
+     * cannot close that window; only an in-request one can.
+     *
+     * ⚠️ SLICE 4'S FAILURE RULE STILL HOLDS, AND IS RE-PROVEN HERE.
+     *
+     * If this write fails, **the redirect must still work**. A customer standing
+     * in a shop must reach WhatsApp even when attribution is broken. So the
+     * insert is guarded and its failure swallowed after logging: the customer
+     * gets an unattributed conversation, which is a lost row, not a dead sticker.
+     *
+     * `the_redirect_still_works_when_the_attribution_session_cannot_be_written`
+     * is the discriminator — an implementation that lets a failed write break
+     * the redirect passes every other test in this slice.
+     */
+    private function withAttributionReference(int $assignmentId, string $message): string
+    {
+        try {
+            $session = $this->attribution->issue($assignmentId);
+
+            return $this->attribution->appendReference($message, $session->token);
+        } catch (\Throwable $e) {
+            Log::warning('smart_qr.attribution.issue_failed', [
+                'assignment_id' => $assignmentId,
+                'error' => $e->getMessage(),
+            ]);
+
+            // Unattributed, but the customer still reaches WhatsApp.
+            return $message;
         }
     }
 

@@ -33,6 +33,7 @@ use App\Listeners\SendWelcomeNotification;
 use App\Models\Client;
 use App\Models\Workspace;
 use App\Modules\Shared\Services\ChannelManager;
+use App\Modules\SmartQr\Listeners\RecordQrAttributionListener;
 use App\Services\Billing\BillingGatewayRegistry;
 use App\Services\StorageManager;
 use App\Support\Http\ConnectionExceptionScrubber;
@@ -98,6 +99,16 @@ class AppServiceProvider extends ServiceProvider
         // ── Outbound webhook event delivery ─────────────────────────────────
         Event::listen(ContactCreated::class, [DispatchOutboundWebhookListener::class, 'handleContactCreated']);
         Event::listen(MessageReceived::class, [DispatchOutboundWebhookListener::class, 'handleMessageReceived']);
+
+        // ⚠️ Smart QR attribution (§9). A FIFTH OBSERVER on the existing event —
+        // not a parallel inbound flow, which CLAUDE.md forbids. Nothing in the
+        // driver, controller or routes changed.
+        //
+        // Synchronous, like the four beside it, and that is load-bearing:
+        // WhatsappDriver wraps the inbound persist in WorkspaceContext::for(),
+        // so a synchronous listener inherits the correct tenant. A queued one
+        // would run outside it, where every scoped read fails closed.
+        Event::listen(MessageReceived::class, [RecordQrAttributionListener::class, 'handle']);
         Event::listen(CampaignCompleted::class, [DispatchOutboundWebhookListener::class, 'handleCampaignCompleted']);
 
         // ── Notification bridging listeners ──────────────────────────────────
