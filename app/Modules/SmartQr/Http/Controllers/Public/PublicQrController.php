@@ -7,7 +7,9 @@ use App\Modules\SmartQr\Jobs\RecordQrScanJob;
 use App\Modules\SmartQr\Services\SmartQrRedirectResolver;
 use App\Modules\SmartQr\Services\SmartQrScanFingerprint;
 use App\Modules\SmartQr\Support\QrRedirectOutcome;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -39,7 +41,7 @@ class PublicQrController extends Controller
         private readonly SmartQrScanFingerprint $fingerprint,
     ) {}
 
-    public function __invoke(Request $request, string $token)
+    public function __invoke(Request $request, string $token): RedirectResponse|Response
     {
         $resolved = $this->resolver->resolve($token);
         $outcome = $resolved['outcome'];
@@ -110,7 +112,7 @@ class PublicQrController extends Controller
      * ⚠️ Every string below is generic by design (§8). No tenant name, no
      * client, no batch, no serial, no channel, no dates.
      */
-    private function page(QrRedirectOutcome $outcome)
+    private function page(QrRedirectOutcome $outcome): Response
     {
         [$title, $message] = match ($outcome) {
             QrRedirectOutcome::UNASSIGNED => [

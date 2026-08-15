@@ -20,6 +20,7 @@ use Illuminate\Support\Str;
  * @property int $serial_start
  * @property string $status
  * @property string|null $failure_reason
+ * @property string|null $default_message
  */
 class SmartQrBatch extends Model
 {

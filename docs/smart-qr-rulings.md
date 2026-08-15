@@ -485,3 +485,90 @@ adding a route for a screen whose entire content is six fields.
 
 Same reasoning as R-9 once more: the alternative introduces a navigation step this admin does
 not otherwise have, for a form that fits in a dialog.
+
+---
+
+## R-17 — NO CACHING on the public redirect. A deliberate refusal of §8.
+
+§8 lists, under redirect performance: *"cache stable QR configuration if safe"* and *"ensure
+cache invalidation after assignment/status/message update"*.
+
+**Refused. Do not add it later as a performance win.**
+
+### Why the shape of the requirement is the problem
+
+That is a cache whose correctness depends on somebody remembering to invalidate it. This
+codebase produced exactly that failure **one week before slice 4 was written**: BUG-036 — five
+invalidators wired to `InvalidateEntitlementCache`, and the one path that needed a sixth (the
+admin plan editor) never dispatched anything, so stale limits were enforced silently for up to
+an hour, in both directions, with nothing surfaced.
+
+### Why it is worse here than it was there
+
+In BUG-036 the stale value is a **number**. Here the stale value is **which tenant owns the
+code**.
+
+A cached assignment surviving a reassignment sends a customer scanning a sticker to the
+**previous tenant's WhatsApp number**. That is a cross-tenant leak introduced by an
+optimisation — and R-4, the one-current-assignment index, and the whole assignment-period model
+exist to make that state unreachable. A cache would reintroduce it above the layer that
+prevents it.
+
+### And the optimisation buys almost nothing
+
+The lookup is a single hit against a `unique` index on `public_token`. The resolver issues three
+indexed queries total. There is no aggregation, no join fan-out and no N+1 on this path.
+
+**If caching is ever revisited it needs two things first:** a measurement showing the lookup is
+actually a bottleneck, and an invalidation path that cannot be forgotten — not one that depends
+on every future assignment writer remembering to call it.
+
+---
+
+## R-18 — §7's message hierarchy ships with TWO tiers, not three
+
+§7 specifies: global Smart QR default message → batch default message → individual QR override.
+
+**Ruled: batch → assignment → empty.** The global tier is deliberately not built.
+
+There is no system setting for a global default and adding one would ship a third tier that
+**nobody has configured** — a value empty on every installation, read on every scan, and
+answering a question no operator has asked. §7's top tier can arrive when something needs it;
+`SmartQrRedirectResolver::effectiveMessage()` is where it slots in, and the fallback chain there
+is already ordered to receive it.
+
+Two tiers work today. A setting nobody set is not a feature.
+
+---
+
+## R-4 — AMENDED: what survives a reassignment is the AGGREGATES, not the raw scans
+
+⚠️ **This narrows R-4, and it is recorded here rather than only in a retention document because
+R-4 is where the guarantee was made.**
+
+R-4 keeps assignment history forever — the row survives, `unassigned_at` closes the period — so
+that *"a reassignment hides the previous tenant's analytics"* is true without date arithmetic.
+Scans are keyed by `smart_qr_assignment_id` precisely so the previous tenant's data stays
+attached to their period.
+
+**Retention policy, ruled in slice 4:**
+
+| Data | Retained |
+|---|---|
+| raw `smart_qr_scan_events` | **90 days** |
+| daily aggregates (slice 7) | **indefinitely** |
+
+So the guarantee R-4 makes becomes: **the previous tenant's AGGREGATES stay reachable, not their
+raw scans.** Beyond 90 days the assignment period still exists and still carries their totals;
+the per-scan rows behind those totals do not.
+
+That is the right trade — nobody needs per-scan rows from two years ago, and §10 asks for daily
+aggregates precisely so the dashboard never reads the raw table — but it is a narrowing of a
+ruling already made, so it is written down at the ruling rather than inferred later from a
+prune command.
+
+⚠️ **The prune command is NOT built in slice 4.** Deleting raw scans before the aggregates that
+replace them exist would destroy data with nothing holding its summary. Policy now, command in
+slice 7, alongside the aggregates.
+
+`smart_qr_scan_events` remains the only unboundedly growing table in this project until then.

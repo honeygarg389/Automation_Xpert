@@ -32,6 +32,10 @@ use Illuminate\Support\Str;
  * @property Carbon|null $assigned_at
  * @property Carbon|null $unassigned_at
  * @property string $status
+ * @property int|null $channel_account_id
+ * @property string|null $default_message
+ * @property Carbon|null $starts_at
+ * @property Carbon|null $expires_at
  */
 class SmartQrAssignment extends Model
 {

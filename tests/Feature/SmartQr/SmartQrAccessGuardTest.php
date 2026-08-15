@@ -57,6 +57,12 @@ class SmartQrAccessGuardTest extends TestCase
         // workspace would answer a different question and, worse, report every
         // assigned code deletable.
         'app/Modules/SmartQr/Services/SmartQrDeletability.php',
+        // ⚠️ Slice 4, the PUBLIC redirect — and the one place a stranger's
+        // request reaches this model. Permitted because the token IS the
+        // boundary: it is 128 bits of entropy addressing exactly one code, and
+        // the tenant is what the lookup is resolving TOWARDS. There is no
+        // workspace to bound it to at the moment it runs.
+        'app/Modules/SmartQr/Services/SmartQrRedirectResolver.php',
         'app/Http/Controllers/Admin/',
         'app/Modules/SmartQr/Http/Controllers/Admin/',
     ];
