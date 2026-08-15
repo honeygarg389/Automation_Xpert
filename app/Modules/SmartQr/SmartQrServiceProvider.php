@@ -8,7 +8,8 @@ use Illuminate\Support\ServiceProvider;
  * Smart QR — dynamic QR codes, platform-generated and tenant-assigned.
  *
  * Slice 1 was schema, models and the access boundary. Slice 2 added generation.
- * Slice 3 adds the Super Admin surface — the first routes this module has.
+ * Slice 3 added the Super Admin surface. Slice 4 adds the PUBLIC redirect —
+ * `routes/public.php`, which carries no auth middleware by design.
  *
  * ⚠️ `routes/admin.php` here is NOT the application's `routes/admin.php`. The
  * application one is wrapped in `['web', 'auth:admin', 'demo']` + the `admin`
@@ -21,5 +22,6 @@ class SmartQrServiceProvider extends ServiceProvider
     {
         $this->loadMigrationsFrom(__DIR__.'/database/migrations');
         $this->loadRoutesFrom(__DIR__.'/routes/admin.php');
+        $this->loadRoutesFrom(__DIR__.'/routes/public.php');
     }
 }

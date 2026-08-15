@@ -25,11 +25,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class SmartQrScanEvent extends Model
 {
-    protected $fillable = ['smart_qr_assignment_id', 'scanned_at'];
+    /**
+     * ⚠️ EVERY scan column must be listed here.
+     *
+     * Slice 4 added ip_hash, ua_hash, is_bot, referer_host and is_unique, and
+     * omitting them from this array made `create()` DISCARD them silently — no
+     * error, no exception, just rows with the database defaults. Bot flags read
+     * false, referers read null and every repeat scan counted as unique.
+     *
+     * Caught only because the tests assert the STORED ROW rather than the job
+     * payload. A test that checked what was dispatched would have passed.
+     */
+    protected $fillable = [
+        'smart_qr_assignment_id', 'scanned_at',
+        'ip_hash', 'ua_hash', 'is_bot', 'referer_host', 'is_unique',
+    ];
 
     protected function casts(): array
     {
-        return ['scanned_at' => 'datetime'];
+        return [
+            'scanned_at' => 'datetime',
+            'is_bot' => 'boolean',
+            'is_unique' => 'boolean',
+        ];
     }
 
     /** @return BelongsTo<SmartQrAssignment, $this> */
