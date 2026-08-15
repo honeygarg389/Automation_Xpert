@@ -40,13 +40,6 @@ class CustomerSmartQrDashboardTest extends TestCase
 {
     use RefreshDatabase;
 
-    protected function setUp(): void
-    {
-        parent::setUp();
-        config(['inertia.testing.ensure_pages_exist' => false]);
-        $this->withoutVite();
-    }
-
     /**
      * A tenant with the Smart QR entitlement and one assigned code.
      *

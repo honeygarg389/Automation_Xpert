@@ -21,9 +21,13 @@ use Inertia\Response;
  * here would return every tenant's rows and the failure would be SILENT: a list
  * that quietly includes codes belonging to somebody else.
  *
- * `SmartQrAccessGuardTest` fails the build on any `SmartQrCode::` outside the
- * access service and the admin namespace. This namespace is deliberately not on
- * that allowlist and must not be added to it.
+ * `SmartQrAccessGuardTest` fails the build on any raw static query against that
+ * model outside the access service and the admin namespace. This namespace is
+ * deliberately not on that allowlist and must not be added to it.
+ *
+ * ⚠️ The guard is a TEXT scan, so it flags the model name followed by `::` even
+ * inside a comment. Over-reporting is its safe direction, so this docblock names
+ * the rule without spelling the pattern — the guard moves for nobody.
  *
  * ⚠️ §11 B is deliberately absent from this controller — see
  * SmartQrCodeController. §11 D (Settings) is not built at all: R-23.

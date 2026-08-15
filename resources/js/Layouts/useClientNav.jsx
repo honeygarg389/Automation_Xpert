@@ -5,7 +5,7 @@ import {
     LayoutDashboard, CreditCard, Package, FileText, Users, Settings,
     Layers, Webhook, Key, BookOpen, Image, Radio, Inbox, Bot, Database,
     Zap, Share2, MapPin, Tag, LifeBuoy, ExternalLink, Mail, MessageSquare,
-    ShoppingBag,
+    ShoppingBag, QrCode,
 } from 'lucide-react';
 
 const iconClass = 'h-4 w-4';
@@ -24,7 +24,7 @@ function safeRoute(name, ...args) {
  * and items. Keep all nav changes here only.
  */
 export default function useClientNav() {
-    const { auth, branding } = usePage().props;
+    const { auth, branding, features } = usePage().props;
     const { t } = useTranslation();
     const user = auth?.user;
     const docsUrl = branding?.docs_url;
@@ -58,6 +58,28 @@ export default function useClientNav() {
         { label: t('nav.api_docs'),      href: safeRoute('client.api-docs'),          icon: <BookOpen className={iconClass} />, activePattern: 'client.api-docs' },
         { label: t('nav.media_library'), href: safeRoute('client.media.index'),       icon: <Image className={iconClass} />,   activePattern: 'client.media.*' },
     ];
+
+    /**
+     * ⚠️ THE FIRST ENTITLEMENT-GATED NAV GROUP.
+     *
+     * R-5 puts `smart_qr_enabled` at DISPLAY, and R-22 rules the module HIDDEN
+     * ENTIRELY when the customer lacks it — not present-and-empty. An empty
+     * Smart QR section shown to somebody who cannot have Smart QR is an advert
+     * placed inside the product, and every other group here is either present or
+     * absent; there is no disabled state to copy.
+     *
+     * The routes 403 independently (EnsureSmartQrEnabled), so hiding this is
+     * presentation rather than protection.
+     *
+     * ⚠️ THREE items, not §11's four. Settings is not built — see R-23.
+     */
+    const smartQrItems = features?.smart_qr
+        ? [
+            { label: t('nav.smart_qr_overview'), href: safeRoute('client.smartqr.overview'),    icon: <QrCode className={iconClass} />,      activePattern: 'client.smartqr.overview' },
+            { label: t('nav.smart_qr_codes'),    href: safeRoute('client.smartqr.codes.index'), icon: <Layers className={iconClass} />,      activePattern: 'client.smartqr.codes.*' },
+            { label: t('nav.smart_qr_activity'), href: safeRoute('client.smartqr.activity'),    icon: <Radio className={iconClass} />,       activePattern: 'client.smartqr.activity' },
+        ]
+        : [];
 
     const supportItems = [
         { label: t('nav.support_tickets'), href: safeRoute('client.support.index'), icon: <LifeBuoy className={iconClass} />,   activePattern: 'client.support.*' },
@@ -136,6 +158,7 @@ export default function useClientNav() {
         { type: 'group', label: t('nav.group_ecommerce'),    items: ecommerceItems },
         { type: 'group', label: t('nav.group_ai'),            items: aiItems },
         { type: 'group', label: t('nav.group_leads'),         items: leadsItems },
+        ...(smartQrItems.length ? [{ type: 'group', label: t('nav.group_smart_qr'), items: smartQrItems }] : []),
         { type: 'group', label: t('nav.group_reports'),       items: reportsItems },
         { type: 'group', label: t('nav.group_support'),       items: supportItems },
         { type: 'group', label: t('nav.group_billing'),       items: billingItems },

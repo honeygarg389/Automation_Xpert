@@ -713,3 +713,118 @@ I would drop the column rather than wire it, on the evidence:
 scan-level attribution.** If it is dropped, drop it in the same migration that adds the
 aggregate tables. If it is kept, the back-fill belongs in `RecordQrScanJob` and it needs a test
 asserting the link survives a retried job.
+
+---
+
+## R-22 — `smart_qr_enabled` is DERIVED from the presence of `smart_qr_max_assigned`
+
+R-5 puts `smart_qr_enabled` at DISPLAY, checked in slice 6. Building that revealed the gate
+could never open.
+
+### ⚠️ Nothing could set the flag. Measured.
+
+`PlanPackageSynthesizer::legacyFlags()` was the only source of boolean flags and returned exactly
+one — `white_label`. The other source, add-on grants, is Phase 1 slice 6, which is **BLOCKED**
+behind BUG-032. Reference count for `smart_qr_enabled` across `app/` and `database/` before this
+slice: **zero**.
+
+So gating on the flag as it stood would have **hidden Smart QR from every customer on every
+plan**, silently, with the module apparently working in every test.
+
+⚠️ **That is R-13's failure inverted.** R-13 is a gate that can never FIRE (a limit nothing
+seeds, so nothing is ever refused). This is a gate that can never OPEN (a flag nothing sets, so
+everything is refused). Same class of bug, opposite direction, and they are recorded together
+deliberately — checking "can this gate fire?" and "can this gate open?" are two questions and
+only asking one of them is how both happened.
+
+### The ruling
+
+`legacyFlags()` sets `smart_qr_enabled` when `plans.limits` **has the key**
+`smart_qr_max_assigned`. A bridge, framed exactly like `white_label_enabled`:
+
+- **DERIVED, not authoritative.** It stays until add-ons can grant the flag directly, and it is
+  annotated at the code so nobody reads it as the source of truth.
+- Correct rather than merely convenient: R-13 seeded that limit on all three tiers, so every
+  current customer has the feature, and a future plan that omits the limit correctly omits it.
+- `array_key_exists`, **not truthiness** — a limit of `0` means "bounded at zero", which is a
+  granted feature the customer cannot use yet, not an absent one (BUG-030's pinned semantics).
+- The resolver stays the single authority, so the partner ceiling still intersects it
+  (CLAUDE.md rule 6).
+
+**A customer without it: the module is HIDDEN ENTIRELY** — no nav group, and every route 403s.
+Not present-and-empty: an empty Smart QR section shown to somebody who cannot have Smart QR is an
+advert placed inside the product, and every other group in the client nav is either present or
+absent. There is no disabled state to copy.
+
+---
+
+## R-23 — THREE customer pages, not §11's four. Settings is not built.
+
+§11 names four pages: Overview, My QR Codes, Activity, **Settings** — and never says what is in
+Settings. The only tenant-level Smart QR setting that could exist is a default message, and R-18
+already ruled out the global tier, so the batch and the assignment cover it.
+
+**Ruled: ship three.** An empty page built to match a heading is worse than an absent one — it
+looks broken rather than unbuilt, and it invites somebody to fill it with settings nobody asked
+for.
+
+### ⚠️ Spec discrepancy #6
+
+Added to the running list (see R-12's table): **§11 names a page with no defined content.**
+
+The others, for continuity: the missing `failure_reason` field (slice 2); "tenant/customer" in a
+codebase with both (R-1); `assigned_count` as a stored field (R-12); one §5 status list that is
+really two (R-10); §6's "disconnected" channel state that does not exist (slice 3a).
+
+---
+
+## ⚠️ Slice 6 readings of §11 against a codebase it never saw
+
+Three places where §11 asks for something this code cannot give, recorded so they are not
+rediscovered as bugs.
+
+**"Allowed customer actions must depend on permissions."** There is no client-side permission
+system — `client_role` (`administrator` / `staff`) is the only granularity that exists. Ruled:
+**reads for everyone, writes for administrators.** Inventing a client permission table for one
+module would be a pattern with a single caller, which is the cost R-9 and R-15 already refuse.
+
+**"QR preview" and "download digital copy."** Both need a rendered QR image, and
+`endroid/qr-code` is R-6's slice-8 package — explicitly not to be installed before then. Shipped
+**absent**, not as broken buttons: an action that does nothing is worse than one not offered,
+because a customer cannot tell it from a fault. ⚠️ This is the **third** time §11's feature list
+has assumed a later slice.
+
+**"Change WhatsApp channel."** §11 lists it as an ordinary customer action; slice 3c had
+deliberately excluded `channel_account_id` from the admin edit form because it needs cross-tenant
+validation. Ruled: **build it, with `SmartQrAssignmentValidator` reused in full** — the channel
+must belong to the customer's own workspace, checked server-side with the scope-bypass shape
+slice 3a documented. A customer switching lines is a real need and the workaround (ask an admin)
+is worse than the feature.
+
+---
+
+## ⚠️ OWED — `smart_qr_scans_per_month` was never built. A SLICE 4 GAP.
+
+Found while planning slice 6, which depends on the counter tier existing.
+
+R-5 named three entitlement keys and assigned each to a slice:
+
+| Key | Kind | Enforced at | References in `app/` + `database/` |
+|---|---|---|---|
+| `smart_qr_max_assigned` | gauge | assignment (slice 3) | **8** — built, seeded, enforced |
+| `smart_qr_scans_per_month` | counter | **scan (slice 4)** | **0** |
+| `smart_qr_enabled` | boolean | display (slice 6) | built here, R-22 |
+
+**The scan path records events and never touches a `UsageMeter`.** R-5's counter tier does not
+exist: a customer on any plan can generate unlimited scans, and nothing measures or refuses them.
+
+Recorded as OWED rather than a BUG because nothing is *wrong* — no incorrect value is produced
+and no customer is mischarged. The feature was simply never written, and slice 4 shipped without
+noticing because nothing referenced the key.
+
+**Where it belongs:** the scan path already has the right shape for it —
+`RecordQrScanJob` runs per scan and could increment a meter, and `QuotaGuard`/`UsageMeter` exist
+from Phase 1. ⚠️ But it needs a ruling first: what happens when a workspace exceeds its scan
+quota? Refusing the redirect punishes the *customer's customer*, who is standing in a shop — and
+slice 4's whole failure rule is that the redirect must survive. Recording the overage and
+billing or alerting on it is likely the right answer, and that is a decision, not code.

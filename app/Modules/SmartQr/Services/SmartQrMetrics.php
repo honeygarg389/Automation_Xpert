@@ -3,7 +3,11 @@
 namespace App\Modules\SmartQr\Services;
 
 use App\Modules\SmartQr\Models\SmartQrConversionEvent;
+use App\Modules\SmartQr\Models\SmartQrScanEvent;
 use App\Modules\SmartQr\Support\SmartQrStatus;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -32,9 +36,10 @@ use Illuminate\Support\Facades\DB;
  * `SmartQrCode` has no global scope (R-4), so a raw query here would return
  * every tenant's rows with nothing to stop it, and the failure would be a list
  * that quietly includes codes belonging to somebody else.
- * `SmartQrAccessGuardTest` fails the build on any `SmartQrCode::` outside the
- * access service and the admin namespace — and this namespace is deliberately
- * NOT on that allowlist.
+ * `SmartQrAccessGuardTest` fails the build on any raw static query against that
+ * model outside the access service and the admin namespace — and this namespace
+ * is deliberately NOT on that allowlist. (The guard is a text scan, so this
+ * comment avoids spelling the pattern it looks for.)
  */
 class SmartQrMetrics
 {
@@ -136,8 +141,17 @@ class SmartQrMetrics
      * ⚠️ Bots INCLUDED here, flagged, unlike the counters above. The feed is a
      * log rather than a metric: hiding crawler hits would make an operator
      * wonder why a scan they can see in their own analytics is missing.
+     *
+     * ⚠️ Typed to Model rather than SmartQrScanEvent, and that is upstream's
+     * shape rather than a shrug: `SmartQrAccess`'s builders carry no generic
+     * parameter — four of this module's six pre-existing PHPStan errors are
+     * exactly that — so the paginator's item type erases to Model. Narrowing it
+     * here would be a claim the call does not support. It tightens for free the
+     * day SmartQrAccess is annotated.
+     *
+     * @return LengthAwarePaginator<int, Model>
      */
-    public function activity(int $workspaceId, int $perPage = 50)
+    public function activity(int $workspaceId, int $perPage = 50): LengthAwarePaginator
     {
         return $this->access->scanEventsFor($workspaceId)
             ->with(['assignment:id,name,qr_type,smart_qr_code_id', 'assignment.code:id,serial_number'])
@@ -152,7 +166,8 @@ class SmartQrMetrics
      * previous tenant's period and are unreachable here. That is R-4 doing its
      * job, and it is why no query in this file filters on workspace directly.
      */
-    private function scanQuery(int $workspaceId)
+    /** @return Builder<SmartQrScanEvent> */
+    private function scanQuery(int $workspaceId): Builder
     {
         return $this->access->scanEventsFor($workspaceId)->where('is_bot', false);
     }

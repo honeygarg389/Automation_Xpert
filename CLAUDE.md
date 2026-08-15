@@ -364,6 +364,11 @@ transient error permanently dedups the event and the renewal is lost.
   live customer-facing 500. Files touched during 1c get fixed opportunistically in their own
   module commit; these two do not, so they need a deliberate pass. See `docs/found-bugs.md`
   BUG-003 for the full list and the decided scope policy.
+- **`smart_qr_scans_per_month` was never built — a SLICE 4 gap.** R-5 assigned it to the scan
+  path; the scan path records events and never touches a `UsageMeter`, so R-5's counter tier does
+  not exist and scans are unlimited on every plan. Needs a ruling before code: refusing the
+  redirect punishes the customer's customer, and slice 4's rule is that the redirect must
+  survive. See the OWED entry in `docs/smart-qr-rulings.md`.
 - **`smart_qr_attribution_sessions.smart_qr_scan_event_id` — nullable, and nothing fills it.**
   Added in slice 5 to be back-filled by the scan job; the back-fill was never written, so every
   row is NULL. Recommendation is to DROP it in slice 7 unless the aggregates find a use — see

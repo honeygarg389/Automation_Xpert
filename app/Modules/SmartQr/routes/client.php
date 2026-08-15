@@ -33,7 +33,7 @@ Route::middleware(['web', 'client-app', EnsureSmartQrEnabled::class])
         // ⚠️ Bound by the PRINTED SERIAL, never the public token. The token is
         // the secret the QR encodes; putting it in a URL would place it in
         // browser history, referers and server logs. Same reasoning as
-        // SmartQrCode::getRouteKeyName().
+        // the code model's getRouteKeyName().
         Route::patch('/codes/{serial}', [SmartQrCodeController::class, 'update'])->name('codes.update');
 
         // C — Activity
