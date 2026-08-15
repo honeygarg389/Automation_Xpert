@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
  * @property int $id
  * @property string $uuid
  * @property int $workspace_id
+ * @property Carbon|null $created_at
  * @property string|null $phone_e164
  * @property string|null $email
  * @property string|null $first_name

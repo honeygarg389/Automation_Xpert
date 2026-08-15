@@ -187,6 +187,13 @@ class SmartQrAttributionTest extends TestCase
      * customers as their own conversions.
      *
      * The discriminator is ZERO ROWS — not an exception, not a log line.
+     *
+     * ⚠️ MEASURED: this test is satisfied by the WORKSPACE SCOPE, not by the
+     * listener's explicit workspace comparison. `SmartQrAssignment` is scoped
+     * and the listener runs inside the message's workspace context, so
+     * `$session->assignment` is already null for another tenant. Removing the
+     * explicit check alone leaves this green; removing the scope AND the check
+     * makes it fail. Both barriers exist, and this test proves the first.
      */
     #[Test]
     public function a_token_from_another_tenant_attributes_nothing(): void

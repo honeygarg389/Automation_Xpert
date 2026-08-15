@@ -572,3 +572,100 @@ replace them exist would destroy data with nothing holding its summary. Policy n
 slice 7, alongside the aggregates.
 
 `smart_qr_scan_events` remains the only unboundedly growing table in this project until then.
+
+---
+
+## R-19 — Attributed counts UNDER-REPORT, and the dashboard must say "attributed"
+
+⚠️ **A PRODUCT CONSTRAINT, not a caveat. It changes the labels §10's dashboard is allowed to
+use.**
+
+The reference token rides inside the customer's own WhatsApp message, as visible, editable
+text. A meaningful share of customers will delete it before sending — it looks like junk, and
+deleting it is one obvious action.
+
+So every attributed figure is a **floor, not a total**. Real customers who messaged because of
+a QR will be missing from it, and there is no way to recover them (see R-20).
+
+**Ruled: §10's dashboard labels these metrics "attributed" — never "customers who messaged".**
+
+- ✅ "Attributed messages", "attributed conversions", "attributed new contacts"
+- ❌ "Customers messaged", "conversions", "customers acquired"
+
+Presenting an under-count as a total is how a tenant concludes the QR does not work and stops
+using the product. The honest label costs one word and makes the number defensible.
+
+This binds slice 7's dashboard and any export or report built on these tables.
+
+---
+
+## R-20 — NO FALLBACK ATTRIBUTION. EVER. A REFUSED DESIGN.
+
+§9: when the customer removes the reference, "exact attribution is unavailable" and **must not
+be faked**.
+
+**Ruled: there is no fallback, and no method exists that could become one.** Specifically
+refused:
+
+- ❌ matching on the customer's phone number against recent scans
+- ❌ a time window — "this workspace had a scan four minutes ago"
+- ❌ "the only unconsumed session for this assignment"
+- ❌ any heuristic combining the above
+
+### Why each is superficially reasonable and quietly wrong
+
+They all credit the QR for a customer who **scanned it, ignored it, and messaged an hour later
+from a business card, a website, or a shop sign**. The tenant then reads a conversion figure
+describing something that did not happen — and unlike an under-count, an over-count is
+invisible: there is no way to look at an inflated number and tell which rows are fictional.
+
+An under-count is honest and can be explained (R-19). A fabricated attribution cannot be
+detected, corrected, or apologised for.
+
+⚠️ **`a_message_with_the_reference_stripped_attributes_nothing` is the test guarding this**, and
+it guards the honesty of every number §10 reports. If it is ever weakened, the whole analytics
+surface becomes unfalsifiable.
+
+---
+
+## R-21 — The redirect gains a SYNCHRONOUS write, reversing slice 4's rule
+
+Slice 4's shape was: read, redirect, defer every write. Slice 5 breaks it — issuing the
+attribution session is an in-request `INSERT` on the public redirect path.
+
+**Ruled: accepted, and the reason is that it cannot be deferred.** The token must be **durable
+before the redirect is issued**, or there is a window in which the customer sends a message
+quoting a reference that does not exist yet — and that attribution is lost with no way to
+recover it (R-20 forbids reconstructing it). A queued insert cannot close that window; only an
+in-request one can.
+
+### ⚠️ SLICE 4'S FAILURE RULE STILL HOLDS, AND IS RE-PROVEN
+
+**If the session write fails, the redirect must still work.** A customer standing in a shop must
+reach WhatsApp even when attribution is broken: a lost analytics row is acceptable, a dead
+sticker is not.
+
+The insert is guarded and its failure logged and swallowed, and
+`the_redirect_still_works_when_the_attribution_session_cannot_be_written` is the discriminator.
+It matters because an implementation that lets a failed write break the redirect **passes every
+other test in slice 5** — the failure is only visible from the one direction nothing else looks.
+
+---
+
+## ⚠️ Slice 5 measurement — WHICH barrier fires, for two safety properties
+
+Recorded because in both cases the obvious answer is wrong, and a future reader removing the
+"redundant" check would be removing the wrong thing.
+
+| Property | What the test proves fires | What is defence in depth |
+|---|---|---|
+| cross-tenant attribution refused | the **workspace scope** on `SmartQrAssignment` — the listener runs inside the message's workspace context, so another tenant's assignment is already null | the listener's explicit `workspace_id` comparison |
+| one token = one attribution | the **unique index** on `(attribution_session_id, type)` | the `consumed_at` conditional update |
+
+Measured by mutation: removing either second-column item alone leaves the suite green.
+Removing the first-column item **and** its partner makes the relevant test fail.
+
+Both second-column checks are kept deliberately. The explicit comparison is the only protection
+that survives if that lookup is ever changed to bypass the scope — which every other admin path
+in this module does. The `consumed_at` update keeps ordinary repeat messages on a cheap
+conditional rather than throwing an exception per message and using a catch for flow control.

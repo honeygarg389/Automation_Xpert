@@ -3,6 +3,9 @@
 namespace App\Modules\SmartQr\Listeners;
 
 use App\Events\MessageReceived;
+use App\Modules\Shared\Models\Contact;
+use App\Modules\Shared\Models\Conversation;
+use App\Modules\Shared\Models\Message;
 use App\Modules\SmartQr\Models\SmartQrAttributionSession;
 use App\Modules\SmartQr\Models\SmartQrConversionEvent;
 use App\Modules\SmartQr\Services\SmartQrAttribution;
@@ -83,6 +86,7 @@ class RecordQrAttributionListener
             return;
         }
 
+        /** @var Conversation|null $conversation */
         $conversation = $message->conversation;
 
         if ($conversation === null) {
@@ -99,6 +103,27 @@ class RecordQrAttributionListener
         // Reached through the assignment because neither attribution table
         // carries a workspace_id (R-4): a session outlives the certainty of its
         // tenant, since the code can be reassigned inside the session's window.
+        //
+        // ─── ⚠️ WHICH BARRIER ACTUALLY FIRES, MEASURED ─────────────────────
+        //
+        // There are TWO, and only the first is currently observable:
+        //
+        //   1. `SmartQrAssignment` is workspace-scoped, and this listener runs
+        //      inside WorkspaceContext::for($conversationWorkspace). So
+        //      `$session->assignment` returns NULL for another tenant's
+        //      assignment — the scope fails closed and blocks it first.
+        //   2. The explicit comparison below.
+        //
+        // Measured by mutation: removing the comparison alone leaves
+        // `a_token_from_another_tenant_attributes_nothing` GREEN, because
+        // barrier 1 already stopped it. Removing BOTH — dropping the scope on
+        // this lookup and the comparison — makes that test fail.
+        //
+        // The comparison is therefore defence in depth that cannot presently be
+        // shown to fire on its own. It is kept deliberately: it is the only
+        // thing that still holds if this lookup is ever changed to bypass the
+        // scope (which every other admin path in this module does), and that
+        // change would otherwise silently open cross-tenant attribution.
         $assignment = $session->assignment;
 
         if ($assignment === null || (int) $assignment->workspace_id !== (int) $conversation->workspace_id) {
@@ -121,8 +146,9 @@ class RecordQrAttributionListener
         $this->recordConversions($session, $message, $conversation);
     }
 
-    private function recordConversions(SmartQrAttributionSession $session, $message, $conversation): void
+    private function recordConversions(SmartQrAttributionSession $session, Message $message, Conversation $conversation): void
     {
+        /** @var Contact|null $contact */
         $contact = $conversation->contact;
         $issuedAt = $session->issued_at;
 

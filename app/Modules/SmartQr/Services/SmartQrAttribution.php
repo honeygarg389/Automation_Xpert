@@ -160,9 +160,19 @@ class SmartQrAttribution
      * same token can arrive concurrently; `where consumed_at IS NULL` makes the
      * database decide, and exactly one update reports a row affected.
      *
-     * The unique index on (attribution_session_id, type) is the actual
-     * guarantee — this is the fast path that avoids relying on a constraint
-     * violation for ordinary flow control.
+     * ⚠️ THE UNIQUE INDEX IS THE GUARANTEE; THIS IS THE FAST PATH. MEASURED.
+     *
+     * Removing both `whereNull('consumed_at')` guards — here and in resolve() —
+     * leaves `the_same_token_in_three_messages_is_one_attribution` GREEN: the
+     * unique index on (attribution_session_id, type) rejects the second
+     * `customer_messaged` insert and the listener's guard swallows it.
+     *
+     * So this check cannot presently be shown to fire on its own, and that is
+     * the intended layering rather than a gap — the same shape slice 2 found
+     * when its application-level serial check turned out to be TOCTOU and the
+     * unique index was what actually held. What this buys is that ordinary
+     * repeat messages take a cheap conditional update instead of throwing an
+     * exception per message and relying on a catch for flow control.
      */
     public function claim(SmartQrAttributionSession $session, int $contactId, int $conversationId, int $messageId): bool
     {

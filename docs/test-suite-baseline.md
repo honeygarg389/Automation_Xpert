@@ -2,7 +2,7 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **1,207 tests, 39,777 assertions, 0 failures, 1 documented skip.**
+> The suite passes: **1,222 tests, 39,910 assertions, 0 failures, 1 documented skip.**
 >
 > **Front-end: 24 vitest tests, 3 files.** Previously ZERO ran — `setup.js` held JSX under a
 > `.js` extension so vite refused to transform it. Fixed in Smart QR slice 3b.
@@ -41,7 +41,8 @@ with its own full-suite run:
 | **Smart QR slice 3b**, admin React pages + QR navigation | 1 test for the `workspaces` prop the modal needed | 1163 |
 | Smart QR slice 3b fixes — three walkthrough UI defects | 1 PHP (`qr_type` end to end) + 8 vitest | 1164 + 19 JS |
 | **Smart QR slice 3c** — delete vs retire, rename, edit | 12 delete/retire + 7 edit PHP, 5 vitest (typed confirmation) | 1183 + 24 JS |
-| **Smart QR slice 4** — the public redirect `/q/{token}` | 24 tests: seven outcomes, the serial-404 control, scan privacy | **1207** + 24 JS |
+| **Smart QR slice 4** — the public redirect `/q/{token}` | 24 tests: seven outcomes, the serial-404 control, scan privacy | 1207 + 24 JS |
+| **Smart QR slice 5** — §9 attribution, both halves | 15 tests: cross-tenant refusal, stripped token, reuse, failed-write redirect | **1222** + 24 JS |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.

@@ -18,6 +18,7 @@ use Illuminate\Support\Str;
  * @property string $uuid
  * @property int $workspace_id
  * @property int $contact_id
+ * @property Carbon|null $created_at
  * @property int|null $channel_account_id
  * @property string|null $channel
  * @property string $status
