@@ -669,3 +669,47 @@ Both second-column checks are kept deliberately. The explicit comparison is the 
 that survives if that lookup is ever changed to bypass the scope — which every other admin path
 in this module does. The `consumed_at` update keeps ordinary repeat messages on a cheap
 conditional rather than throwing an exception per message and using a catch for flow control.
+
+---
+
+## ⚠️ OWED — `smart_qr_attribution_sessions.smart_qr_scan_event_id` is nullable and NOTHING fills it
+
+Raised at the end of slice 5. **Must be resolved in slice 6 or 7 — it will not resolve itself,
+and an always-null column looks like data loss to whoever finds it next.**
+
+### Why it exists
+
+Slice 4 records the scan on a **queue**; slice 5 issues the attribution token **in-request**,
+because the token must be durable before the redirect (R-21). The two rows are therefore created
+by different processes at different times and cannot be written together, so the column was
+added to be back-filled by the scan job afterwards.
+
+**That back-fill was never written.** Every row has `smart_qr_scan_event_id = NULL` today.
+
+### What it would buy, and what it costs
+
+Linking them lets a conversion be traced to the individual scan — its bot flag, its unique flag,
+its referer host. Without it, a conversion is attributable to an *assignment* and a *session*,
+but not to the specific scan that produced it.
+
+⚠️ **Nothing consumes that today.** No metric in §10 needs it: `customers messaged`,
+`unique customers messaged`, `new contacts` and `conversations started` all resolve through the
+session and the assignment.
+
+### Recommendation — DROP IT, unless slice 7 finds a use
+
+I would drop the column rather than wire it, on the evidence:
+
+- No metric needs it, and §10's aggregate dimensions do not include it.
+- Wiring it means `RecordQrScanJob` learning about attribution sessions — coupling the scan
+  path to the attribution path for a link nothing reads, on the queue that runs for **every**
+  scan including bots.
+- A back-fill that runs on a queue is best-effort anyway: a dropped job leaves the link null,
+  so even wired, the column could never be trusted as non-null. A column that is sometimes
+  populated and sometimes not is worse than one that is absent — it invites a query that
+  silently omits rows.
+
+**Decide it in slice 7, when the aggregates exist and it is clear whether anything wants
+scan-level attribution.** If it is dropped, drop it in the same migration that adds the
+aggregate tables. If it is kept, the back-fill belongs in `RecordQrScanJob` and it needs a test
+asserting the link survives a retried job.

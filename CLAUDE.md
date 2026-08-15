@@ -364,6 +364,11 @@ transient error permanently dedups the event and the renewal is lost.
   live customer-facing 500. Files touched during 1c get fixed opportunistically in their own
   module commit; these two do not, so they need a deliberate pass. See `docs/found-bugs.md`
   BUG-003 for the full list and the decided scope policy.
+- **`smart_qr_attribution_sessions.smart_qr_scan_event_id` — nullable, and nothing fills it.**
+  Added in slice 5 to be back-filled by the scan job; the back-fill was never written, so every
+  row is NULL. Recommendation is to DROP it in slice 7 unless the aggregates find a use — see
+  the OWED entry in `docs/smart-qr-rulings.md`. An always-null column looks like data loss to
+  whoever finds it next.
 - **`ClientWorkspaceService::detachStaleWorkspaces()`** — deferred out of Phase 0. See
   `docs/phase-0-tenant-isolation-plan.md` §G-1d. Prerequisite for any partner-tier feature
   that can move a customer between organisations.
