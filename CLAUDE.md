@@ -301,6 +301,37 @@ Rules:
   git command whose failure changes which branch you are on — suppressing the error is
   what made a loud failure silent.
 
+- **A stash-check whose MUTATION cannot be shown to have landed proves nothing.** This is the
+  unverified-revert trap in the opposite direction, and it is worse, because it produces a
+  *green* result that reads as "the code is correct" when it means "nothing was tested".
+
+  Measured: three refusal-state mutations in Smart QR slice 4 all reported **OK (24 tests)**.
+  The conclusion on offer was "these tests do not discriminate" — and it was wrong. The Python
+  edits had been piped through a bash helper function, the escaping mangled the search strings,
+  and `str.replace()` silently did nothing. Re-run with the pattern asserted, every one of the
+  six mutations failed exactly the tests it should.
+
+  So: **every mutation asserts its own pattern before writing**, e.g.
+
+      assert old in s, 'PATTERN NOT FOUND'
+
+  and prints confirmation. `str.replace()` and `sed` both fail silently on a missed pattern;
+  neither tells you the file is unchanged. Confirm the mutation applied, and confirm the
+  restore afterwards — both halves, every time.
+
+- **Assert the STORED ROW, not the dispatched payload.** A test that checks what a job was
+  *called with* passes while the job writes nothing.
+
+  Smart QR slice 4: `SmartQrScanEvent::$fillable` still listed slice 1's two columns, so
+  `create()` **silently discarded** `ip_hash`, `ua_hash`, `is_bot`, `referer_host` and
+  `is_unique` — no error, no exception, rows written with database defaults. Bot flags read
+  false, referers null, and every repeat scan counted as unique.
+
+  `Queue::assertPushed(fn ($job) => $job->isBot === true)` **would have passed**: the argument
+  was correct all the way to `create()`. Only reading the row back caught it. Mass assignment
+  fails quietly by design, so the payload and the persisted row are two different claims — test
+  the second.
+
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
   asking.
