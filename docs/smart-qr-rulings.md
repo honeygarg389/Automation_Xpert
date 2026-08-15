@@ -828,3 +828,41 @@ from Phase 1. ⚠️ But it needs a ruling first: what happens when a workspace 
 quota? Refusing the redirect punishes the *customer's customer*, who is standing in a shop — and
 slice 4's whole failure rule is that the redirect must survive. Recording the overage and
 billing or alerting on it is likely the right answer, and that is a decision, not code.
+
+---
+
+## ⚠️ OWED — vitest coverage for the three customer pages
+
+**Consciously deferred in slice 6, not overlooked.** Recorded so it is findable.
+
+Missing: component tests for `client/SmartQr/Overview.jsx`, `client/SmartQr/Codes.jsx` and
+`client/SmartQr/Activity.jsx`.
+
+### Why it was deferred
+
+Slice 3b established the pattern — 24 vitest tests, and the runner was unblocked there — so the
+machinery exists and this was a choice about spend, not an absence of tooling.
+
+Slice 6's risks were **boundary and entitlement**, and those live in PHP: which tenant's codes a
+customer can reach, whether a reassigned code leaves the previous tenant's pages, whether a
+customer can point a QR at another tenant's channel, and whether the entitlement gate refuses.
+All four were covered by stash-checked PHP tests, each verified to fail under its own mutation.
+A React test could not have caught any of them.
+
+### What it would cover, when written
+
+The things PHP genuinely cannot see:
+
+- ⚠️ **R-19's labels.** The PHP suite asserts the *prop names* (`attributed_messages`, and that
+  `customers_messaged` is absent) — but nothing asserts the rendered **card text** says
+  "Attributed Messages". R-19 is a constraint about what a customer READS, and the label is the
+  part a well-meaning edit would change.
+- The `canManage` split: the edit control absent for staff, present for administrators.
+- The Activity feed's bot/unique/repeat badge mapping, which is the one place bots are shown
+  rather than excluded.
+- The empty states on all three pages.
+
+### Priority
+
+Low, and the label test is the one worth writing first — it is the only assertion standing
+between R-19 and somebody "improving" a card title back to "Customers Messaged".
