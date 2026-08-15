@@ -84,14 +84,45 @@ migration.
 **Nothing is consumed at generation.** Codes are platform inventory; no workspace exists to
 charge, and `smart_qr_codes` has no `workspace_id` to resolve an entitlement *for*.
 
+⚠️ **AMENDED 2026-08-16 — there are TWO tiers, not three. The counter was RULED OUT.**
+
 | Key | Kind | Enforced at | Slice |
 |---|---|---|---|
 | `smart_qr_max_assigned` | **gauge** — `COUNT(*)` of current assignments | assignment | 3 |
-| `smart_qr_scans_per_month` | **counter** — `UsageMeter` on the scan path | scan | 4 |
-| `smart_qr_enabled` | **boolean** — feature flag | display | dashboard |
+| ~~`smart_qr_scans_per_month`~~ | ~~counter~~ | — | **REMOVED — see below** |
+| `smart_qr_enabled` | **boolean** — feature flag | display | 6 (derived, R-22) |
 
-The gauge slots into `GaugeSources` and inherits everything Phase 1 slice 4 built. Recorded as
-three rows rather than prose so slice 3 and the dashboard slice each know which one is theirs.
+The gauge slots into `GaugeSources` and inherits everything Phase 1 slice 4 built.
+
+### ⚠️ THE COUNTER TIER WAS REMOVED AS A CONCEPT. OWNER RULING.
+
+**There is no scan limit.** Not deferred, not owed, not "the missing third tier" — decided
+against, and it will not be built. This is recorded in full because an absence otherwise reads
+as an unfinished slice, and the next person to notice R-5 once listed three tiers would
+reasonably try to complete it.
+
+**1. Scan volume is not what is sold.** The product is the Business Kit — physical printed
+stickers, sold as a kit. Its value is in how many CODES a customer holds, and
+`smart_qr_max_assigned` already bounds that at 50 (R-13). Metering scans meters something the
+customer was never sold.
+
+**2. It would meter success and then punish it.** A shop whose QR is scanned heavily is the most
+successful customer on the platform. Charging or refusing for that is backwards — the metric
+that indicates the product working is the last thing to put a ceiling on.
+
+**3. It would put a WRITE on the redirect path.** Enforcing a counter means incrementing a
+`UsageMeter` on every scan, on the one path slice 4 deliberately kept to reads. R-21 already
+records the single exception (the attribution session, which cannot be deferred) and its failure
+rule exists precisely because that path must stay light and must never break.
+
+**4. ⚠️ The person a refusal blocks is not the customer.** It is the CUSTOMER'S CUSTOMER —
+standing in a shop, holding a phone, looking at a sticker — who would get an error page that
+makes the tenant look broken. The tenant would never learn how many people walked away. Every
+other gate in this module refuses an *admin* or a *tenant*, who can read the message and act on
+it. This one would refuse a member of the public on their behalf.
+
+Recorded as two rows plus a struck third rather than silently rewritten to two, so the history of
+the decision survives.
 
 ---
 
@@ -803,7 +834,22 @@ is worse than the feature.
 
 ---
 
-## ⚠️ OWED — `smart_qr_scans_per_month` was never built. A SLICE 4 GAP.
+## ✅ RESOLVED (not built, by decision) — `smart_qr_scans_per_month`
+
+⚠️ **Closed 2026-08-16 by owner ruling: there is no scan limit, and there will not be one.**
+See the amendment to R-5 above for the full reasoning — the product sells CODES not scans,
+metering scan volume punishes the most successful customers, enforcement would put a write on
+the redirect path slice 4 kept read-only, and a refusal would land on the customer's customer
+standing in a shop rather than on anyone who could act on it.
+
+**Kept rather than deleted**, because a resolved decision is findable and a deleted entry looks
+like something that was forgotten. Confirmed at closure: **zero references to the key anywhere**
+in `app/`, `database/`, `tests/`, `resources/` or `config/` — nothing had to be removed, which is
+also why slice 4 shipped without noticing it was missing.
+
+The original entry follows, for the record.
+
+### Original entry — `smart_qr_scans_per_month` was never built. A SLICE 4 GAP.
 
 Found while planning slice 6, which depends on the counter tier existing.
 
