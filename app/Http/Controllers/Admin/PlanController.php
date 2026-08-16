@@ -61,6 +61,19 @@ class PlanController extends Controller
             ->all();
     }
 
+    /**
+     * ⚠️ CATALOG, NOT ENTITLEMENT — do not route this through the facade.
+     *
+     * This is an administrator editing the PLAN DEFINITION. The facade answers
+     * "what may this customer do", which is a different question with a
+     * different answer: it folds grants and applies a partner ceiling, so it
+     * would show the admin some customer's resolved entitlement in a form whose
+     * Save button writes the plan row. Editing a resolved value back into its
+     * own source is how a ceiling would silently become the plan.
+     *
+     * `plans.limits` is the correct source here, and this form is the thing that
+     * writes it.
+     */
     private function planToArray(Plan $p): array
     {
         $limits = $p->limits;
