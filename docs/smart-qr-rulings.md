@@ -1072,8 +1072,12 @@ guards against.
 tests. Before this, the PHP suite asserted only the prop names — a well-meaning edit to the card
 title would have shipped with a green suite.
 
-⚠️ **Closed fully in slice 8b** — `resources/js/__tests__/smartqr-customer-pages.test.jsx`
-covers the two remaining pages, 7 tests. Deliberately only what PHP cannot see:
+⚠️ **Slice 8b — WRITTEN AND PASSING, NOT MUTATION-CHECKED.**
+`resources/js/__tests__/smartqr-customer-pages.test.jsx` covers the two remaining pages,
+7 tests, verified passing (7/7, 1.33 s). The vitest runner then degraded and **no mutation
+check was run against any of them**, so they are not verified to fail. The entry is therefore
+**not closed** — see the slice 8b runner note below, which names re-running the check as the
+first action next session. Deliberately only what PHP cannot see:
 
 | Assertion | The failure it catches |
 |---|---|
