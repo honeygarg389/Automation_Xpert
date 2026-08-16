@@ -2,13 +2,21 @@
     "$schema": "https://getcomposer.org/schema.json",
     "name": "whatsmine/whatsmine",
     "type": "project",
-    "description": "WhatsMine — multi-channel customer messaging, AI chatbots, broadcasting and automation platform.",
-    "keywords": ["whatsapp", "messaging", "saas", "inbox", "automation"],
+    "description": "WhatsMine \u2014 multi-channel customer messaging, AI chatbots, broadcasting and automation platform.",
+    "keywords": [
+        "whatsapp",
+        "messaging",
+        "saas",
+        "inbox",
+        "automation"
+    ],
     "license": "proprietary",
     "require": {
         "php": "^8.2",
+        "ext-iconv": "*",
         "barryvdh/laravel-dompdf": "^3.1",
         "dedoc/scramble": "^0.13.22",
+        "endroid/qr-code": "^5.1",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^12.0",
         "laravel/reverb": "^1.10",

@@ -49,6 +49,9 @@ Route::middleware(['web', 'auth:admin', 'demo'])
             ->name('inventory.mark-printed')->middleware('permission:manage_qr_batches');
         Route::post('/inventory/change-status', [QrInventoryController::class, 'changeStatus'])
             ->name('inventory.change-status')->middleware('permission:manage_qr_batches');
+        // §5 export — queued, capped at 500, SVG by default. See the controller.
+        Route::post('/inventory/export', [QrInventoryController::class, 'export'])
+            ->name('inventory.export')->middleware('permission:view_qr_inventory');
         Route::delete('/inventory', [QrInventoryController::class, 'destroy'])
             ->name('inventory.destroy')->middleware('permission:manage_qr_batches');
 

@@ -37,6 +37,10 @@ Route::middleware(['web', 'client-app', EnsureSmartQrEnabled::class])
         // the code model's getRouteKeyName().
         Route::patch('/codes/{serial}', [SmartQrCodeController::class, 'update'])->name('codes.update');
 
+        // §11's preview column and download action — slice 8.
+        Route::get('/codes/{serial}/preview.svg', [SmartQrCodeController::class, 'preview'])->name('codes.preview');
+        Route::get('/codes/{serial}/download', [SmartQrCodeController::class, 'download'])->name('codes.download');
+
         // C — Activity
         Route::get('/activity', [SmartQrDashboardController::class, 'activity'])->name('activity');
     });

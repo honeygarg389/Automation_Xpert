@@ -5,6 +5,7 @@ namespace App\Modules\SmartQr\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Scopes\WorkspaceScope;
 use App\Models\Workspace;
+use App\Modules\SmartQr\Jobs\GenerateQrExportJob;
 use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
@@ -206,5 +207,50 @@ class QrInventoryController extends Controller
         SmartQrCode::whereIn('id', $data['code_ids'])->delete();
 
         return back()->with('success', __(':count code(s) deleted.', ['count' => $codes->count()]));
+    }
+
+    /**
+     * §5's "export" bulk action — the third hole slice 8 fills.
+     *
+     * ⚠️ QUEUED. 500 renders cannot happen in a web request, and an admin
+     * watching a spinner time out reads it as a failure while the work carries
+     * on invisibly.
+     *
+     * ⚠️ THE CAP IS ENFORCED HERE, WITH A MESSAGE. §14's "ZIP of 500" is an
+     * example; making it a limit means an admin who ticks 5,000 is told so
+     * immediately rather than discovering the ceiling by timeout.
+     *
+     * ⚠️ SVG is the default format. For 500 codes that is a few hundred KB
+     * against 50–150 MB of PNG, and a printer wants vector anyway. PNG stays an
+     * explicit choice, and the UI states the size difference where the choice is
+     * made — an admin asking for PNG should see what they are asking for before
+     * they wait for it.
+     */
+    public function export(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'code_ids' => ['required', 'array', 'min:1'],
+            'code_ids.*' => ['integer', 'exists:smart_qr_codes,id'],
+            'format' => ['nullable', Rule::in(GenerateQrExportJob::FORMATS)],
+        ]);
+
+        if (count($data['code_ids']) > GenerateQrExportJob::MAX_CODES) {
+            return back()->withErrors(['code_ids' => __(
+                'Select at most :max codes per export. You selected :count. Exporting more than '
+                .':max in one archive risks a job that fails after several minutes of work.',
+                ['max' => GenerateQrExportJob::MAX_CODES, 'count' => count($data['code_ids'])]
+            )]);
+        }
+
+        GenerateQrExportJob::dispatch(
+            array_values($data['code_ids']),
+            $data['format'] ?? 'svg',
+            $request->user('admin')?->id,
+        );
+
+        return back()->with('success', __(
+            'Preparing an export of :count code(s). It will appear in storage when ready.',
+            ['count' => count($data['code_ids'])]
+        ));
     }
 }

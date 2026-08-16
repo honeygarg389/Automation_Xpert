@@ -8,12 +8,14 @@ use App\Models\Workspace;
 use App\Modules\SmartQr\Http\Requests\UpdateCustomerQrRequest;
 use App\Modules\SmartQr\Services\SmartQrAccess;
 use App\Modules\SmartQr\Services\SmartQrAssignmentValidator;
+use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use App\Modules\SmartQr\Services\SmartQrMetrics;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * §11 B — My QR Codes, and the customer's own edits.
@@ -34,6 +36,7 @@ class SmartQrCodeController extends Controller
         private readonly SmartQrAccess $access,
         private readonly SmartQrMetrics $metrics,
         private readonly SmartQrAssignmentValidator $validator,
+        private readonly SmartQrImageRenderer $renderer,
     ) {}
 
     public function index(Request $request): Response
@@ -135,6 +138,69 @@ class SmartQrCodeController extends Controller
         $assignment->update($data);
 
         return back()->with('success', __('QR code updated.'));
+    }
+
+    /**
+     * §11's "QR preview" column — the first of the three holes slice 8 fills.
+     *
+     * ⚠️ SVG and rendered on demand: crisp at any row height, and it costs no
+     * storage. A cached PNG per code would be a storage lifecycle to manage for
+     * an operation that takes milliseconds.
+     *
+     * ⚠️ Resolved through SmartQrAccess, so a code the customer does not
+     * currently hold is a 404 — including one they held last month (R-4).
+     */
+    public function preview(Request $request, string $serial): SymfonyResponse
+    {
+        $code = $this->access->findForWorkspace($this->workspaceId($request), $serial);
+
+        if ($code === null) {
+            abort(404);
+        }
+
+        $rendered = $this->renderer->svg(
+            route('smartqr.scan', ['token' => $code->public_token]),
+            $code->serial_number
+        );
+
+        return response($rendered['data'], 200, [
+            'Content-Type' => $rendered['mime'],
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    /**
+     * §11's "download digital copy" — the second hole.
+     *
+     * ⚠️ Generated per request, not stored. A single code is cheap; only bulk
+     * needs the queue.
+     */
+    public function download(Request $request, string $serial): SymfonyResponse
+    {
+        $code = $this->access->findForWorkspace($this->workspaceId($request), $serial);
+
+        if ($code === null) {
+            abort(404);
+        }
+
+        $format = $request->query('format', 'svg');
+
+        if (! in_array($format, ['svg', 'png', 'pdf'], true)) {
+            abort(422, 'Unsupported format.');
+        }
+
+        $url = route('smartqr.scan', ['token' => $code->public_token]);
+
+        $rendered = match ($format) {
+            'png' => $this->renderer->png($url, $code->serial_number),
+            'pdf' => $this->renderer->pdf($url, $code->serial_number),
+            default => $this->renderer->svg($url, $code->serial_number),
+        };
+
+        return response($rendered['data'], 200, [
+            'Content-Type' => $rendered['mime'],
+            'Content-Disposition' => 'attachment; filename="'.$code->serial_number.'.'.$format.'"',
+        ]);
     }
 
     /**
