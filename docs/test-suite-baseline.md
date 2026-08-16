@@ -2,7 +2,10 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **948 tests, 38,839 assertions, 0 failures, 1 documented skip.**
+> The suite passes: **1,273 tests, 40,226 assertions, 0 failures, 1 documented skip.**
+>
+> **Front-end: 28 vitest tests, 4 files.** Previously ZERO ran — `setup.js` held JSX under a
+> `.js` extension so vite refused to transform it. Fixed in Smart QR slice 3b.
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
 > failures" to hide behind — that excuse expired on 2026-08-03. A red suite blocks the
@@ -10,8 +13,7 @@
 >
 > **But read the caveat below before treating green as assurance.**
 
-**Current number recorded:** 2026-08-07, on `master` at `473d583`, after the three hard-gate
-security merges. Every figure here is measured, not carried forward.
+**Current number recorded:** 2026-08-14, on `feature/smart-qr` after Smart QR slice 3b. Previously 2026-08-07 on `master` at `473d583`. Every figure here is measured, not carried forward.
 
 **The 1 skip is documented and deliberate**, not a silent hole:
 `CredentialNotInExceptionMessageTest::test_the_places_scraper_does_not_persist_the_key_to_the_job_error_column`
@@ -34,6 +36,17 @@ with its own full-suite run:
 | Phase 0 — `BelongsToWorkspace`, slices 1–9 + BUG-019 | scope, guards, brake, job context | 949 |
 | `25c9476` — partner tier data layer | 9 partner-tier tests | 957 |
 | `54f965a` — **BUG-022/023** plan limits never enforced | 9 rewritten + 5 new limit tests | **966** |
+| Phase 1 slices 1–7 + Smart QR slices 1–2 | catalog, resolver, cache, QR schema + generation | 1128 |
+| `d4b5e80` — **Smart QR slice 3a**, admin batches / inventory / assignment | 18 assignment + 16 inventory/batch tests | 1162 |
+| **Smart QR slice 3b**, admin React pages + QR navigation | 1 test for the `workspaces` prop the modal needed | 1163 |
+| Smart QR slice 3b fixes — three walkthrough UI defects | 1 PHP (`qr_type` end to end) + 8 vitest | 1164 + 19 JS |
+| **Smart QR slice 3c** — delete vs retire, rename, edit | 12 delete/retire + 7 edit PHP, 5 vitest (typed confirmation) | 1183 + 24 JS |
+| **Smart QR slice 4** — the public redirect `/q/{token}` | 24 tests: seven outcomes, the serial-404 control, scan privacy | 1207 + 24 JS |
+| **Smart QR slice 5** — §9 attribution, both halves | 15 tests: cross-tenant refusal, stripped token, reuse, failed-write redirect | 1222 + 24 JS |
+| **Smart QR slice 6** — §11 customer dashboard | 14 tests: SmartQrAccess re-proven, previous-tenant boundary, entitlement gate | 1236 + 24 JS |
+| **Smart QR slice 7a** — aggregates, retention prune, HAZARD H-4 | 13 tests: the interlock, prune guards, §12's rate | 1249 + 24 JS |
+| **Smart QR slice 7b** — §12's reports UI | 13 PHP + 4 vitest (R-19's rendered labels) | 1262 + 28 JS |
+| **Smart QR slice 8** — §13/§14 image generation and export | 11 tests: ZIP cap, failure cleanup, no-logo fallback, Dompdf proof | **1273** + 28 JS |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.

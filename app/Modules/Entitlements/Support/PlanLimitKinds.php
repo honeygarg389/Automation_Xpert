@@ -54,6 +54,17 @@ final class PlanLimitKinds
         'chatbots' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'chatbots'],
         'social_accounts' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'accounts'],
         'automations' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'automations'],
+
+        // ⚠️ Smart QR slice 3. R-5 said this "slots into GaugeSources" — that is
+        // half the wiring, and R-5 is amended in the rulings doc to say so.
+        // `plans.limits` carries no kind, so THIS map is what declares the key
+        // to be a gauge; without an entry here `kindOf()` returns null and the
+        // guard that stops a gauge going silently unenforced never sees it.
+        //
+        // Counted as CURRENT assignments only — see the `where` filter in
+        // GaugeSources. An unfiltered count would include ended assignments and
+        // is monotonic, so a workspace that churns codes locks itself out.
+        'smart_qr_max_assigned' => ['kind' => AddOnGrant::KIND_GAUGE, 'unit' => 'assigned_codes'],
     ];
 
     public static function kindOf(string $key): ?string

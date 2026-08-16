@@ -111,6 +111,20 @@ class JobWorkspaceContextGuardTest extends TestCase
         //
         // Every read inside it is filtered by an explicit client_id or
         // workspace_id, so there is no query relying on ambient context.
+        // Generates PLATFORM inventory: smart_qr_codes has no workspace_id, so
+        // there is no tenant to establish. A workspace context here would be
+        // meaningless rather than merely unnecessary — nothing it could scope.
+        'App\Modules\SmartQr\Jobs\GenerateQrBatchJob',
+        // ⚠️ Writes ONE row keyed by smart_qr_assignment_id, and the assignment
+        // carries the tenant (R-4). There is deliberately no workspace_id on
+        // smart_qr_scan_events, so a workspace context would have nothing to
+        // scope. It also receives only HASHES — never an IP or a user agent —
+        // so the durable `jobs` payload cannot hold what §10 forbids storing.
+        'App\Modules\SmartQr\Jobs\RecordQrScanJob',
+        // Renders PLATFORM inventory into a ZIP. smart_qr_codes has no
+        // workspace_id (R-4), so there is no tenant to establish — a workspace
+        // context here would have nothing to scope.
+        'App\Modules\SmartQr\Jobs\GenerateQrExportJob',
         'App\Modules\Entitlements\Jobs\ReconcileWorkspaceEntitlements',
         'App\Jobs\DispatchWebhookJob',
         'App\Jobs\GenerateWorkspaceExportJob',

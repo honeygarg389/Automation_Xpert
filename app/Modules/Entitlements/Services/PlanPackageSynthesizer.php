@@ -62,7 +62,8 @@ class PlanPackageSynthesizer
     }
 
     /**
-     * ⚠️ `plans.white_label_enabled` bridged in as a FEATURE grant.
+     * ⚠️ TWO legacy bridges: `plans.white_label_enabled` and, derived from
+     * `plans.limits`, `smart_qr_enabled`.
      *
      * The column is the legacy source, exactly as `plans.limits` is: synthesized
      * into the package so the resolver is the single authority and the partner
@@ -79,7 +80,42 @@ class PlanPackageSynthesizer
      */
     private function legacyFlags(Plan $plan): array
     {
-        return $plan->white_label_enabled ? ['white_label' => true] : [];
+        $flags = $plan->white_label_enabled ? ['white_label' => true] : [];
+
+        // ⚠️ `smart_qr_enabled` DERIVED from the presence of the assignment
+        // limit. A bridge, exactly like `white_label_enabled` above, and it
+        // stays until add-ons can grant the flag directly.
+        //
+        // ─── Why derived rather than gated on a real flag ──────────────────
+        //
+        // R-5 puts `smart_qr_enabled` at display. But NOTHING can set it:
+        // legacyFlags() was the only source of boolean flags and returned just
+        // white_label, and the other source — add-on grants — is Phase 1 slice
+        // 6, which is BLOCKED behind BUG-032.
+        //
+        // ⚠️ So gating on the flag as it stood would have hidden Smart QR from
+        // EVERY customer on EVERY plan. That is R-13's failure inverted: not a
+        // gate that can never fire, but one that can never OPEN. Same class of
+        // bug, opposite direction — and both are now written down together, in
+        // R-13 and R-22.
+        //
+        // Deriving from `smart_qr_max_assigned` is correct rather than merely
+        // convenient: R-13 seeded that limit on all three tiers, so every
+        // current customer has the feature, and a future plan that omits the
+        // limit correctly omits the feature. `array_key_exists`, not truthiness
+        // — a limit of 0 means "bounded at zero", which is still a granted
+        // feature the customer simply cannot use yet (BUG-030 semantics).
+        //
+        // ⚠️ DERIVED, NOT AUTHORITATIVE. Like white_label_enabled, this is a
+        // seed, and it is annotated so it cannot go on looking like the source
+        // of truth once add-ons can grant the flag properly.
+        $limits = is_array($plan->limits) ? $plan->limits : [];
+
+        if (array_key_exists('smart_qr_max_assigned', $limits)) {
+            $flags['smart_qr_enabled'] = true;
+        }
+
+        return $flags;
     }
 
     /**

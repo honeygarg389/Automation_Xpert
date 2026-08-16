@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\AI\Models\AiChatbot;
 use App\Modules\AI\Models\AiKnowledgeBase;
 use App\Modules\Automation\Models\Automation;
+use App\Modules\SmartQr\Models\SmartQrAssignment;
 use App\Modules\Social\Models\SocialAccount;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
@@ -46,7 +47,24 @@ final class GaugeSources
     public const SCOPE_CLIENT = 'client';
 
     /**
-     * @var array<string, array{model: class-string, scope: string}>
+     * ⚠️ THE OPTIONAL `where` KEY — a FILTERED count, added in Smart QR slice 3.
+     *
+     * Six of the eight entries below carry exactly `model` and `scope`, and the
+     * branch that reads `where` is guarded on the KEY'S ABSENCE with `isset()`,
+     * so it cannot execute for them. That inertness is provable by absence, and
+     * it is why this could land inside a Smart QR slice rather than its own
+     * branch (R-7).
+     *
+     * `isset()` and not truthiness, deliberately: a future `'where' => null`
+     * must NOT fire the branch. Treating an explicitly-null filter as "no
+     * filter" is the same conflation of absent and null that BUG-030 is about,
+     * and `array_key_exists` would get it backwards.
+     *
+     * Shape: column => value, where **null means `whereNull`**. A closure would
+     * read better and cannot be held in a `const`, which is also why the
+     * discriminator test needs `GaugeReader::sourceFor()` to override.
+     *
+     * @var array<string, array{model: class-string, scope: string, where?: array<string, mixed>}>
      */
     public const MAP = [
         // ⚠️ CLIENT-scoped. Seats belong to the organisation holding the plan.
@@ -79,6 +97,35 @@ final class GaugeSources
         'automations' => [
             'model' => Automation::class,
             'scope' => self::SCOPE_WORKSPACE,
+        ],
+
+        /**
+         * ⚠️ THE FIRST FILTERED GAUGE, and the filter is the whole point.
+         *
+         * `smart_qr_assignments` keeps history: a reassignment sets
+         * `unassigned_at` and LEAVES THE ROW, because R-4 needs the old period
+         * to survive for the previous tenant's analytics to stay reachable.
+         *
+         * So an UNFILTERED count returns every assignment the workspace has
+         * ever held. A workspace that held five codes and had all five
+         * reassigned away would read 5 used / 0 current — at its limit while
+         * owning nothing — and because the count only ever grows, a workspace
+         * that churns codes is permanently locked out.
+         *
+         * `unassigned_at IS NULL` is the current-period filter, the same
+         * predicate the code model's currentAssignment relation and the DB's
+         * unique index over `current_code_id` use. One definition of "current",
+         * three consumers.
+         *
+         * ⚠️ That relation is named without its class prefix deliberately:
+         * `SmartQrAccessGuardTest` is a TEXT scan and would flag this comment
+         * as a raw query. Over-reporting is the safe direction for that guard,
+         * so the comment moves rather than the guard.
+         */
+        'smart_qr_max_assigned' => [
+            'model' => SmartQrAssignment::class,
+            'scope' => self::SCOPE_WORKSPACE,
+            'where' => ['unassigned_at' => null],
         ],
     ];
 

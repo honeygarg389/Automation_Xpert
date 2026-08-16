@@ -54,6 +54,28 @@ class WorkspaceScopeBypassGuardTest extends TestCase
         'app/Modules/Broadcasting/Models/UsageMeter.php' => 'current() takes an explicit workspace_id and its own where() IS the boundary. Under the scope a null context would report ZERO usage, which EnforceLimit reads as under-limit — a missing context would grant unlimited quota. Fail-open; bypassed deliberately.',
         'app/Modules/Ecommerce/Services/ContactCapacity.php' => 'remaining() takes an explicit workspace_id and its own where() IS the boundary. Under the scope a null context would count ZERO contacts and report the FULL limit as available — a capacity check granting unbounded headroom. Fail-open; bypassed deliberately.',
         'app/Modules/Entitlements/Services/GaugeReader.php' => 'Gauge counts apply an explicit workspace_id/client_id which IS the boundary. Under the scope a null context would count ZERO and hand the customer their FULL limit as headroom. Fail-open; bypassed deliberately, and from birth so Phase 0 slice 8 cannot convert these counts later.',
+        'app/Modules/SmartQr/Services/SmartQrAccess.php' => 'Every method applies an explicit workspace_id which IS the boundary. Inside whereHas there is no ambient context, so the scope would AND 1=0 onto the subquery and the join would match NOTHING — fail-CLOSED, the mirror of UsageMeter::current(). Caught by the canary, not by reasoning.',
+        // ── Smart QR slice 3: the admin surface, and it has NO workspace ──
+        //
+        // Every entry below is the SAME reason and it is worth stating once: a
+        // Super Admin request carries no workspace context by definition — the
+        // admin belongs to no tenant. The scope fails CLOSED, so leaving it on
+        // does not make these queries safer, it makes them return NOTHING:
+        // an empty inventory, an empty assignment list, and — worst — a
+        // duplicate check that reports every code unheld.
+        //
+        // The tenant boundary in each case is either an explicit workspace_id
+        // stated beside the bypass, or genuinely absent because the question is
+        // platform-level.
+        'app/Modules/SmartQr/Http/Controllers/Admin/QrInventoryController.php' => 'Admin inventory spans all tenants by design; inside whereHas the scope ANDs 1=0 and every "assigned" filter would return an empty set for codes that ARE assigned. Fail-CLOSED.',
+        'app/Modules/SmartQr/Http/Controllers/Admin/QrBatchController.php' => 'Batch listing derives assigned_count (R-12) across all tenants; the scope would report every batch as holding zero assignments.',
+        'app/Modules/SmartQr/Http/Controllers/Admin/QrAssignmentController.php' => 'The Super Admin assignments screen spans all tenants; and unassign resolves by uuid, where a scoped bind would 404 on a row that exists and the permission check would never run.',
+        'app/Modules/SmartQr/Actions/AssignQrCodesAction.php' => 'The duplicate check asks "is this code held by ANYONE" — inherently cross-tenant, and it is the check standing between one code and two tenants. Scoped, it answers "no" for every code and leaves only the DB unique index.',
+        'app/Modules/SmartQr/Services/SmartQrAssignmentValidator.php' => 'Channel lookup states workspace_id explicitly and THAT is the boundary. Scoped, with no admin context, it would reject every channel including the correct one — the same fail-CLOSED shape as SmartQrAccess.',
+        'app/Modules/SmartQr/Services/SmartQrRedirectResolver.php' => 'THE THIRD PUBLIC ENTRY POINT. A stranger scanning a sticker has no session and no workspace — the workspace is the ANSWER the token is being resolved into, the same discovery shape as ChannelAccountRouting::findForInbound(). Scoped, the assignment lookup fails closed and EVERY code on earth reports as unassigned. The channel lookup states workspace_id explicitly and that IS the boundary.',
+        'app/Modules/SmartQr/Services/SmartQrDeletability.php' => 'Asks "has this code EVER been assigned" to decide whether deleting it would destroy tenant history. Inherently cross-tenant: an admin has no workspace, and a scoped count returns ZERO for every code — which would report every assigned code deletable and cascade away its scan events. Fail-closed turning into fail-DESTRUCTIVE.',
+        'app/Modules/SmartQr/Models/SmartQrCode.php' => 'currentAssignment() answers "which tenant holds this code", which is asked precisely when the answer is unknown. Under the scope isAssigned() returned FALSE for genuinely assigned codes — found by an assertion failing in slice 3. Customer-facing uses are bounded by SmartQrAccess::boundedTo().',
+
         'app/Models/Scopes/WorkspaceScope.php' => 'The scope itself. It reads isCrossTenant() to honour the door; it does not open one.',
         'app/Jobs/Middleware/EstablishesWorkspaceContext.php' => 'THE one job-context bypass: reads a single workspace_id column so a job can establish its own tenant. One query wide. Also routes declared cross-tenant jobs.',
 

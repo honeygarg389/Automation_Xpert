@@ -56,7 +56,14 @@ class PlanLimitKeyDivergenceTest extends TestCase
         $back = array_keys(PlanController::defaultLimits());
 
         $this->assertNotEmpty($front);
-        $this->assertSame(16, count($front), 'Expected 16 keys in the admin form.');
+        // ⚠️ 16 -> 17: `smart_qr_max_assigned` joined in Smart QR slice 3. The
+        // key is NAMED as well as counted — a bare bump would let the NEXT key
+        // arrive by accident and be absorbed the same way.
+        $this->assertSame(17, count($front), 'Expected 17 keys in the admin form.');
+        $this->assertContains('smart_qr_max_assigned', $front,
+            'The Smart QR limit is missing from the admin form. It is seeded on all three '
+            .'plans, and setAllUnlimited() rebuilds limits from LIMIT_KEYS alone — so a key '
+            .'absent here is silently deleted from every plan the first time it is clicked.');
 
         $this->assertSame([], array_diff($front, $back),
             'The admin form submits keys the controller does not validate. Laravel drops '
@@ -102,9 +109,9 @@ class PlanLimitKeyDivergenceTest extends TestCase
 
         $validated = Validator::make(['limits' => $submitted], $rules)->validated();
 
-        $this->assertCount(16, $submitted, 'Precondition: 16 keys submitted.');
-        $this->assertCount(16, $validated['limits'] ?? [],
-            'Validation dropped '.(16 - count($validated['limits'] ?? [])).' of 16 limit keys. '
+        $this->assertCount(17, $submitted, 'Precondition: 17 keys submitted.');
+        $this->assertCount(17, $validated['limits'] ?? [],
+            'Validation dropped '.(17 - count($validated['limits'] ?? [])).' of 17 limit keys. '
             .'Every dropped key is written back as absent, which reads as unlimited.');
 
         $this->assertSame(array_keys($submitted), array_keys($validated['limits']));
@@ -140,13 +147,13 @@ class PlanLimitKeyDivergenceTest extends TestCase
 
         $this->assertSame($limits, $saved,
             'A save round-trip changed the plan’s limits. Before BUG-027 was fixed this left '
-            .'2 of 16 keys, turning 14 limits into unlimited for every customer on the plan.');
+            .'2 of 17 keys, turning 15 limits into unlimited for every customer on the plan.');
     }
 
     /**
      * POSITIVE CONTROL: validation must still REJECT a bad value.
      *
-     * Without this, "all 16 keys survive" is equally satisfied by a controller
+     * Without this, "all 17 keys survive" is equally satisfied by a controller
      * that validates nothing at all — which would be a different bug with the
      * same green test.
      */

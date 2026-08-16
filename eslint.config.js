@@ -6,6 +6,29 @@ import prettierConfig from 'eslint-config-prettier';
 export default [
     js.configs.recommended,
     {
+        // ⚠️ The vitest globals, for the test directory only.
+        //
+        // `setup.jsx` has always used `vi` and `global` and has always failed
+        // no-undef — invisible while the runner itself was broken (JSX under a
+        // `.js` extension meant ZERO front-end tests ran, so nobody looked).
+        // Unblocking the runner in Smart QR slice 3b made these the only lint
+        // errors in `resources/js`, so they are declared rather than left.
+        //
+        // Scoped to __tests__: `vi` must stay undefined in application code.
+        files: ['resources/js/__tests__/**/*.{js,jsx}'],
+        languageOptions: {
+            globals: {
+                vi: 'readonly',
+                global: 'readonly',
+                describe: 'readonly',
+                it: 'readonly',
+                expect: 'readonly',
+                beforeEach: 'readonly',
+                afterEach: 'readonly',
+            },
+        },
+    },
+    {
         files: ['resources/js/**/*.{js,jsx}'],
         plugins: {
             react: reactPlugin,

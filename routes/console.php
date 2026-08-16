@@ -1,12 +1,12 @@
 <?php
 
+use App\Http\Controllers\Admin\CronSetupController;
 use App\Modules\Broadcasting\Jobs\LaunchScheduledCampaignsJob;
 use App\Modules\Broadcasting\Models\UsageMeter;
 use App\Modules\Social\Jobs\DispatchScheduledPostsJob;
 use App\Modules\Social\Jobs\RefreshSocialTokensJob;
 use App\Modules\Whatsapp\Jobs\TemplateSyncJob;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
-use App\Http\Controllers\Admin\CronSetupController;
 use App\Services\WebhookIdempotencyService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -107,5 +107,34 @@ Schedule::command('reports:weekly-digest')
     ->mondays()
     ->at('09:00')
     ->name('weekly-digest-emails')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// ── Smart QR daily aggregates (§10) ─────────────────────────────────────────
+//
+// ⚠️ Builds YESTERDAY, not today. Today is still accumulating and the dashboard
+// computes the current day live from raw rows, so it never depends on this job
+// having run.
+//
+// --days=3 rather than 1: a re-run is idempotent (updateOrCreate against the
+// unique assignment+date grain), so overlapping the last three days repairs any
+// gap left by a missed run or a late-arriving scan, at no cost.
+Schedule::command('smartqr:aggregate --days=3')
+    ->dailyAt('00:20')
+    ->name('smartqr-daily-aggregates')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// ── Smart QR raw scan retention (R-4 amendment) ─────────────────────────────
+//
+// ⚠️ DELETES CUSTOMER DATA, and it runs AFTER the aggregator by design — GUARD 2
+// refuses any day with no aggregate row, so ordering these the other way round
+// would make the prune refuse every night and quietly never run.
+//
+// Weekly rather than daily: there is no urgency, and a smaller number of larger
+// batched runs is easier to notice in a log than a nightly delete nobody reads.
+Schedule::command('smartqr:prune-scans')
+    ->weeklyOn(0, '03:00')
+    ->name('smartqr-prune-scans')
     ->withoutOverlapping()
     ->onOneServer();

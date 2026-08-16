@@ -296,6 +296,28 @@ class HandleInertiaRequests extends Middleware
             }
         }
 
+        // ⚠️ THE FIRST FEATURE FLAG SHARED TO THE CLIENT PANEL.
+        //
+        // `useClientNav` gates nothing today — every item is unconditional — so
+        // this introduces the first gated entry. Kept to a flat `features` map
+        // rather than a general capability system: one module needs it, and a
+        // framework for one caller is the cost this project refuses elsewhere.
+        //
+        // Resolved through the entitlement facade so the partner ceiling still
+        // intersects it (CLAUDE.md rule 6), and wrapped because a failure here
+        // would drop the whole page to the fallback props.
+        $features = [];
+
+        if ($user instanceof User && $workspaceId) {
+            try {
+                $entitlement = app(Entitlements::class)
+                    ->forWorkspace((int) $workspaceId);
+                $features['smart_qr'] = $entitlement->allows('smart_qr_enabled');
+            } catch (\Throwable $e) {
+                $features['smart_qr'] = false;
+            }
+        }
+
         $auth = [
             'user' => $user,
             'adminUser' => null,
@@ -384,6 +406,7 @@ class HandleInertiaRequests extends Middleware
             'app_version' => env('APP_VERSION', '1.0.0'),
             'onboardingSummary' => $onboardingSummary,
             'landingPageEnabled' => SystemSetting::get('landing.page_enabled', '1') === '1',
+            'features' => $features,
             'branding' => $this->brandingShare(),
             'pusher' => $this->pusherPublicConfig(),
             'onesignal' => $this->oneSignalPublicConfig(),

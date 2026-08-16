@@ -283,6 +283,55 @@ Rules:
      surviving into check N+1 is how a green result becomes meaningless.
   4. `git checkout` cannot restore an untracked file at all. There is no undo.
 
+  **The same rule applies to `git checkout <branch>`, and it cost a whole session's work
+  being committed to the wrong branch.** Opening a Smart QR session with:
+
+  ```
+  git checkout -q feature/smart-qr 2>/dev/null || git checkout -q -b feature/smart-qr master
+  → fatal: a branch named 'feature/smart-qr' already exists
+  ```
+
+  The branch existed at master's tip, the `||` fallback swallowed the failure, and **every
+  commit for the rest of the session went to the branch that happened to be checked out
+  already**. It surfaced only when a push of `feature/smart-qr` uploaded a branch with 0
+  commits and 0 files, hours later.
+
+  So: **verify the RESULT of a checkout, not that the command returned.** `git rev-parse
+  --abbrev-ref HEAD` after switching, before the first commit. And never `2>/dev/null` a
+  git command whose failure changes which branch you are on — suppressing the error is
+  what made a loud failure silent.
+
+- **A stash-check whose MUTATION cannot be shown to have landed proves nothing.** This is the
+  unverified-revert trap in the opposite direction, and it is worse, because it produces a
+  *green* result that reads as "the code is correct" when it means "nothing was tested".
+
+  Measured: three refusal-state mutations in Smart QR slice 4 all reported **OK (24 tests)**.
+  The conclusion on offer was "these tests do not discriminate" — and it was wrong. The Python
+  edits had been piped through a bash helper function, the escaping mangled the search strings,
+  and `str.replace()` silently did nothing. Re-run with the pattern asserted, every one of the
+  six mutations failed exactly the tests it should.
+
+  So: **every mutation asserts its own pattern before writing**, e.g.
+
+      assert old in s, 'PATTERN NOT FOUND'
+
+  and prints confirmation. `str.replace()` and `sed` both fail silently on a missed pattern;
+  neither tells you the file is unchanged. Confirm the mutation applied, and confirm the
+  restore afterwards — both halves, every time.
+
+- **Assert the STORED ROW, not the dispatched payload.** A test that checks what a job was
+  *called with* passes while the job writes nothing.
+
+  Smart QR slice 4: `SmartQrScanEvent::$fillable` still listed slice 1's two columns, so
+  `create()` **silently discarded** `ip_hash`, `ua_hash`, `is_bot`, `referer_host` and
+  `is_unique` — no error, no exception, rows written with database defaults. Bot flags read
+  false, referers null, and every repeat scan counted as unique.
+
+  `Queue::assertPushed(fn ($job) => $job->isBot === true)` **would have passed**: the argument
+  was correct all the way to `create()`. Only reading the row back caught it. Mass assignment
+  fails quietly by design, so the payload and the persisted row are two different claims — test
+  the second.
+
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
   asking.
@@ -315,6 +364,19 @@ transient error permanently dedups the event and the renewal is lost.
   live customer-facing 500. Files touched during 1c get fixed opportunistically in their own
   module commit; these two do not, so they need a deliberate pass. See `docs/found-bugs.md`
   BUG-003 for the full list and the decided scope policy.
+- **BUG-038: there is no AutomationXpert logo asset in the repo.** §14 requires one on printed QR
+  artwork; the only logo files are WhatsMine-branded, inherited from `4ec7e3e`. Slice 8 uses the
+  configured platform logo and renders PLAIN when none is set — it must NEVER fall back to the
+  inherited asset, because a competitor's brand on a printed sticker is irreversible. ⚠️ Needs an
+  owner decision before any kit is printed; it cannot be resolved in code.
+- **`smart_qr_scans_per_month` — ✅ RESOLVED: there is NO scan limit, by owner ruling.** R-5
+  originally recorded three enforcement tiers; there are TWO — a gauge at assignment and a
+  boolean at display. The counter was **removed as a concept**, not deferred: the product sells
+  CODES (bounded at 50 by `smart_qr_max_assigned`), metering scan volume would punish the most
+  successful customers, enforcement would put a write on the redirect path slice 4 kept
+  read-only, and a refusal would land on the customer's customer standing in a shop rather than
+  on anybody who could act on it. ⚠️ Do not reinstate it as "the missing third tier" — see the
+  amendment to R-5 in `docs/smart-qr-rulings.md`.
 - **`ClientWorkspaceService::detachStaleWorkspaces()`** — deferred out of Phase 0. See
   `docs/phase-0-tenant-isolation-plan.md` §G-1d. Prerequisite for any partner-tier feature
   that can move a customer between organisations.
@@ -367,6 +429,23 @@ scheduled, all would die quietly when Phase 0 closes:
 
   The cost of the wrong note was real: `EnforceLimit` was written against `activePlan()`, so
   every gateway-billed customer has been exempt from every plan limit since launch. See BUG-023.
+- **BUG-037**: ⚠️ **`php artisan db:seed` CORRUPTS `resources/js/locales/*.json`.** Do not run it
+  until this is fixed — see `docs/found-bugs.md` BUG-037 for a safe seeder sequence.
+  `TranslationKeyScanner`'s fifth regex is unanchored and harvests `route('admin.clients.index')`
+  as a translation key; `I18nFileService::unflatten()` then silently collapses real nested keys
+  (4 one way, 25 the other). **It affects deployed installs** — `InstallerService::seedCore()`
+  runs `i18n:seed-defaults`, so a fresh install damages en.json before anyone logs in. Non-English
+  is worse than loss: the English string is written into hi/ar/zh and reads as translated.
+  Predates all our work (`4ec7e3e`).
+- **BUG-036**: editing a plan's limits through `Admin\PlanController` never invalidates the
+  entitlement cache, so the OLD limits stay enforced for up to
+  `entitlements.cache_fallback_ttl_minutes` (default 60) — silently, in both directions.
+  ⚠️ Not "an event with no dispatcher": `PlanChanged` IS dispatched, from `StripeGateway`, but it
+  means *"this subscriber moved between plans"* and its constructor requires a User and a
+  Subscription — so a plan-DEFINITION edit structurally cannot dispatch it. There is no event for
+  "a plan's definition changed", and the fix is a fan-out over every subscriber, not a
+  `dispatch()` call. `entitlements:reconcile` is the workaround; a workaround an operator must
+  remember is not a fix. See `docs/found-bugs.md` BUG-036.
 - **BUG-002**: 10 pre-existing PHPStan `property.notFound` errors in `app/Modules/Social`.
   Fix properly with `@property` annotations, or baseline as a *tracked decision* — not as a
   side effect of not looking. See `docs/found-bugs.md`.

@@ -2320,3 +2320,349 @@ The fix is small — mirror Stripe's `catch` block — but it belongs on a billi
 BUG-032, and it wants one decision first: whether the release should be unconditional or limited
 to specific exception types. Releasing on a *permanent* failure means retrying something that
 will fail identically every time, which is its own kind of noise.
+
+---
+
+## BUG-035 — overlapping batch serial ranges collided mid-generation — ✅ FIXED
+
+- **Severity:** Medium — safe failure, but late, cryptic, and it left a half-generated batch
+- **Status:** **FIXED in Smart QR slice 3a** (`d3b5fa5`, branch `feature/smart-qr`).
+  Found 2026-08-13 during slice 2, fixed 2026-08-14.
+- **Files:** `app/Modules/SmartQr/Rules/SerialRangeAvailable.php` (new),
+  `app/Modules/SmartQr/Http/Requests/StoreQrBatchRequest.php`
+- **User-facing:** No — Super Admin only.
+
+### ⚠️ It lived in a TEST DOCBLOCK and nowhere else
+
+This entry exists because the defect was surfaced by
+`QrBatchGenerationTest::overlapping_serial_ranges_collide_at_generation_time`, which described
+it accurately, named slice 3's admin surface as the place to fix it — and was the **only**
+record of it anywhere. It was not in this document, not in the roadmap, and not in
+`CLAUDE.md`.
+
+A defect recorded only in the test that demonstrates it is a defect nobody schedules. The test
+passes, so nothing draws attention to it; and it reads as an intentional property of the system
+rather than an outstanding one. Recorded here as much for that as for the bug.
+
+### The defect
+
+`smart_qr_codes.serial_number` is **globally unique**, so a batch's
+`prefix` + `serial_start` + `quantity` defines a range no other batch may share. Nothing
+prevented an administrator creating two batches with prefix `AX` both starting at 1.
+
+The failure was **safe but late**. Generation chunks at 100 codes with one transaction per
+chunk, so on a 500-code batch the collision may not surface until the fifth chunk — after four
+have committed. What the operator saw:
+
+- a batch stuck in a failed state holding 400 of its 500 codes
+- a raw duplicate-key message in `failure_reason`
+
+rather than *"that serial range is already taken by batch AX-BK-0826"*, which is knowable
+before a single row is written.
+
+### The fix, and what it is NOT
+
+`SerialRangeAvailable`, applied to `serial_start` in `StoreQrBatchRequest`. It refuses a range
+overlapping any existing batch's under the same prefix, naming the conflicting batch and both
+ranges.
+
+⚠️ **It is a TOCTOU check, and the unique index remains the guarantee.** Two admins submitting
+overlapping batches concurrently both pass the rule: it reads, then the row is written, and
+nothing holds a lock in between. The rule converts a late cryptic failure into an immediate
+readable one — it does not replace the constraint.
+
+`overlapping_serial_ranges_collide_at_generation_time` is therefore left **passing and
+unchanged**, deliberately: it proves generation still fails safely when the validation is
+bypassed, which is the case the rule cannot cover.
+
+Tests: `SmartQrAdminInventoryTest::an_overlapping_serial_range_is_refused_at_batch_creation`,
+with `an_adjacent_non_overlapping_range_is_accepted` as the positive control — 101 starting
+exactly where 1..100 ends must be allowed, since a continuing print run is the whole reason
+`serial_start` exists.
+
+---
+
+## BUG-036 — editing a plan's limits never invalidates the entitlement cache
+
+- **Severity:** Medium — silent, time-bounded, and it makes an admin action appear to do nothing
+- **Status:** **NOT FIXED.** Found 2026-08-14 while writing a browser walkthrough for Smart QR
+  slice 3b. Recorded deliberately rather than fixed — see "Not fixed here".
+- **Files:** `app/Http/Controllers/Admin/PlanController.php` (the write),
+  `app/Modules/Entitlements/EntitlementsServiceProvider.php` (the five invalidators),
+  `app/Modules/Entitlements/Listeners/InvalidateEntitlementCache.php`
+- **User-facing:** Indirectly — customers keep their old limits; the admin sees no error.
+
+### What is affected
+
+**Any limit edited through `Admin\PlanController`.** All 17 keys, including
+`smart_qr_max_assigned`. The controller writes `plans.limits` and dispatches nothing —
+measured: **zero** `dispatch(` or `event(` calls in the whole file.
+
+### The observable
+
+The customer keeps being enforced against the **old** limit for up to
+`entitlements.cache_fallback_ttl_minutes` (`ENTITLEMENTS_CACHE_TTL_MINUTES`, default **60**),
+because `EntitlementCache` serves the materialised `workspace_entitlements` row until it ages
+past that TTL.
+
+Both directions are wrong and one of them costs money:
+
+| Edit | Until the TTL expires |
+|---|---|
+| limit raised | customer still refused at the old, lower ceiling — looks like the admin's change did nothing |
+| limit lowered | customer still permitted above the new ceiling |
+
+Nothing surfaces. No error, no log line, no failed job. The admin saves the plan, sees the new
+number in the form, and the system enforces the old one.
+
+### ⚠️ THIS IS NOT "AN EVENT WITH NO DISPATCHER", AND THE TRUE SHAPE IS WORSE
+
+The first reading of this — stated in conversation before it was checked — was that
+`PlanChanged` is listened to but never dispatched. **That is wrong**, and the correction matters
+because it changes what a reader should look for.
+
+`PlanChanged` **is** dispatched — once, from `StripeGateway::changePlan` (line ~569). So anyone
+auditing "is PlanChanged wired up?" finds a dispatcher and moves on. Measured across the five
+invalidators:
+
+| Event | Dispatchers |
+|---|---|
+| `SubscriptionStarted` | 15 |
+| `SubscriptionRenewed` | 14 |
+| `SubscriptionCancelled` | 2 |
+| `SubscriptionExpired` | 2 |
+| `PlanChanged` | **1** — `StripeGateway::changePlan` only |
+
+The real defect is **semantic, not a missing wire**. `PlanChanged` means *"this subscriber moved
+from one plan to another"* — its constructor is
+`(User $user, Subscription $subscription, Plan $oldPlan, Plan $newPlan)`. A plan **definition**
+edit has no user, no subscription and no "old plan", so `PlanController` **structurally cannot**
+dispatch it even if someone tried. The event's own shape forbids the reuse.
+
+**There is no event in this codebase for "a plan's definition changed."**
+
+### Why the fix is not one line
+
+`InvalidateEntitlementCache` resolves a **single** `client_id` and dispatches
+`ReconcileWorkspaceEntitlements` for that one client. All five invalidators are per-customer.
+
+A plan-definition edit affects **every subscriber of that plan** — a fan-out over N clients,
+which none of the existing five can express. So the fix needs a new event carrying a `plan_id`
+and a listener that reconciles every client subscribed to it, in batches. That is a design
+decision about blast radius on a shared table, not a missing `dispatch()` call.
+
+### The workaround, and why it is not a fix
+
+`php artisan entitlements:reconcile` rebuilds the read model immediately.
+
+⚠️ **A workaround that requires an operator to remember is not a fix.** It is the same class of
+rule CLAUDE.md rejects when it insists `withoutWorkspaceScope()` take its reason as an argument
+rather than a comment: correctness that depends on somebody recalling a second step is
+correctness that will lapse. The admin editing the plan is precisely the person who does not
+know the command exists.
+
+### ⚠️ Found by writing a WALKTHROUGH, not by a test — and no test could have caught it
+
+There is no test that edits a plan **through the controller** and then **reads an entitlement**.
+The two halves are covered separately and both pass:
+
+- `PlanLimitKeyDivergenceTest` posts to the controller and asserts the limits **column**
+- the Entitlements tests resolve entitlements from plans written **directly by a factory**
+
+The cache sits between them and is exercised by neither. The defect lives exactly in the seam —
+which is why writing a set of instructions for a human to follow found it, and 1,163 passing
+tests did not.
+
+That is the second finding in two slices from the same category. Slice 3b's other one was a
+controller returning props the screen needed but never received. Both are gaps a test asserting
+one layer cannot see, and both surfaced only when something end-to-end was assembled.
+
+### Not fixed here
+
+Deliberately out of scope: it is Phase 1 billing-layer work, it needs the fan-out decision
+above, and it wants a test that crosses the seam — post to `PlanController`, then read
+`Entitlements::limitForWorkspace()` and assert the **new** number. Writing that test first is
+the right start, because it currently fails and nothing else does.
+
+---
+
+## BUG-037 — the translation key scanner destroys locale files on every fresh install
+
+- **Severity:** High — silent data loss in files that ship in the repo, and it corrupts
+  **deployed** installs, not just working copies
+- **Status:** **NOT FIXED.** Found 2026-08-14 during Smart QR slice 3c.
+- **Files:** `app/Services/I18n/TranslationKeyScanner.php` (root cause),
+  `app/Services/I18n/I18nFileService.php` (`unflatten`, the destruction),
+  `database/seeders/TranslationSeeder.php`, `app/Services/Install/InstallerService.php`
+- **User-facing:** Yes — missing and wrong UI strings, in every language.
+
+### ⚠️ IT AFFECTS DEPLOYED INSTALLS, BEFORE ANYONE LOGS IN
+
+`InstallerService::seedCore()` calls `Artisan::call('i18n:seed-defaults')`, which runs
+`TranslationSeeder`. **Every fresh install rewrites `resources/js/locales/*.json` and destroys
+part of them as its first act** — before an administrator account exists, let alone before
+anyone opens the admin panel.
+
+This is the part that makes it more than a developer annoyance. The locale files are tracked in
+the repo, so the shipped English dictionary is correct; the installer then damages the copy on
+disk, and nothing reports it.
+
+### Root cause — one regex that is not anchored
+
+`TranslationKeyScanner::discoverKeys()` runs five patterns. **Four are anchored to a function
+name** — `t(…)`, `i18n.t(…)`, `@lang(…)`, `__(…)`. The fifth (line 81) is context-free:
+
+```
+/['"`]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)['"`]\s*(?:\)|,|\s)/
+```
+
+It matches **any quoted dotted string** followed by `)`, `,` or whitespace. So
+`route('admin.clients.index')` is harvested as a translation key, along with every other route
+name, axios path and dotted literal in `resources/js`. Measured: **3,605 keys returned**, of
+which a large share are not translation keys at all.
+
+`keyToDefaultEnglish()` then supplies a value with `Str::title(lastSegment)`. Executed:
+`Str::title('2fa')` === `"2Fa"` — the exact value observed in the damaged file.
+
+### The destruction is in `unflatten()`, and it runs in BOTH directions
+
+The humanised value is not written *over* the parent. It is added as a **sibling flat key**,
+and `I18nFileService::unflatten()` then collapses the tree by last-write-wins. Measured against
+`en.json`:
+
+| | Case | Count |
+|---|---|---|
+| **A** | the discovered key **is** an object → the string overwrites it, children destroyed | **4** — `client.profile.2fa`, `client.profile.sessions`, `client.inbox.setup`, `client.segments.contacts` |
+| **B** | the discovered key's **ancestor** is a leaf string → the object overwrites the string | **25** — `admin.clients`, `admin.plans`, `admin.payments`, `admin.admins`, `client.workspaces`, … |
+
+**B's 25 matches the 25 destroyed leaves exactly.** `unflatten()` performs this silently: it
+reassigns `$ref[$part]` with no check that it is discarding a populated node.
+
+### Eight call sites, four files — fixing the seeder closes one of four
+
+`I18nFileService::putFlatDictionary()` is the only function that writes, but it is reached from:
+
+| Caller | Sites |
+|---|---|
+| `Admin/TranslationController` | 3 (lines 28, 47, 89) — the admin Translations screen |
+| `Console/Commands/I18nScanCommand` | 2 (lines 43, 55) |
+| `database/seeders/TranslationSeeder` | 2 (lines 38, 52) |
+| `Admin/LocaleController:100` | 1, via `createLocaleFile()` — "add a language" |
+
+Plus `I18nSeedDefaultsCommand`, which constructs `TranslationSeeder` directly. **Saving a
+translation in the admin UI and adding a language are equally live paths.** This is the
+BUG-006 shape: fixing the first site found closes nothing while looking correct.
+
+### ⚠️ Non-English is WORSE than data loss — it reads as translated
+
+`FallbackTranslationProvider::translate()` returns `null`, and the seeder does:
+
+```php
+$flat[$flatKey] = $translated ?? $enVal;
+```
+
+So any key missing from a target locale is filled with **the English string**, sitting in
+`hi.json` / `ar.json` / `zh.json` looking like a translation. Combined with the collision above,
+a destroyed Hindi key is refilled with English on the next run.
+
+Collisions measured per locale: **hi 24, ar 24, zh 29.**
+
+One real mitigation: a populated translation that *differs* from English is protected by
+`if (($flat[$key] ?? '') === '' || $flat[$key] === $enVal)`. The damage is confined to keys the
+collision destroyed — which is exactly the set that then gets English.
+
+### It predates all of our work
+
+`TranslationKeyScanner.php` and `TranslationSeeder.php` both date to **`4ec7e3e`, 2026-08-03 —
+the initial WhatsMine import — and are untouched since.** We found this; we did not cause it.
+
+Smart QR surfaced it only because the slice-3b browser walkthrough instructed the owner to run
+`php artisan db:seed`, which is what triggered it, twice. See the correction below.
+
+### ⚠️ CORRECTION TO THE SLICE-3B WALKTHROUGH INSTRUCTIONS
+
+**Step 1 of that walkthrough said `php artisan db:seed`. That is what corrupted the locale
+files, both times.** `DatabaseSeeder` calls `TranslationSeeder`. The instruction was wrong and
+should not be repeated until this bug is fixed.
+
+**A safe setup sequence, until then** — the full seeder list minus `TranslationSeeder`:
+
+```bash
+php artisan migrate
+php artisan db:seed --class=Database\\Seeders\\UserSeeder
+php artisan db:seed --class=Database\\Seeders\\PermissionSeeder
+php artisan db:seed --class=Database\\Seeders\\RoleSeeder
+php artisan db:seed --class=Database\\Seeders\\CurrencySeeder
+php artisan db:seed --class=Database\\Seeders\\LocaleSeeder
+php artisan db:seed --class=Database\\Seeders\\PlanSeeder
+php artisan db:seed --class=Database\\Seeders\\PaymentGatewayConfigSeeder
+php artisan db:seed --class=Database\\Seeders\\EmailTemplateSeeder
+php artisan db:seed --class=Database\\Seeders\\IntegrationConfigSeeder
+php artisan db:seed --class=Database\\Seeders\\SmtpConfigurationSeeder
+php artisan db:seed --class=Database\\Seeders\\LandingPageSeeder
+php artisan db:seed --class=Database\\Seeders\\CmsPageSeeder
+php artisan db:seed --class=Database\\Seeders\\DemoSeeder
+```
+
+`LocaleSeeder` is safe — it writes the `locales` table, not the JSON files. `DemoSeeder`
+provides the workspaces and active WhatsApp channels the Smart QR walkthrough needs.
+
+**If `db:seed` is run by accident**, the locale files are tracked, so the damage is reverted
+with `git checkout -- resources/js/locales/` — check `git status` first, because that command
+also discards any legitimate translation edits made since the last commit.
+
+### Not fixed here — and the fix spans three places
+
+1. **The regex.** Anchor pattern 5 to a function name, or delete it — the other four already
+   cover the real call shapes.
+2. **`unflatten()`'s silent last-write-wins.** It must refuse to overwrite a populated node with
+   a scalar (or a scalar with a node) rather than doing it quietly. This is the safety net: even
+   with the regex fixed, one bad key should not be able to delete a subtree.
+3. **The English-into-foreign-locale fallback.** Writing `$enVal` into `hi.json` produces content
+   that looks translated and is not. Leaving the key absent is the honest failure.
+
+**And it needs a test that nothing today performs:** run `TranslationSeeder` against a fixture
+locale set and assert that **no leaf count decreases** for any locale. Every existing i18n test
+checks reading or flattening in isolation; none runs the seeder and re-counts the file
+afterwards, which is precisely why this survived from the initial import.
+
+---
+
+## BUG-038 — there is no AutomationXpert logo asset in this repository
+
+- **Severity:** Medium — not a code defect, but it blocks physical production
+- **Status:** **OPEN — needs the owner, not a developer.** Found 2026-08-16 during Smart QR
+  slice 8.
+- **Files:** `public/whatsmine-logo.png`, `public/whatsmine-logo-with-title.svg`
+
+§14 requires the printed QR artwork to carry "AutomationXpert logo only", and says to reuse an
+existing asset if one exists. **There is no AutomationXpert asset.** The only logo files in the
+repository are `whatsmine-logo.png` and `whatsmine-logo-with-title.svg` — WhatsMine branding,
+inherited from the initial import (`4ec7e3e`), which is the product this platform was forked
+from.
+
+### What slice 8 does about it
+
+The renderer takes its logo from the **configured platform logo**
+(`SystemSetting::get('app_logo_path')`), which on a white-label install is that installation's
+own brand — one per installation, set by the platform owner, so it is not a "customer logo" and
+§14 and R-2 both hold.
+
+⚠️ **When none is configured it renders the QR PLAIN, and it must never fall back to the
+inherited asset.** A plain QR is honest; a competitor's brand printed onto a customer's stickers
+is not recoverable once the run is done. Pinned by
+`no_configured_logo_renders_plain_and_never_the_inherited_asset`.
+
+### Why it still needs closing
+
+Nothing in the code is wrong, but **a Business Kit printed today would carry either the
+platform-configured logo or no logo at all** — never an AutomationXpert mark, because none
+exists to use. That is a decision for the owner before any print run:
+
+1. commit an AutomationXpert asset (PNG or JPEG — **not SVG**, GD cannot rasterise it and the
+   renderer refuses it deliberately, which also keeps this path clear of SEC-004), or
+2. confirm that the configured platform logo is the intended mark and set it, or
+3. confirm that plain, unbranded codes are intended for the MVP.
+
+Recorded here rather than only in the rulings because it is the one item in this module that
+**cannot be resolved in code**.
