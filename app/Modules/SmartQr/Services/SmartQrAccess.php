@@ -87,6 +87,29 @@ class SmartQrAccess
     }
 
     /**
+     * EVERY assignment this workspace has ever held — current AND ended.
+     *
+     * ⚠️ THE COUNTERPART TO assignmentsFor(), AND THE DISTINCTION IS R-4.
+     *
+     * `assignmentsFor()` answers "what do I hold NOW" and filters
+     * `unassigned_at IS NULL`. That is right for counting codes and wrong for
+     * counting history: R-4 requires that a reassignment hide the old scans from
+     * the NEW tenant while the PREVIOUS tenant keeps its own.
+     *
+     * Slice 7 introduced this after switching the metrics to aggregates keyed by
+     * assignment id. Using the current-only set silently zeroed a former
+     * tenant's entire scan history the moment a code was reassigned — caught by
+     * slice 6's regression test, not by reasoning.
+     *
+     * Use this for anything HISTORICAL; use assignmentsFor() for anything
+     * describing the present.
+     */
+    public function allAssignmentsFor(int $workspaceId): Builder
+    {
+        return $this->boundedTo(SmartQrAssignment::query(), $workspaceId);
+    }
+
+    /**
      * Scans visible to this workspace.
      *
      * ⚠️ Scoped through the ASSIGNMENT, so a reassigned code's earlier scans are

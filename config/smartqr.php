@@ -21,4 +21,26 @@ return [
     */
     'attribution_ttl_minutes' => (int) env('SMART_QR_ATTRIBUTION_TTL_MINUTES', 30),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Raw scan retention
+    |--------------------------------------------------------------------------
+    |
+    | How many days of individual `smart_qr_scan_events` rows are kept. Daily
+    | aggregates are kept INDEFINITELY — see R-4's amendment, which narrows the
+    | reassignment guarantee to "the previous tenant's AGGREGATES stay
+    | reachable", not their raw scans.
+    |
+    | ⚠️ THIS VALUE IS READ BY TWO COMMANDS THAT MUST AGREE.
+    |
+    | `smartqr:prune-scans` deletes raw rows older than this. `smartqr:aggregate`
+    | REFUSES to recompute a day older than this — because recomputing a pruned
+    | day would produce zero and overwrite a correct historical aggregate.
+    |
+    | Changing it changes both. Lowering it makes the prune delete more on its
+    | next run; raising it does NOT restore what was already deleted.
+    |
+    */
+    'scan_retention_days' => (int) env('SMART_QR_SCAN_RETENTION_DAYS', 90),
+
 ];

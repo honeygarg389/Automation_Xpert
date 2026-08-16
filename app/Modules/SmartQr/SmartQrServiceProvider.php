@@ -2,6 +2,8 @@
 
 namespace App\Modules\SmartQr;
 
+use App\Modules\SmartQr\Console\Commands\AggregateSmartQrStatsCommand;
+use App\Modules\SmartQr\Console\Commands\PruneSmartQrScansCommand;
 use Illuminate\Support\ServiceProvider;
 
 /**
@@ -25,5 +27,12 @@ class SmartQrServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/routes/admin.php');
         $this->loadRoutesFrom(__DIR__.'/routes/public.php');
         $this->loadRoutesFrom(__DIR__.'/routes/client.php');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                AggregateSmartQrStatsCommand::class,
+                PruneSmartQrScansCommand::class,
+            ]);
+        }
     }
 }

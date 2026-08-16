@@ -3,6 +3,7 @@
 namespace App\Modules\SmartQr\Services;
 
 use App\Modules\SmartQr\Models\SmartQrConversionEvent;
+use App\Modules\SmartQr\Models\SmartQrDailyStat;
 use App\Modules\SmartQr\Models\SmartQrScanEvent;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -43,7 +44,10 @@ use Illuminate\Support\Facades\DB;
  */
 class SmartQrMetrics
 {
-    public function __construct(private readonly SmartQrAccess $access) {}
+    public function __construct(
+        private readonly SmartQrAccess $access,
+        private readonly SmartQrAggregator $aggregator,
+    ) {}
 
     /**
      * The Overview cards.
@@ -56,40 +60,118 @@ class SmartQrMetrics
      */
     public function overview(int $workspaceId): array
     {
-        $assignmentIds = $this->access->assignmentsFor($workspaceId)->pluck('id');
+        // ⚠️ HISTORICAL metrics use EVERY assignment this workspace has ever
+        // held, not just current ones. R-4 keeps a previous tenant's own scans
+        // visible to them after a reassignment — using the current-only set
+        // zeroes their history the moment a code changes hands.
+        $assignmentIds = $this->access->allAssignmentsFor($workspaceId)->pluck('id');
 
         $codes = $this->access->codesFor($workspaceId)->count();
 
         $active = $this->access->assignmentsFor($workspaceId)
             ->where('status', SmartQrStatus::ASSIGNMENT_ACTIVE)->count();
 
-        $scans = $this->scanQuery($workspaceId)->count();
-        $unique = $this->scanQuery($workspaceId)->where('is_unique', true)->count();
-
-        $attributedMessages = $this->conversions($assignmentIds, SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED);
-        $attributedContacts = $this->conversions($assignmentIds, SmartQrConversionEvent::TYPE_NEW_CONTACT);
+        $totals = $this->scanAndConversionTotals($assignmentIds);
 
         return [
+            // ⚠️ These three STAY live. They are "what is assigned right now",
+            // not a time series — an aggregate could only tell you what was
+            // assigned on some past day.
             'total_codes' => $codes,
             'active_codes' => $active,
             'inactive_codes' => max(0, $codes - $active),
-            'total_scans' => $scans,
-            'unique_scans' => $unique,
 
-            // ⚠️ R-19 — these are ATTRIBUTED counts and the key names say so.
-            // They under-report, because a customer can delete the reference
-            // from their own message before sending. The naming is load-bearing:
-            // a prop called `customers_messaged` would end up on a card called
-            // "Customers Messaged", which R-19 forbids.
-            'attributed_messages' => $attributedMessages,
-            'attributed_new_contacts' => $attributedContacts,
+            'total_scans' => $totals['scans'],
+            'unique_scans' => $totals['unique_scans'],
+            'attributed_messages' => $totals['attributed_messages'],
+            'attributed_new_contacts' => $totals['attributed_new_contacts'],
 
-            // A floor, not a conversion rate. Null rather than 0 when there are
-            // no scans — 0% reads as "nobody responded", which is a different
-            // claim from "nothing has happened yet".
-            'attributed_message_rate' => $scans > 0
-                ? round(($attributedMessages / $scans) * 100, 1)
+            // ⚠️ §12's DEFINITION, and slice 6's number CHANGED here.
+            //
+            // §12: "Scan-to-Message Rate = Unique Customers Messaged / Unique
+            // Valid Scans × 100".
+            //
+            // Slice 6 shipped `attributed_messages / all non-bot scans` — a
+            // different numerator AND a different denominator. That was wrong
+            // against an explicit spec definition, and it is corrected rather
+            // than left to look like drift: `attributed_unique_contacts` is the
+            // piece slice 6 could not compute, and slice 7's aggregates add it.
+            //
+            // ⚠️ null, not 0, when there are no scans. "0%" reads as "nobody
+            // responded"; null reads as "nothing has happened yet", which is
+            // the truth. §12 asks only that divide-by-zero be prevented — it
+            // does not ask for a misleading zero.
+            'attributed_message_rate' => $totals['unique_scans'] > 0
+                ? round(($totals['attributed_unique_contacts'] / $totals['unique_scans']) * 100, 1)
                 : null,
+        ];
+    }
+
+    /**
+     * ⚠️ THE HYBRID: history from aggregates, TODAY from raw.
+     *
+     * Today is still accumulating and the nightly job has not seen it. Showing
+     * yesterday's figure as today's would be wrong; showing nothing would make a
+     * customer think their scans were not recorded. So the current day is
+     * computed live — it is one partial day of rows against an indexed column —
+     * and everything before it comes from the aggregates.
+     *
+     * This is also why the dashboard never depends on the scheduler having run.
+     *
+     * @param  Collection<int, int>  $assignmentIds
+     * @return array<string, int>
+     */
+    private function scanAndConversionTotals($assignmentIds): array
+    {
+        $zero = [
+            'scans' => 0, 'unique_scans' => 0,
+            'attributed_messages' => 0, 'attributed_unique_contacts' => 0,
+            'attributed_new_contacts' => 0,
+        ];
+
+        if ($assignmentIds->isEmpty()) {
+            return $zero;
+        }
+
+        $today = now()->startOfDay();
+
+        // ── Historical: the aggregates ──────────────────────────────────────
+        $agg = SmartQrDailyStat::query()
+            ->whereIn('smart_qr_assignment_id', $assignmentIds)
+            ->where('stat_date', '<', $today->toDateString())
+            ->selectRaw('COALESCE(SUM(scans),0) as scans')
+            ->selectRaw('COALESCE(SUM(unique_scans),0) as unique_scans')
+            ->selectRaw('COALESCE(SUM(attributed_messages),0) as attributed_messages')
+            ->selectRaw('COALESCE(SUM(attributed_unique_contacts),0) as attributed_unique_contacts')
+            ->selectRaw('COALESCE(SUM(attributed_new_contacts),0) as attributed_new_contacts')
+            ->first();
+
+        // ── Today: raw ──────────────────────────────────────────────────────
+        $todayScans = DB::table('smart_qr_scan_events')
+            ->whereIn('smart_qr_assignment_id', $assignmentIds)
+            ->where('scanned_at', '>=', $today)
+            ->selectRaw('SUM(CASE WHEN is_bot = 0 THEN 1 ELSE 0 END) as scans')
+            ->selectRaw('SUM(CASE WHEN is_bot = 0 AND is_unique = 1 THEN 1 ELSE 0 END) as unique_scans')
+            ->first();
+
+        $todayConv = DB::table('smart_qr_conversion_events')
+            ->whereIn('smart_qr_assignment_id', $assignmentIds)
+            ->where('occurred_at', '>=', $today)
+            ->selectRaw('SUM(CASE WHEN type = ? THEN 1 ELSE 0 END) as messages', [SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED])
+            ->selectRaw('COUNT(DISTINCT CASE WHEN type = ? THEN contact_id END) as unique_contacts', [SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED])
+            ->selectRaw('SUM(CASE WHEN type = ? THEN 1 ELSE 0 END) as new_contacts', [SmartQrConversionEvent::TYPE_NEW_CONTACT])
+            ->first();
+
+        return [
+            'scans' => (int) ($agg->scans ?? 0) + (int) ($todayScans->scans ?? 0),
+            'unique_scans' => (int) ($agg->unique_scans ?? 0) + (int) ($todayScans->unique_scans ?? 0),
+            'attributed_messages' => (int) ($agg->attributed_messages ?? 0) + (int) ($todayConv->messages ?? 0),
+            // ⚠️ Summing daily distinct counts over-counts a customer who
+            // messaged on two different days. Accepted deliberately: the
+            // alternative is keeping every contact id per day, which is a second
+            // scan-sized table. Documented rather than silently approximate.
+            'attributed_unique_contacts' => (int) ($agg->attributed_unique_contacts ?? 0) + (int) ($todayConv->unique_contacts ?? 0),
+            'attributed_new_contacts' => (int) ($agg->attributed_new_contacts ?? 0) + (int) ($todayConv->new_contacts ?? 0),
         ];
     }
 
@@ -100,6 +182,8 @@ class SmartQrMetrics
      */
     public function perAssignment(int $workspaceId): array
     {
+        // Current only, deliberately: this table lists the codes the customer
+        // holds NOW, so a row for a code they no longer have would be noise.
         $assignmentIds = $this->access->assignmentsFor($workspaceId)->pluck('id')->all();
 
         if ($assignmentIds === []) {
