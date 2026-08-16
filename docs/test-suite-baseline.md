@@ -59,8 +59,13 @@ steps hit their number exactly: master measured **1,099** (not assumed — the d
 confirmed by running it first), then 1,108, then 1,284, then 1,284 unchanged for the two
 docs-only billing branches.
 
-⚠️ **The 35 JS tests are NOT a gate.** The vitest runner degraded during slice 8b and hangs on
-every invocation; 7 of those 35 have never been mutation-checked. See `docs/smart-qr-rulings.md`.
+✅ **The 35 JS tests ARE now a gate** — 5 files, 35 passing in 2.79 s, and slice 8b's 7 are
+mutation-checked. The runner hang was a quarantined native addon (`fsevents`), not vitest; it is
+diagnosed and fixed in `docs/smart-qr-rulings.md`.
+
+⚠️ **`npm run build` still fails** on this machine — the `.bin` shims are flattened symlinks with
+no exec bit. Use `node node_modules/vite/bin/vite.js build`. Same cause as the addon fault: the
+tree was extracted from an archive rather than installed.
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.

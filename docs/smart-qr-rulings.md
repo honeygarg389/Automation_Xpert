@@ -1072,7 +1072,16 @@ guards against.
 tests. Before this, the PHP suite asserted only the prop names — a well-meaning edit to the card
 title would have shipped with a green suite.
 
-⚠️ **Slice 8b — WRITTEN AND PASSING, NOT MUTATION-CHECKED.**
+✅ **CLOSED 2026-08-16 — written, passing, AND mutation-checked.** All four assertions were
+mutated and each failed exactly the test it should: the preview keyed by `id` instead of
+`serial`, the download's `?format=` dropped, the `canManage` guard forced true, and the
+bot/unique precedence flipped. Four mutations, four single-test failures, restore confirmed
+clean after each. The blocker was a toolchain fault, diagnosed and fixed the same day — see
+"the vitest and vite hang" below.
+
+The superseded record read:
+
+> ⚠️ **Slice 8b — WRITTEN AND PASSING, NOT MUTATION-CHECKED.**
 `resources/js/__tests__/smartqr-customer-pages.test.jsx` covers the two remaining pages,
 7 tests, verified passing (7/7, 1.33 s). The vitest runner then degraded and **no mutation
 check was run against any of them**, so they are not verified to fail. The entry is therefore
@@ -1240,3 +1249,83 @@ when a `--reporter=basic` flag simply did not exist in vitest 4, and the run had
 succeeded. The discipline that worked here was running a **known-good control file** before
 concluding anything — which is what showed the first hang was a process collision and the second
 was real.
+
+
+---
+
+## ✅ RESOLVED — the vitest and vite hang were ONE fault: a quarantined native addon
+
+**Diagnosed 2026-08-16 after it escalated from "vitest hangs" to "the owner cannot see the UI",
+because the vite build hung too.** Same root cause, and the slice 8b note that ruled out stale
+processes, both pools, file parallelism and the transform cache was correct to rule them out —
+it just never reached the real one.
+
+### What it actually was
+
+`node_modules` on this machine was unpacked from an archive by **"RAR Extractor - Unarchiver"**.
+That tool did two things:
+
+1. **Flattened every symlink into a text file.** `node_modules/.bin/vite` is 19 bytes containing
+   the literal string `../vite/bin/vite.js`, and **0 of 40** `.bin` entries are executable. This
+   is the half already recorded — it is why `npm run build` fails and why the node invocation
+   was adopted as the workaround.
+2. **Stamped `com.apple.quarantine` on 60,228 files** — including
+   `node_modules/fsevents/fsevents.node`, a **native addon**.
+
+`dlopen()` of a quarantined native library sends macOS to assess it. That assessment blocked, and
+the block is **permanent and keyed to the path**.
+
+### The measurements that pinned it, in order
+
+| Test | Result |
+|---|---|
+| `import('vite')` with no config, no plugins | HANG |
+| `import('react')`, `rollup`, `esbuild`, `postcss`, `tailwindcss` | all fine |
+| bisect vite's graph → the 1.5 MB chunk → its imports | every leaf fine, the chunk hangs |
+| `require('fsevents')` alone | HANG |
+| raw `process.dlopen()` of the addon | HANG — below JS entirely |
+| the **same bytes** unpacked fresh from npm, in `/private/tmp` | **loads instantly** |
+| `probe.node` — same bytes, **same directory** | **loads instantly** |
+| `fsevents.node` — same bytes, same directory | HANG |
+
+⚠️ **Identical SHA, same directory, one filename loads and the other does not.** The poisoned
+state belongs to the *path*, not the file.
+
+### Three fixes that did NOT work, and they matter
+
+- **Removing the quarantine xattr** — still hung.
+- **Re-signing ad-hoc** (`codesign --force --sign -`) — signature valid, still hung.
+- **Replacing the file with a new inode** (`rm` + `cp`, verified inode changed) — still hung.
+
+The state outlives the attribute, the signature and the inode. Nothing recoverable at the file
+level clears it.
+
+⚠️ **And `kill -9` does not reap a process blocked in `dlopen`.** Thirteen unkillable node
+processes had accumulated, the oldest being the owner's build. This is why slice 8b saw runs that
+had *just passed* start hanging: the first blocked load poisoned the path, and everything after
+queued behind it forever. **A process that survives `kill -9` is not a stale process — it is a
+symptom, and slice 8b misread it as the former.**
+
+### The fix
+
+`fsevents` is an **optionalDependency**. Moving `node_modules/fsevents` aside makes
+`require('fsevents')` fail fast with MODULE_NOT_FOUND, which chokidar catches and falls back to
+its portable watcher. Measured after: **build 11.14 s**, **vitest 35/35 in 2.79 s**.
+
+The cost is that file-watching in `vite dev` falls back to polling — slower on a large tree,
+functionally identical. For **build** and **vitest**, which is all this project uses, there is no
+cost at all.
+
+⚠️ **The permanent fix is `rm -rf node_modules && npm ci`**, which restores the symlinks *and*
+avoids quarantine entirely, because npm writes the files itself rather than extracting them.
+That was not done here because the workaround unblocks the owner immediately and a reinstall is
+the owner's call on a 96%-full disk. **Do not re-extract `node_modules` from an archive** — that
+is the actual mistake, and it will reproduce all of this.
+
+### What is still not known
+
+**Why it worked in slice 3b and 8b and then stopped.** The addon has been quarantined since
+2026-07-12 and node was installed 2026-07-17, so the ingredients predate the failure by a month.
+Security assessments are cached, so the likeliest story is that something invalidated the cache
+and the next `dlopen` was the one that blocked — but I could not pin the invalidating event, and
+I am not going to invent one.
