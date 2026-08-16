@@ -47,6 +47,20 @@ with its own full-suite run:
 | **Smart QR slice 7a** — aggregates, retention prune, HAZARD H-4 | 13 tests: the interlock, prune guards, §12's rate | 1249 + 24 JS |
 | **Smart QR slice 7b** — §12's reports UI | 13 PHP + 4 vitest (R-19's rendered labels) | 1262 + 28 JS |
 | **Smart QR slice 8** — §13/§14 image generation and export | 11 tests: ZIP cap, failure cleanup, no-logo fallback, Dompdf proof | **1273** + 28 JS |
+| **Smart QR slice 8b** — preview, download menu, export size note | 2 tests: the measured SVG-vs-PNG size inversion, the estimate reaching the page | **1275** + 35 JS |
+| **MERGE to `master` 2026-08-16** — entitlement-presentation + Smart QR + both billing branches | +9 presentation-site tests; Smart QR's 176 arrive as a whole | **1284** + 35 JS |
+
+⚠️ **The `master` baseline is now 1,284 tests / 40,258 assertions / 1 documented skip**, measured
+after the four-branch merge of 2026-08-16. Everything above it is a per-branch running total and
+is NOT what a regression is measured against.
+
+The merge was gated at each step against a prediction made before any branch moved, and all three
+steps hit their number exactly: master measured **1,099** (not assumed — the derived figure was
+confirmed by running it first), then 1,108, then 1,284, then 1,284 unchanged for the two
+docs-only billing branches.
+
+⚠️ **The 35 JS tests are NOT a gate.** The vitest runner degraded during slice 8b and hangs on
+every invocation; 7 of those 35 have never been mutation-checked. See `docs/smart-qr-rulings.md`.
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
