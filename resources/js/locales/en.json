@@ -4169,6 +4169,24 @@
         "no_report_data": "No activity in this date range.",
         "chart_scans": "Scans",
         "chart_unique": "Unique",
-        "chart_attributed": "Attributed messages"
+        "chart_attributed": "Attributed messages",
+        "col_preview": "Preview",
+        "download_label": "Download",
+        "format_svg": "SVG",
+        "format_png": "PNG",
+        "format_pdf": "PDF (print)",
+        "export_queued_note": "The archive is built in the background and appears in storage when ready.",
+        "bulk_export": "Export artwork",
+        "export_title": "Export QR artwork",
+        "export_body": "Build a ZIP archive of artwork for {{count}} selected code(s).",
+        "export_format": "Format",
+        "export_format_svg": "SVG — vector, recommended for print",
+        "export_format_png": "PNG — 1024 px raster",
+        "export_size_estimate": "Estimated archive size: about {{size}}.",
+        "export_size_compare": "The same selection as {{other}} would be about {{otherSize}}.",
+        "export_note_svg": "Vector artwork stays sharp at any physical size, so the same file works for a table sticker and a shopfront poster.",
+        "export_note_png": "A 1024 px raster is fine for a sticker but will look soft printed larger than a few centimetres.",
+        "export_over_cap": "You selected {{count}} codes. Export at most {{max}} at a time.",
+        "export_confirm": "Start export"
     }
 }

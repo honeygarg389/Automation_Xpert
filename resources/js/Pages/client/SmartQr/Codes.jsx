@@ -9,13 +9,12 @@ import { formatDateTz } from '@/Utils/datetime';
 /**
  * §11 B — My QR Codes.
  *
- * ⚠️ TWO §11 COLUMNS AND TWO ACTIONS ARE DELIBERATELY ABSENT.
+ * ⚠️ THE PREVIEW AND DOWNLOAD ARRIVED IN SLICE 8.
  *
- * "QR preview" and "download digital copy" both need a rendered QR image, and
- * `endroid/qr-code` is R-6's slice-8 package — explicitly not to be installed
- * before then. They are omitted rather than shipped as broken buttons: an
- * action that does nothing is worse than one that is not offered, because the
- * customer cannot tell it from a bug.
+ * Both need a rendered QR image, and `endroid/qr-code` is R-6's slice-8 package
+ * — explicitly not to be installed before then. Until then they were OMITTED
+ * rather than shipped as buttons that did nothing, because a customer cannot
+ * tell a dead action from a bug.
  *
  * ⚠️ Editing is ADMINISTRATOR-ONLY. §11 says actions "depend on permissions",
  * but this codebase has no client permission system — `client_role` is the only
@@ -126,6 +125,7 @@ export default function SmartQrCodes({ codes, stats = {}, canManage, channels = 
                         <table className="min-w-full text-sm">
                             <thead>
                                 <tr className="border-b border-neutral-200 text-left text-neutral-500 dark:border-neutral-700 dark:text-neutral-400">
+                                    <th className="px-4 pb-2 font-medium uppercase">{t('smart_qr.col_preview')}</th>
                                     <th className="px-4 pb-2 font-medium uppercase">{t('smart_qr.col_serial')}</th>
                                     <th className="px-4 pb-2 font-medium uppercase">{t('smart_qr.col_name')}</th>
                                     <th className="px-4 pb-2 font-medium uppercase">{t('smart_qr.col_qr_type')}</th>
@@ -144,6 +144,20 @@ export default function SmartQrCodes({ codes, stats = {}, canManage, channels = 
 
                                     return (
                                         <tr key={c.id} className="border-b border-neutral-100 dark:border-neutral-800">
+                                            {/* ⚠️ SVG, rendered on demand by the
+                                                preview endpoint — crisp at any row
+                                                height and costing no storage. A
+                                                cached PNG per code would be a
+                                                storage lifecycle to manage for an
+                                                operation that takes milliseconds. */}
+                                            <td className="px-4 py-3">
+                                                <img
+                                                    src={route('client.smartqr.codes.preview', c.serial_number)}
+                                                    alt=""
+                                                    loading="lazy"
+                                                    className="h-12 w-12 rounded border border-neutral-200 bg-white object-contain dark:border-neutral-700"
+                                                />
+                                            </td>
                                             <td className="px-4 py-3 font-mono font-medium text-neutral-900 dark:text-neutral-100">{c.serial_number}</td>
                                             <td className="px-4 py-3 text-neutral-700 dark:text-neutral-300">{a.name ?? '—'}</td>
                                             <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{a.qr_type ?? '—'}</td>
@@ -155,12 +169,32 @@ export default function SmartQrCodes({ codes, stats = {}, canManage, channels = 
                                             <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
                                                 {s.last_scan_at ? formatDateTz(s.last_scan_at, tz) : '—'}
                                             </td>
-                                            <td className="px-4 py-3 text-right">
-                                                {canManage && (
-                                                    <button type="button" onClick={() => setEditing(c)} aria-label={t('smart_qr.edit_title')} className="p-1 text-neutral-400 transition hover:text-brand-600">
-                                                        <Pencil className="h-4 w-4" />
-                                                    </button>
-                                                )}
+                                            <td className="px-4 py-3">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    {/* §11's "download digital copy". Three
+                                                        formats, generated per request — only
+                                                        bulk needs the queue. */}
+                                                    <Select
+                                                        aria-label={t('smart_qr.download_label')}
+                                                        className="w-28"
+                                                        value=""
+                                                        onChange={(e) => {
+                                                            if (! e.target.value) return;
+                                                            window.location.href = route('client.smartqr.codes.download', c.serial_number) + '?format=' + e.target.value;
+                                                        }}
+                                                        placeholder={t('smart_qr.download_label')}
+                                                        options={[
+                                                            { value: 'svg', label: t('smart_qr.format_svg') },
+                                                            { value: 'png', label: t('smart_qr.format_png') },
+                                                            { value: 'pdf', label: t('smart_qr.format_pdf') },
+                                                        ]}
+                                                    />
+                                                    {canManage && (
+                                                        <button type="button" onClick={() => setEditing(c)} aria-label={t('smart_qr.edit_title')} className="p-1 text-neutral-400 transition hover:text-brand-600">
+                                                            <Pencil className="h-4 w-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     );

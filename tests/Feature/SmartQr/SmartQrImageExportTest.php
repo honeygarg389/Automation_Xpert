@@ -349,4 +349,76 @@ class SmartQrImageExportTest extends TestCase
         $this->actingAs($user)->get(route('client.smartqr.codes.preview', $foreign->serial_number))->assertNotFound();
         $this->actingAs($user)->get(route('client.smartqr.codes.download', $foreign->serial_number))->assertNotFound();
     }
+
+    // ══ ⚠️ SLICE 8b — the export size note, and the inversion it exists for ══
+
+    /**
+     * ⚠️ THE SIZE FIGURES ARE MEASURED, AND SLICE 8's PLAN HAD THEM BACKWARDS.
+     *
+     * The plan justified SVG-by-default with "a few hundred KB against 50–150 MB
+     * of PNG". Measured in a real ZipArchive, WITH a logo configured — the
+     * intended production state — SVG is roughly 3x LARGER, because endroid's
+     * SvgWriter embeds the logo as a base64 data URI in every single file while
+     * the PNG writer rasterises it into one already-compressed bitmap.
+     *
+     * This test pins the INVERSION, in both directions, because the admin export
+     * modal shows these numbers to somebody deciding what to wait for. A note
+     * that names the wrong format as the expensive one is worse than no note:
+     * it is a confident wrong answer.
+     *
+     * (SVG remains the default. The reason that survives measurement is that it
+     * is vector and prints crisply at any size — the size claim was a wrong
+     * number that happened to point at the right default.)
+     */
+    #[Test]
+    public function the_export_size_estimate_inverts_when_a_logo_is_configured(): void
+    {
+        SystemSetting::set('app_logo_path', '');
+
+        $plain = $this->renderer()->zippedBytesPerCode();
+
+        $this->assertLessThan($plain['png'], $plain['svg'],
+            'With no logo, SVG should be the smaller format.');
+
+        Storage::fake('public');
+        $image = imagecreatetruecolor(64, 64);
+        ob_start();
+        imagepng($image);
+        Storage::disk('public')->put('logo.png', (string) ob_get_clean());
+        SystemSetting::set('app_logo_path', 'logo.png');
+        SystemSetting::set('app_logo_disk', 'public');
+
+        $withLogo = $this->renderer()->zippedBytesPerCode();
+
+        // ⚠️ The whole point. If a refactor ever makes these two branches
+        // return the same array, this is the assertion that notices.
+        $this->assertGreaterThan($withLogo['png'], $withLogo['svg'],
+            'With a logo configured, SVG is the LARGER format — endroid embeds the logo as '
+            .'base64 in every file. A UI note claiming otherwise sends an admin to the wrong '
+            .'format believing it is the cheap one.');
+
+        $this->assertGreaterThan($plain['svg'] * 10, $withLogo['svg'],
+            'Positive control: the logo branch is genuinely a different, much larger figure.');
+    }
+
+    /**
+     * The measured figures reach the page that shows them.
+     *
+     * ⚠️ Computed server-side deliberately: the two branches differ by ~100x and
+     * React cannot know whether a platform logo is configured.
+     */
+    #[Test]
+    public function the_inventory_page_carries_the_measured_export_estimate_and_the_cap(): void
+    {
+        $admin = $this->adminWith(['view_qr_inventory']);
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.index'))
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p
+                ->has('exportBytesPerCode.svg')
+                ->has('exportBytesPerCode.png')
+                ->where('exportMaxCodes', GenerateQrExportJob::MAX_CODES)
+            );
+    }
 }

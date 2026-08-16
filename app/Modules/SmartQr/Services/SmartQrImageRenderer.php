@@ -78,6 +78,51 @@ class SmartQrImageRenderer
      */
     private const SVG_LABEL_BAND = 38;
 
+    /**
+     * ⚠️ MEASURED ZIPPED BYTES PER CODE — and the direction is the OPPOSITE of
+     * what slice 8's plan and my own controller docblock assumed.
+     *
+     * The plan said "SVG is a few hundred KB for 500, PNG is 50–150 MB", so SVG
+     * became the default on a size argument. Measured, in a ZipArchive because
+     * that is what the admin actually downloads:
+     *
+     *   |          | SVG/code | PNG/code | 500 SVG | 500 PNG |
+     *   |----------|----------|----------|---------|---------|
+     *   | no logo  |   4.5 KB |   6.8 KB |  2.1 MB |  3.2 MB |
+     *   | logo     |  491  KB |  154  KB |  234 MB |   73 MB |
+     *
+     * ⚠️ WITH A LOGO CONFIGURED — the intended production state — SVG IS ROUGHLY
+     * 3× LARGER THAN PNG, not smaller.
+     *
+     * The cause is structural, not incidental: endroid's SvgWriter embeds the
+     * logo as a base64 data URI in EVERY file, and base64 of an already-
+     * compressed PNG neither shrinks in the SVG nor deflates in the ZIP. The
+     * PNG writer rasterises the same logo into one bitmap that is compressed
+     * once.
+     *
+     * SVG REMAINS THE DEFAULT, on the argument that actually holds: it is vector
+     * and prints crisply at any physical size, where a 1024 px PNG blurs on
+     * anything larger than a sticker. The size claim was never the real reason —
+     * it was a wrong number that happened to point at the right default.
+     *
+     * These figures drive the UI note, so an admin sees the true cost of the
+     * format they pick. Re-measure if the logo pipeline changes.
+     */
+    public const ZIPPED_BYTES_PER_CODE = [
+        'no_logo' => ['svg' => 4_495, 'png' => 6_809],
+        'logo' => ['svg' => 491_000, 'png' => 153_866],
+    ];
+
+    /**
+     * Bytes per code for the currently configured logo state.
+     *
+     * @return array{svg: int, png: int}
+     */
+    public function zippedBytesPerCode(): array
+    {
+        return self::ZIPPED_BYTES_PER_CODE[$this->logoPath() === null ? 'no_logo' : 'logo'];
+    }
+
     /** @return array{data: string, mime: string} */
     public function svg(string $url, string $serial): array
     {

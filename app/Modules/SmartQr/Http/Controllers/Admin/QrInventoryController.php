@@ -9,6 +9,7 @@ use App\Modules\SmartQr\Jobs\GenerateQrExportJob;
 use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
+use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use App\Services\AuditLogService;
 use Illuminate\Http\RedirectResponse;
@@ -93,6 +94,14 @@ class QrInventoryController extends Controller
                 ->orderByDesc('id')
                 ->get(['id', 'batch_number', 'batch_name']),
             'statuses' => SmartQrStatus::CODE_STATUSES,
+
+            // ⚠️ The export size note is driven by MEASURED bytes, and it must
+            // be computed here rather than hard-coded in React: the figures
+            // differ by ~100× depending on whether a platform logo is
+            // configured, which React cannot know.
+            'exportBytesPerCode' => app(SmartQrImageRenderer::class)
+                ->zippedBytesPerCode(),
+            'exportMaxCodes' => GenerateQrExportJob::MAX_CODES,
 
             // ⚠️ ADDED IN SLICE 3b, and it is a gap 3a did not notice.
             //
@@ -220,11 +229,16 @@ class QrInventoryController extends Controller
      * example; making it a limit means an admin who ticks 5,000 is told so
      * immediately rather than discovering the ceiling by timeout.
      *
-     * ⚠️ SVG is the default format. For 500 codes that is a few hundred KB
-     * against 50–150 MB of PNG, and a printer wants vector anyway. PNG stays an
-     * explicit choice, and the UI states the size difference where the choice is
-     * made — an admin asking for PNG should see what they are asking for before
-     * they wait for it.
+     * ⚠️ SVG is the default format, but NOT for the reason this docblock used to
+     * give. It said "a few hundred KB against 50–150 MB of PNG". Measured, that
+     * is backwards whenever a logo is configured: SVG is ~3× LARGER, because
+     * endroid embeds the logo as base64 in every file. See
+     * SmartQrImageRenderer::ZIPPED_BYTES_PER_CODE for the four measured figures.
+     *
+     * SVG stays the default on the argument that survives measurement — it is
+     * vector and prints crisply at any size. PNG stays an explicit choice, and
+     * the UI states the REAL size of each where the choice is made, so an admin
+     * sees what they are asking for before they wait for it.
      */
     public function export(Request $request): RedirectResponse
     {

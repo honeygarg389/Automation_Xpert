@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, ConfirmDestructiveModal, Pagination, Select } from '@/Components/ui';
-import { QrCode, Link2, Printer, Trash2 } from 'lucide-react';
+import { Button, Card, ConfirmDestructiveModal, Modal, Pagination, Select } from '@/Components/ui';
+import { QrCode, Link2, Printer, Trash2, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge } from '../QrStatusBadge';
 import AssignQrModal from '../AssignQrModal';
@@ -19,7 +19,29 @@ import AssignQrModal from '../AssignQrModal';
  * one is a refactor across ~20 screens, not something a QR slice should do on
  * its way past.
  */
-export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [], statuses = [], workspaces = [] }) {
+/**
+ * Bytes -> a size an admin can act on. No shared helper exists in this codebase
+ * and one screen does not justify inventing a util module.
+ */
+function formatBytes(bytes) {
+    if (! bytes) return '0 KB';
+    if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+export default function SmartQrInventoryIndex({
+    codes,
+    filters = {},
+    batches = [],
+    statuses = [],
+    workspaces = [],
+    // ⚠️ Measured server-side — see SmartQrImageRenderer::ZIPPED_BYTES_PER_CODE.
+    // The fallback is the no-logo pair, so a stale cached page understates
+    // rather than invents.
+    exportBytesPerCode = { svg: 4495, png: 6809 },
+    exportMaxCodes = 500,
+}) {
     const { t } = useTranslation();
     const page = usePage();
     const flash = page.props.flash || {};
@@ -37,6 +59,10 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
     });
 
     const [selected, setSelected] = useState([]);
+    const [exportOpen, setExportOpen] = useState(false);
+    const [exportFormat, setExportFormat] = useState('svg');
+    const bytesPerCode = exportBytesPerCode;
+    const overExportCap = selected.length > exportMaxCodes;
     const [assignOpen, setAssignOpen] = useState(false);
     const [deleteOpen, setDeleteOpen] = useState(false);
 
@@ -225,6 +251,13 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
                                 />
                             </>
                         )}
+                        {/* §5's export bulk action. A MODAL, not a bare select:
+                            the ruling is that the admin sees the size before
+                            they wait, and an onChange handler fires the job
+                            before the note has been read. */}
+                        <Button size="sm" variant="outline" onClick={() => setExportOpen(true)}>
+                            <Download className="mr-1.5 h-4 w-4" /> {t('smart_qr.bulk_export')}
+                        </Button>
                         {canManage && (
                             <Button size="sm" variant="outline" className="text-red-600 hover:text-red-700" onClick={() => setDeleteOpen(true)}>
                                 <Trash2 className="mr-1.5 h-4 w-4" /> {t('smart_qr.delete_codes')}
@@ -315,10 +348,81 @@ export default function SmartQrInventoryIndex({ codes, filters = {}, batches = [
                 </Card>
             </div>
 
+            {/* ── §5 export — format choice WITH its real cost ────── */}
+            <Modal show={exportOpen} onClose={() => setExportOpen(false)} maxWidth="lg">
+                <Modal.Header title={t('smart_qr.export_title')} onClose={() => setExportOpen(false)} />
+                <Modal.Body className="space-y-4">
+                    <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                        {t('smart_qr.export_body', { count: selected.length })}
+                    </p>
+
+                    <Select
+                        label={t('smart_qr.export_format')}
+                        value={exportFormat}
+                        onChange={(e) => setExportFormat(e.target.value)}
+                        placeholder=""
+                        options={[
+                            { value: 'svg', label: t('smart_qr.export_format_svg') },
+                            { value: 'png', label: t('smart_qr.export_format_png') },
+                        ]}
+                    />
+
+                    {/* ⚠️ THE SIZE, AT THE POINT OF CHOICE, from measured
+                        bytes — not a static string. With a platform logo
+                        configured SVG is ~3x LARGER than PNG, so a
+                        hard-coded "PNG is the big one" note would be a lie
+                        in the production configuration. */}
+                    <div className="rounded-soft-lg bg-neutral-50 p-3 text-sm dark:bg-neutral-800">
+                        <p className="font-medium text-neutral-800 dark:text-neutral-100">
+                            {t('smart_qr.export_size_estimate', {
+                                size: formatBytes(bytesPerCode[exportFormat] * selected.length),
+                            })}
+                        </p>
+                        <p className="mt-1 text-neutral-500 dark:text-neutral-400">
+                            {t('smart_qr.export_size_compare', {
+                                other: exportFormat === 'svg' ? 'PNG' : 'SVG',
+                                otherSize: formatBytes(
+                                    bytesPerCode[exportFormat === 'svg' ? 'png' : 'svg'] * selected.length
+                                ),
+                            })}
+                        </p>
+                        <p className="mt-2 text-neutral-500 dark:text-neutral-400">
+                            {exportFormat === 'svg'
+                                ? t('smart_qr.export_note_svg')
+                                : t('smart_qr.export_note_png')}
+                        </p>
+                        <p className="mt-2 text-neutral-500 dark:text-neutral-400">
+                            {t('smart_qr.export_queued_note')}
+                        </p>
+                    </div>
+
+                    {/* ⚠️ The server refuses over-cap too, and that refusal
+                        is the real guard. This exists so the admin is not
+                        told by a failed round-trip after selecting 5,000. */}
+                    {overExportCap && (
+                        <p className="rounded-soft-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-900/20 dark:text-red-300">
+                            {t('smart_qr.export_over_cap', { max: exportMaxCodes, count: selected.length })}
+                        </p>
+                    )}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="outline" onClick={() => setExportOpen(false)}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button
+                        disabled={overExportCap}
+                        onClick={() => { bulk('admin.qr.inventory.export', { format: exportFormat }); setExportOpen(false); }}
+                    >
+                        {t('smart_qr.export_confirm')}
+                    </Button>
+                </Modal.Footer>
+            </Modal>
+
             {/* ⚠️ Typed confirmation, because a delete has no undo. The server
                 refuses anything printed or ever assigned regardless — this gate
                 is about the codes that ARE deletable. */}
             {canManage && (
+
                 <ConfirmDestructiveModal
                     show={deleteOpen}
                     onClose={() => setDeleteOpen(false)}
