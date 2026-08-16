@@ -3,6 +3,7 @@
 namespace App\Modules\SmartQr\Models;
 
 use App\Models\Concerns\BelongsToWorkspace;
+use App\Models\User;
 use App\Models\Workspace;
 use Database\Factories\SmartQrAssignmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -36,6 +37,9 @@ use Illuminate\Support\Str;
  * @property string|null $default_message
  * @property Carbon|null $starts_at
  * @property Carbon|null $expires_at
+ * @property string|null $name
+ * @property string|null $qr_type
+ * @property int|null $assigned_user_id
  */
 class SmartQrAssignment extends Model
 {
@@ -101,6 +105,20 @@ class SmartQrAssignment extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    /**
+     * The team member this QR is assigned to (§6 step 6), or null.
+     *
+     * ⚠️ OPTIONAL, and usually null. Nothing in the product requires it, which
+     * is why §12's user-wise performance report is empty on most installations —
+     * the UI names that cause rather than showing a blank table.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function assignedUser(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_user_id');
     }
 
     /** @return BelongsTo<SmartQrCode, $this> */

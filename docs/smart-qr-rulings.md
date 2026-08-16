@@ -1027,3 +1027,50 @@ that can honestly be called a history.
 
 Raw export is **out of scope until someone asks for it**, and when they do it needs the retention
 boundary surfaced *in the file itself*, not in the UI that generated it.
+
+---
+
+## ⚠️ Spec discrepancy #7 — §12 contradicts itself on KPI cards
+
+§12 says, in the same section: *"Do not duplicate the same content in both Overview and Reports"*
+— then lists **"basic KPI cards"** under Smart QR Overview and **"KPI cards"** as required visual
+A under Smart QR Reports.
+
+**The reading, ruled in slice 7b:** Overview (slice 6) is the OPERATIONAL snapshot — what is
+assigned right now, how many are active, recent activity. Reports is the same measures over
+TIME, filtered, compared and exportable. Same metrics, genuinely different content, and neither
+is a copy of the other.
+
+The instruction as written cannot be followed literally, which is why it is recorded here rather
+than resolved silently in a controller.
+
+**The running list** (see R-12 and R-23 for the earlier entries): missing `failure_reason`;
+"tenant/customer" in a codebase with both; `assigned_count` as a stored field; one §5 status list
+that is really two; §6's non-existent "disconnected" channel state; §11's Settings page with no
+defined content; and now §12's KPI cards in both places.
+
+---
+
+## ✅ RESOLVED — vitest coverage for R-19's labels
+
+⚠️ **Closed in slice 7b.** The OWED entry said the label test was the one worth writing first,
+and slice 7b is where those labels are written, so it was written here rather than deferred
+again.
+
+`resources/js/__tests__/smartqr-labels.test.jsx` asserts the **rendered text**, not the props:
+
+- every attributed card says "Attributed …"
+- the page never contains `/customers?\s+messaged/i` **anywhere**
+- the under-count note appears in plain words on the page, not only in a tooltip
+- a null rate renders an em dash, never "0%"
+
+⚠️ **`t()` is mocked to return the real English strings**, deliberately: asserting a translation
+KEY would pass while the English label said something else, which is exactly the failure R-19
+guards against.
+
+**Mutation-verified:** renaming the label back to "Customers Messaged" fails two of the four
+tests. Before this, the PHP suite asserted only the prop names — a well-meaning edit to the card
+title would have shipped with a green suite.
+
+The remaining pages named in the original OWED entry (Codes, Activity) are still uncovered by
+vitest; that part of the entry stands.

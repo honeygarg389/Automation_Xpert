@@ -2,6 +2,7 @@
 
 use App\Modules\SmartQr\Http\Controllers\Client\SmartQrCodeController;
 use App\Modules\SmartQr\Http\Controllers\Client\SmartQrDashboardController;
+use App\Modules\SmartQr\Http\Controllers\Client\SmartQrReportController;
 use App\Modules\SmartQr\Http\Middleware\EnsureSmartQrEnabled;
 use Illuminate\Support\Facades\Route;
 
@@ -38,4 +39,22 @@ Route::middleware(['web', 'client-app', EnsureSmartQrEnabled::class])
 
         // C — Activity
         Route::get('/activity', [SmartQrDashboardController::class, 'activity'])->name('activity');
+    });
+
+/**
+ * §12 — Smart QR Reports, under the existing client Reports namespace.
+ *
+ * ⚠️ THE SAME ENTITLEMENT GATE as the pages above, and that is not optional:
+ * without it a customer lacking `smart_qr_enabled` would see a Reports nav entry
+ * (or follow a bookmark) straight into a 403. The nav is hidden by the shared
+ * `features.smart_qr` flag, but hiding is presentation — this is the protection.
+ */
+Route::middleware(['web', 'client-app', EnsureSmartQrEnabled::class])
+    ->prefix('app/reports/smart-qr')
+    ->name('client.reports.smartqr.')
+    ->group(function () {
+        Route::get('/', [SmartQrReportController::class, 'index'])->name('index');
+
+        // ⚠️ R-26 — aggregates only. See the controller.
+        Route::get('/export', [SmartQrReportController::class, 'export'])->name('export');
     });

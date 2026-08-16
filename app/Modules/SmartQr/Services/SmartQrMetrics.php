@@ -2,12 +2,14 @@
 
 namespace App\Modules\SmartQr\Services;
 
+use App\Modules\SmartQr\Models\SmartQrAssignment;
 use App\Modules\SmartQr\Models\SmartQrConversionEvent;
 use App\Modules\SmartQr\Models\SmartQrDailyStat;
 use App\Modules\SmartQr\Models\SmartQrScanEvent;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
@@ -213,6 +215,248 @@ class SmartQrMetrics
         }
 
         return $out;
+    }
+
+    /**
+     * ═══ §12's REPORTS ═══════════════════════════════════════════════════
+     *
+     * ⚠️ EVERY report figure comes from the AGGREGATES, never raw scans.
+     *
+     * That is R-26's reasoning applied beyond the export: raw rows stop at the
+     * retention boundary, so a "last 12 months" chart built from them would show
+     * a cliff at 90 days that looks like the product stopped working. The
+     * aggregates go back indefinitely (R-4 amendment), so they are the only
+     * honest source for anything with a date range.
+     *
+     * ⚠️ Historical assignments included (allAssignmentsFor, not
+     * assignmentsFor). A report covering last quarter must include codes the
+     * workspace held then and has since given up — R-4 keeps a previous
+     * tenant's own history visible to them.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array<string, mixed>
+     */
+    public function report(int $workspaceId, array $filters = []): array
+    {
+        $assignments = $this->filteredAssignments($workspaceId, $filters);
+        $ids = $assignments->pluck('id');
+
+        [$from, $to] = $this->dateRange($filters);
+
+        $rows = $this->dailyRows($ids, $from, $to);
+
+        $totals = [
+            'scans' => (int) $rows->sum('scans'),
+            'unique_scans' => (int) $rows->sum('unique_scans'),
+            'bot_scans' => (int) $rows->sum('bot_scans'),
+            'attributed_messages' => (int) $rows->sum('attributed_messages'),
+            'attributed_unique_contacts' => (int) $rows->sum('attributed_unique_contacts'),
+            'attributed_new_contacts' => (int) $rows->sum('attributed_new_contacts'),
+        ];
+
+        return [
+            'range' => ['from' => $from->toDateString(), 'to' => $to->toDateString()],
+            'totals' => $totals,
+
+            // ⚠️ R-24 — §12's definition: unique contacts / unique VALID scans.
+            // null on zero, never 0: "0%" claims nobody responded.
+            'rate' => $totals['unique_scans'] > 0
+                ? round(($totals['attributed_unique_contacts'] / $totals['unique_scans']) * 100, 1)
+                : null,
+
+            'trend' => $this->trend($rows, $from, $to),
+            'funnel' => $this->funnel($totals),
+            'perQr' => $this->perQr($assignments, $rows),
+            'perUser' => $this->perUser($assignments, $rows),
+        ];
+    }
+
+    /**
+     * §12's B and C — scan and attributed-message trends, one row per day.
+     *
+     * Zero-filled across the whole range, deliberately: a line chart that skips
+     * empty days draws a straight line between two points weeks apart and
+     * implies activity that did not happen.
+     *
+     * @param  Collection<int, SmartQrDailyStat>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function trend(Collection $rows, Carbon $from, Carbon $to): array
+    {
+        $byDate = $rows->groupBy(fn ($r) => $r->stat_date->toDateString());
+
+        $out = [];
+        $cursor = $from->copy();
+
+        while ($cursor->lte($to)) {
+            $key = $cursor->toDateString();
+            $day = $byDate->get($key);
+
+            $out[] = [
+                'date' => $key,
+                'scans' => (int) ($day?->sum('scans') ?? 0),
+                'unique_scans' => (int) ($day?->sum('unique_scans') ?? 0),
+                'attributed_messages' => (int) ($day?->sum('attributed_messages') ?? 0),
+            ];
+
+            $cursor->addDay();
+        }
+
+        return $out;
+    }
+
+    /**
+     * §12's D — the conversion funnel. ⚠️ THREE stages, per R-25.
+     *
+     * §12 asks for four: Scan → WhatsApp Redirect → Customer Messaged → New
+     * Contact. But `PublicQrController::recordScan()` is called ONLY inside the
+     * REDIRECT branch — every refusal returns before it — so scans and redirects
+     * are the same number by construction, and a four-stage funnel would draw
+     * two provably identical bars. Nobody believes a funnel with a 100% step.
+     *
+     * If a future slice records scans on refusals, the fourth stage becomes real.
+     *
+     * @param  array<string, int>  $totals
+     * @return list<array{name: string, value: int}>
+     */
+    private function funnel(array $totals): array
+    {
+        return [
+            ['name' => 'valid_scans', 'value' => $totals['unique_scans']],
+            ['name' => 'attributed_messages', 'value' => $totals['attributed_messages']],
+            ['name' => 'attributed_new_contacts', 'value' => $totals['attributed_new_contacts']],
+        ];
+    }
+
+    /**
+     * §12's E and F — per-QR performance, ordered so F is just the head of E.
+     *
+     * @param  Collection<int, SmartQrAssignment>  $assignments
+     * @param  Collection<int, SmartQrDailyStat>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function perQr(Collection $assignments, Collection $rows): array
+    {
+        $byAssignment = $rows->groupBy('smart_qr_assignment_id');
+
+        return $assignments->map(function ($a) use ($byAssignment) {
+            $r = $byAssignment->get($a->id);
+
+            return [
+                'assignment_id' => $a->id,
+                'serial_number' => $a->code?->serial_number,
+                'name' => $a->name,
+                'qr_type' => $a->qr_type,
+                'status' => $a->status,
+                'scans' => (int) ($r?->sum('scans') ?? 0),
+                'unique_scans' => (int) ($r?->sum('unique_scans') ?? 0),
+                'attributed_messages' => (int) ($r?->sum('attributed_messages') ?? 0),
+            ];
+        })->sortByDesc('scans')->values()->all();
+    }
+
+    /**
+     * §12's G — user-wise performance.
+     *
+     * ⚠️ THIS WILL BE EMPTY ON REAL DATA, and that is not a bug.
+     * `smart_qr_assignments.assigned_user_id` is optional (§6 step 6) and
+     * nothing in the product requires it, so most installations have none set.
+     * The UI names that cause rather than showing a blank table.
+     *
+     * @param  Collection<int, SmartQrAssignment>  $assignments
+     * @param  Collection<int, SmartQrDailyStat>  $rows
+     * @return list<array<string, mixed>>
+     */
+    private function perUser(Collection $assignments, Collection $rows): array
+    {
+        $byAssignment = $rows->groupBy('smart_qr_assignment_id');
+
+        return $assignments
+            ->filter(fn ($a) => $a->assigned_user_id !== null)
+            ->groupBy('assigned_user_id')
+            ->map(function ($group, $userId) use ($byAssignment) {
+                $scans = 0;
+                $messages = 0;
+
+                foreach ($group as $a) {
+                    $r = $byAssignment->get($a->id);
+                    $scans += (int) ($r?->sum('scans') ?? 0);
+                    $messages += (int) ($r?->sum('attributed_messages') ?? 0);
+                }
+
+                return [
+                    'user_id' => (int) $userId,
+                    'name' => $group->first()->assignedUser?->name,
+                    'codes' => $group->count(),
+                    'scans' => $scans,
+                    'attributed_messages' => $messages,
+                ];
+            })->sortByDesc('scans')->values()->all();
+    }
+
+    /**
+     * §12's seven filters, applied to the assignment set.
+     *
+     * ⚠️ Filtering the ASSIGNMENTS rather than the daily rows: every filter §12
+     * names (QR, serial, type, assigned user, status, channel) is a property of
+     * the assignment, not of a day. Narrowing the id set first also keeps the
+     * aggregate query to one indexed `whereIn`.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return Collection<int, SmartQrAssignment>
+     */
+    private function filteredAssignments(int $workspaceId, array $filters): Collection
+    {
+        return $this->access->allAssignmentsFor($workspaceId)
+            ->with(['code:id,serial_number', 'assignedUser:id,name'])
+            ->when($filters['assignment_id'] ?? null, fn ($q, $v) => $q->where('id', $v))
+            ->when($filters['qr_type'] ?? null, fn ($q, $v) => $q->where('qr_type', $v))
+            ->when($filters['assigned_user_id'] ?? null, fn ($q, $v) => $q->where('assigned_user_id', $v))
+            ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
+            ->when($filters['channel_account_id'] ?? null, fn ($q, $v) => $q->where('channel_account_id', $v))
+            ->when($filters['serial'] ?? null, fn ($q, $v) => $q->whereHas('code',
+                fn ($c) => $c->where('serial_number', 'like', '%'.$v.'%')))
+            ->get();
+    }
+
+    /**
+     * @param  Collection<int, int>  $ids
+     * @return Collection<int, SmartQrDailyStat>
+     */
+    private function dailyRows(Collection $ids, Carbon $from, Carbon $to): Collection
+    {
+        if ($ids->isEmpty()) {
+            return collect();
+        }
+
+        return SmartQrDailyStat::query()
+            ->whereIn('smart_qr_assignment_id', $ids)
+            ->whereBetween('stat_date', [$from->toDateString(), $to->toDateString()])
+            ->get();
+    }
+
+    /**
+     * ⚠️ Defaults to the last 30 days ENDING YESTERDAY.
+     *
+     * Reports read aggregates, and today has not been aggregated yet — including
+     * it would show a final day of zero on every chart, every morning, which
+     * reads as a sudden collapse in traffic. The dashboard's Overview handles
+     * today separately by falling through to raw.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    private function dateRange(array $filters): array
+    {
+        $to = isset($filters['to'])
+            ? Carbon::parse((string) $filters['to'])->startOfDay()
+            : now()->startOfDay()->subDay();
+
+        $from = isset($filters['from'])
+            ? Carbon::parse((string) $filters['from'])->startOfDay()
+            : $to->copy()->subDays(29);
+
+        return $from->lte($to) ? [$from, $to] : [$to, $from];
     }
 
     /**

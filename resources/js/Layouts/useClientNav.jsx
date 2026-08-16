@@ -146,6 +146,19 @@ export default function useClientNav() {
         { label: t('nav.social'),              href: safeRoute('client.reports.social.index'),      icon: <Share2 className={iconClass} />, activePattern: 'client.reports.social.*' },
     ];
 
+    // ⚠️ SAME GATE as the Smart QR group above (R-22). Without it a customer
+    // lacking the entitlement would see a Reports entry leading to a 403 —
+    // hiding the module elsewhere and leaving a link here would be worse than
+    // not gating at all, because the dead end looks like a fault.
+    if (features?.smart_qr) {
+        reportsItems.push({
+            label: t('nav.reports_smart_qr'),
+            href: safeRoute('client.reports.smartqr.index'),
+            icon: <QrCode className={iconClass} />,
+            activePattern: 'client.reports.smartqr.*',
+        });
+    }
+
     // Group order: daily operations first, then growth tools, periodic review, then account-adjacent config (usage-frequency–based).
     return [
         { type: 'group', label: t('nav.group_account'),      items: accountItems },

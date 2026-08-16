@@ -2,9 +2,9 @@
 
 > ## 🟢 THE GATE IS ZERO
 >
-> The suite passes: **1,249 tests, 40,066 assertions, 0 failures, 1 documented skip.**
+> The suite passes: **1,262 tests, 40,199 assertions, 0 failures, 1 documented skip.**
 >
-> **Front-end: 24 vitest tests, 3 files.** Previously ZERO ran — `setup.js` held JSX under a
+> **Front-end: 28 vitest tests, 4 files.** Previously ZERO ran — `setup.js` held JSX under a
 > `.js` extension so vite refused to transform it. Fixed in Smart QR slice 3b.
 >
 > **Any failure from here is a regression.** There are no longer any "pre-existing
@@ -44,7 +44,8 @@ with its own full-suite run:
 | **Smart QR slice 4** — the public redirect `/q/{token}` | 24 tests: seven outcomes, the serial-404 control, scan privacy | 1207 + 24 JS |
 | **Smart QR slice 5** — §9 attribution, both halves | 15 tests: cross-tenant refusal, stripped token, reuse, failed-write redirect | 1222 + 24 JS |
 | **Smart QR slice 6** — §11 customer dashboard | 14 tests: SmartQrAccess re-proven, previous-tenant boundary, entitlement gate | 1236 + 24 JS |
-| **Smart QR slice 7** — aggregates, retention prune, HAZARD H-4 | 13 tests: the interlock, prune guards, §12's rate | **1249** + 24 JS |
+| **Smart QR slice 7a** — aggregates, retention prune, HAZARD H-4 | 13 tests: the interlock, prune guards, §12's rate | 1249 + 24 JS |
+| **Smart QR slice 7b** — §12's reports UI | 13 PHP + **4 vitest** (R-19's rendered labels) | **1262** + 28 JS |
 
 **Originally recorded:** 2026-08-03, immediately after §0.0 (test-database isolation).
 **Purpose:** distinguish pre-existing failures from Phase 0 regressions.
