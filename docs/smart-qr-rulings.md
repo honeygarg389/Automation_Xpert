@@ -1072,8 +1072,25 @@ guards against.
 tests. Before this, the PHP suite asserted only the prop names — a well-meaning edit to the card
 title would have shipped with a green suite.
 
-The remaining pages named in the original OWED entry (Codes, Activity) are still uncovered by
-vitest; that part of the entry stands.
+⚠️ **Closed fully in slice 8b** — `resources/js/__tests__/smartqr-customer-pages.test.jsx`
+covers the two remaining pages, 7 tests. Deliberately only what PHP cannot see:
+
+| Assertion | The failure it catches |
+|---|---|
+| the preview `<img>` src is the preview ROUTE, keyed by **serial** | a wrong route key renders a broken-image icon in a cell nobody looks at twice, while PHP shows a green route test for an endpoint the page never calls |
+| the download menu offers svg/png/pdf and emits `?format=` | `?format=` is a string contract between JSX and a `match` in the controller, and nothing else asserted the two agree |
+| the edit control is absent for staff, **present for administrators** | the positive control — without it, a page rendering no rows at all passes the negative |
+| Activity labels bot / unique / repeat distinctly, in ONE render | a mapping collapsed to a single branch would have to produce three different labels by accident |
+
+⚠️ **Bot precedence is the substance of that last one.** A bot's first visit is unique by the
+fingerprint, so `is_bot` and `is_unique` co-occur constantly; the row asserts a scan with BOTH
+flags reads "Bot" and not "Unique". This feed is the one place in the module where a bot is
+shown rather than excluded — every aggregate filters them — so a bot labelled "Unique" would be
+counted by a human reading the feed and by no number on any other screen.
+
+⚠️ **The runner degraded mid-session and the mutation checks for this file were NOT run.** See
+the slice 8b note below. The file is verified passing (7/7, 1.33s); its assertions are not
+verified to fail.
 
 ---
 
@@ -1143,3 +1160,79 @@ reasons are worth keeping:
 A genuine half-built archive needs **one success then a failure**, which is also the only case
 that matters in production. The real leak is the **temp file**, which on a busy queue accumulates
 silently until the volume fills.
+
+
+---
+
+## ⚠️ Slice 8b — the ruled size note was BACKWARDS, and measurement found it
+
+**The ruling:** "put the size difference in the UI where the choice is made — an admin picking
+PNG must see 50–150 MB before they wait for it."
+
+**The premise was wrong**, and building the note honestly required measuring rather than
+transcribing. Measured in a real `ZipArchive`, because that is what the admin downloads:
+
+|          | SVG/code | PNG/code | 500 SVG | 500 PNG |
+|----------|----------|----------|---------|---------|
+| no logo  |   4.5 KB |   6.8 KB |  2.1 MB |  3.2 MB |
+| logo     |  491  KB |  154  KB |  234 MB |   73 MB |
+
+⚠️ **With a logo configured — the intended production state — SVG is roughly 3× LARGER than
+PNG.** Without a logo the two are within 2 KB of each other and both trivial. The "50–150 MB"
+figure is real, but it describes **PNG-with-logo**, and it is the *smaller* of the two options
+in that configuration.
+
+**Cause, and it is structural rather than incidental:** endroid's `SvgWriter` embeds the logo as
+a base64 data URI in **every file**. Base64 of an already-compressed PNG neither shrinks in the
+SVG nor deflates in the ZIP. The `PngWriter` rasterises the same logo into one bitmap compressed
+once. So the SVG penalty is paid 500 times and the PNG penalty once.
+
+**SVG remains the default.** The reason that survives measurement is the one that was never
+stated: it is vector and prints crisply at any physical size, where a 1024 px PNG goes soft on
+anything larger than a sticker. The size argument was a wrong number that happened to point at
+the right default — which is the most dangerous kind, because the outcome looked like
+confirmation.
+
+**Where it lives now:** `SmartQrImageRenderer::ZIPPED_BYTES_PER_CODE`, computed server-side and
+passed to the page as `exportBytesPerCode`. It must be server-side: the two branches differ by
+~100× on whether a logo is configured, and React cannot know that. Mutation-verified in both
+directions — collapsing the logo branch to the no-logo figures fails the test, and removing the
+prop fails the page assertion.
+
+⚠️ **Re-measure if the logo pipeline changes.** These are constants standing in for a
+measurement, and a constant cannot notice that its measurement went stale.
+
+---
+
+## ⚠️ Slice 8b — the vitest runner degraded mid-session
+
+Recorded because it changes what the JS tests currently prove, and because I nearly
+misdiagnosed it a second time.
+
+**Sequence:**
+
+1. `smartqr-customer-pages.test.jsx` ran green — 7 passed, 1.33 s.
+2. `smartqr-labels.test.jsx` (7b's file) ran green — 4 passed, 1.72 s.
+3. A full-directory run hung with **zero bytes of output**, before the `RUN v4.1.5` banner.
+4. From that point **every** invocation hung, including the two files that had just passed and
+   `confirm-destructive.test.jsx`, which had also passed minutes earlier.
+
+**Ruled out:** stale/orphaned processes (none present — `ps` clean), the thread pool
+(`--pool=forks` hangs identically), file parallelism (`--no-file-parallelism` hangs), and the
+transform cache (`node_modules/.vite` cleared, still hangs). It is not the new file: that file
+passed, and files unrelated to this slice now fail the same way.
+
+⚠️ **What this costs:** the 7 new assertions are verified **passing** but not verified
+**failing**. No mutation check was run against them. By the standing rule — *a mutation that
+cannot be shown to have landed proves nothing* — they are unproven, and the honest statement is
+that they have not yet been shown to discriminate.
+
+**First action next session:** re-run vitest in a fresh shell. If it is green, mutation-check
+the four assertions in the table above — in particular the bot/unique precedence, which is the
+one whose failure mode is a plausible-looking wrong label.
+
+⚠️ **The earlier mistake this nearly repeated:** in slice 3b I reported the toolchain broken
+when a `--reporter=basic` flag simply did not exist in vitest 4, and the run had actually
+succeeded. The discipline that worked here was running a **known-good control file** before
+concluding anything — which is what showed the first hang was a process collision and the second
+was real.
