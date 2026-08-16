@@ -372,11 +372,6 @@ transient error permanently dedups the event and the renewal is lost.
   read-only, and a refusal would land on the customer's customer standing in a shop rather than
   on anybody who could act on it. ⚠️ Do not reinstate it as "the missing third tier" — see the
   amendment to R-5 in `docs/smart-qr-rulings.md`.
-- **`smart_qr_attribution_sessions.smart_qr_scan_event_id` — nullable, and nothing fills it.**
-  Added in slice 5 to be back-filled by the scan job; the back-fill was never written, so every
-  row is NULL. Recommendation is to DROP it in slice 7 unless the aggregates find a use — see
-  the OWED entry in `docs/smart-qr-rulings.md`. An always-null column looks like data loss to
-  whoever finds it next.
 - **`ClientWorkspaceService::detachStaleWorkspaces()`** — deferred out of Phase 0. See
   `docs/phase-0-tenant-isolation-plan.md` §G-1d. Prerequisite for any partner-tier feature
   that can move a customer between organisations.

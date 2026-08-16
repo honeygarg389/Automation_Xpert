@@ -703,7 +703,16 @@ conditional rather than throwing an exception per message and using a catch for 
 
 ---
 
-## ⚠️ OWED — `smart_qr_attribution_sessions.smart_qr_scan_event_id` is nullable and NOTHING fills it
+## ✅ RESOLVED — `smart_qr_attribution_sessions.smart_qr_scan_event_id` was DROPPED
+
+⚠️ **Closed in slice 7: the column was dropped**, in the same migration that added the aggregate
+tables, exactly as recommended. Nothing read it, no §10 metric needed it, and a queue-based
+back-fill could never have guaranteed non-null — a column that is *sometimes* populated invites a
+query that silently omits rows.
+
+Kept as a resolved entry rather than deleted, so the decision is findable. The original follows.
+
+### Original entry — nullable, and nothing fills it
 
 Raised at the end of slice 5. **Must be resolved in slice 6 or 7 — it will not resolve itself,
 and an always-null column looks like data loss to whoever finds it next.**
@@ -912,3 +921,109 @@ The things PHP genuinely cannot see:
 
 Low, and the label test is the one worth writing first — it is the only assertion standing
 between R-19 and somebody "improving" a card title back to "Customers Messaged".
+
+---
+
+## ⚠️ HAZARD H-4 — the aggregator/prune interlock
+
+**Two individually correct jobs that together erase the history the prune exists to preserve.**
+Recorded as a named hazard rather than a docblock line because both halves look right in
+isolation and the damage is silent.
+
+### The shape
+
+1. `smartqr:prune-scans` deletes raw scan rows older than the retention window. Safe alone — the
+   aggregates hold the summary.
+2. `smartqr:aggregate` recomputes a day from raw rows and `updateOrCreate`s the result. Safe
+   alone — idempotent, and it corrects late-arriving scans.
+3. Run (2) on a day (1) has already cleared, and it computes **zero** and overwrites a correct
+   historical aggregate — **the only surviving copy of that day** — with zeros.
+
+Nothing throws. Nothing logs. The number simply becomes wrong.
+
+### The interlock
+
+`SmartQrAggregator::aggregate()` **refuses any date older than the retention window**, and there
+is deliberately **no `--force`**: a caller who wants an old day needs the raw rows back, which
+the prune has already made impossible. `PruneSmartQrScansCommand` GUARD 2 is the mirror — it
+refuses any day with no aggregate row.
+
+Both commands read `smartqr.scan_retention_days`, and the scheduler runs the aggregator **before**
+the prune. Reversing that order would make the prune refuse every night and quietly never run.
+
+### ⚠️ The first version of the guarding test could not fail. Measured.
+
+The fixture pruned the scans and left the day with **no conversions**, so the aggregator found no
+activity, wrote nothing, and the existing row survived — removing the refusal left the test
+green.
+
+**Conversion events are never pruned.** That is what makes the hazard real: a genuinely pruned
+day still has conversion rows, so the assignment *is* still in the aggregator's id set and its
+scan figures *are* recomputed to zero. The corrected fixture keeps the conversions.
+
+The discriminator is **the existing row unchanged**, not that an exception was raised — an
+implementation that throws *after* writing zeros passes an exception-only assertion.
+
+---
+
+## R-24 — the Scan-to-Message Rate follows §12, and slice 6's number CHANGED
+
+§12 defines it exactly: **Unique Customers Messaged ÷ Unique Valid Scans × 100.**
+
+Slice 6 shipped `attributed_messages ÷ all non-bot scans` — a different numerator *and* a
+different denominator. That was wrong against an explicit spec definition, and it is corrected
+here rather than left to look like drift later.
+
+| | Numerator | Denominator |
+|---|---|---|
+| slice 6 (wrong) | all attributed messages | all non-bot scans |
+| **slice 7 (§12)** | **distinct contacts** | **unique valid scans** |
+
+`attributed_unique_contacts` is the piece slice 6 could not compute; the aggregates add it.
+⚠️ Counting messages rather than people lets one talkative customer push a conversion rate above
+100%, which is how the error would eventually have been noticed — by a number that is obviously
+absurd, long after it had been quoted.
+
+**Still `null` on zero, never `0`.** §12 asks only that divide-by-zero be prevented; it does not
+ask for a misleading zero. "0%" reads as *nobody responded*; `null` reads as *nothing has
+happened yet*, which is the truth for a QR nobody has scanned.
+
+⚠️ **One documented approximation:** summing daily distinct-contact counts over-counts a customer
+who messaged on two different days. The alternative is storing every contact id per day — a
+second scan-sized table. Recorded at the code rather than left silently approximate.
+
+---
+
+## R-25 — the conversion funnel has THREE stages, not §12's four
+
+§12's funnel is Scan → WhatsApp Redirect → Customer Messaged → New Contact.
+
+**Ruled: three stages** — Valid Scans → Attributed Messages → New Contacts.
+
+### Why, and what would make the fourth real
+
+`PublicQrController::recordScan()` is called **only inside the REDIRECT branch**. Every refusal
+returns before it. So **scans and redirects are the same number, always, by construction** — a
+funnel drawn to §12 would show two provably identical bars, which reads as a rendering bug that
+happens to be correct. Nobody believes a funnel with a 100% step.
+
+⚠️ **If a future slice ever records scans on refusals** — an unassigned or expired code that was
+scanned is genuinely interesting — then Scan and Redirect become different numbers and the fourth
+stage becomes real. This note is what tells that person it can be added, rather than leaving them
+to wonder why the spec says four and the code draws three.
+
+---
+
+## R-26 — export covers AGGREGATES only
+
+§12 asks for export without saying what is exported.
+
+**Ruled: the aggregates, and the button says so.**
+
+A raw-scan export silently stops at the 90-day retention boundary. A customer who downloads
+"their history" and finds it truncated has no way to know why — the file looks complete and is
+not. The aggregates go back indefinitely (R-4 amendment), so an aggregate export is the only one
+that can honestly be called a history.
+
+Raw export is **out of scope until someone asks for it**, and when they do it needs the retention
+boundary surfaced *in the file itself*, not in the UI that generated it.
