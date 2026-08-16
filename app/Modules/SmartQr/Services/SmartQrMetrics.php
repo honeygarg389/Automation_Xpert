@@ -7,7 +7,6 @@ use App\Modules\SmartQr\Models\SmartQrDailyStat;
 use App\Modules\SmartQr\Models\SmartQrScanEvent;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -44,10 +43,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SmartQrMetrics
 {
-    public function __construct(
-        private readonly SmartQrAccess $access,
-        private readonly SmartQrAggregator $aggregator,
-    ) {}
+    public function __construct(private readonly SmartQrAccess $access) {}
 
     /**
      * The Overview cards.
@@ -242,30 +238,5 @@ class SmartQrMetrics
             ->orderByDesc('scanned_at')
             ->paginate($perPage)
             ->withQueryString();
-    }
-
-    /**
-     * ⚠️ Scans are reached through SmartQrAccess::scanEventsFor(), which joins
-     * via the ASSIGNMENT — so a reassigned code's earlier scans belong to the
-     * previous tenant's period and are unreachable here. That is R-4 doing its
-     * job, and it is why no query in this file filters on workspace directly.
-     */
-    /** @return Builder<SmartQrScanEvent> */
-    private function scanQuery(int $workspaceId): Builder
-    {
-        return $this->access->scanEventsFor($workspaceId)->where('is_bot', false);
-    }
-
-    /** @param Collection<int, int> $assignmentIds */
-    private function conversions($assignmentIds, string $type): int
-    {
-        if ($assignmentIds->isEmpty()) {
-            return 0;
-        }
-
-        return (int) SmartQrConversionEvent::query()
-            ->whereIn('smart_qr_assignment_id', $assignmentIds)
-            ->where('type', $type)
-            ->count();
     }
 }

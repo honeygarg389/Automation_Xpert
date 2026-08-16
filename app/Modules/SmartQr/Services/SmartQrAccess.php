@@ -103,6 +103,12 @@ class SmartQrAccess
      *
      * Use this for anything HISTORICAL; use assignmentsFor() for anything
      * describing the present.
+     *
+     * ⚠️ Annotated with its generic, unlike the five methods around it. Those
+     * carry the module's six pre-existing PHPStan errors; a new method should
+     * not add a seventh just to match them.
+     *
+     * @return Builder<SmartQrAssignment>
      */
     public function allAssignmentsFor(int $workspaceId): Builder
     {
