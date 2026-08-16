@@ -252,6 +252,7 @@ class SmartQrImageExportTest extends TestCase
     {
         Storage::fake('local');
         $code = SmartQrCode::factory()->create();
+        $tempBefore = $this->tempFileCount();
 
         // Make rendering blow up midway: a renderer that throws on any call.
         $this->app->bind(SmartQrImageRenderer::class, function () {
@@ -274,8 +275,30 @@ class SmartQrImageExportTest extends TestCase
         $files = Storage::disk('local')->allFiles('smartqr-exports');
 
         $this->assertSame([], $files,
-            'A partial archive survived a failed export. A truncated ZIP downloads and then '
-            .'fails to open, which an admin discovers after sending it to a printer.');
+            'A partial archive survived a failed export at the DESTINATION path. A truncated ZIP '
+            .'downloads and then fails to open, which an admin discovers after sending it to a '
+            .'printer.');
+
+        // ⚠️ AND THE TEMP FILE, WHICH IS WHERE THE REAL LEAK IS.
+        //
+        // Measured: removing the destination cleanup alone leaves this test
+        // green, because the archive is built at a TEMP path and only moved to
+        // the disk on success — so nothing partial ever reaches `$relative` and
+        // that branch is defensive rather than load-bearing.
+        //
+        // What a failed export genuinely leaves behind is the half-written temp
+        // file. On a busy queue that accumulates silently in the system temp
+        // directory until the volume fills, which is the failure this assertion
+        // actually detects.
+        $this->assertSame($tempBefore, $this->tempFileCount(),
+            'A half-written temp archive was left in the system temp directory. Every failed '
+            .'export would leak one, silently, until the volume filled.');
+    }
+
+    /** How many of our temp archives exist right now. */
+    private function tempFileCount(): int
+    {
+        return count(glob(sys_get_temp_dir().'/smartqr*') ?: []);
     }
 
     /** POSITIVE CONTROL: a successful export DOES write an archive. */
