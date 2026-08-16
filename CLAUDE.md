@@ -364,6 +364,11 @@ transient error permanently dedups the event and the renewal is lost.
   live customer-facing 500. Files touched during 1c get fixed opportunistically in their own
   module commit; these two do not, so they need a deliberate pass. See `docs/found-bugs.md`
   BUG-003 for the full list and the decided scope policy.
+- **BUG-038: there is no AutomationXpert logo asset in the repo.** §14 requires one on printed QR
+  artwork; the only logo files are WhatsMine-branded, inherited from `4ec7e3e`. Slice 8 uses the
+  configured platform logo and renders PLAIN when none is set — it must NEVER fall back to the
+  inherited asset, because a competitor's brand on a printed sticker is irreversible. ⚠️ Needs an
+  owner decision before any kit is printed; it cannot be resolved in code.
 - **`smart_qr_scans_per_month` — ✅ RESOLVED: there is NO scan limit, by owner ruling.** R-5
   originally recorded three enforcement tiers; there are TWO — a gauge at assignment and a
   boolean at display. The counter was **removed as a concept**, not deferred: the product sells

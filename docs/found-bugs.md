@@ -2625,3 +2625,44 @@ also discards any legitimate translation edits made since the last commit.
 locale set and assert that **no leaf count decreases** for any locale. Every existing i18n test
 checks reading or flattening in isolation; none runs the seeder and re-counts the file
 afterwards, which is precisely why this survived from the initial import.
+
+---
+
+## BUG-038 — there is no AutomationXpert logo asset in this repository
+
+- **Severity:** Medium — not a code defect, but it blocks physical production
+- **Status:** **OPEN — needs the owner, not a developer.** Found 2026-08-16 during Smart QR
+  slice 8.
+- **Files:** `public/whatsmine-logo.png`, `public/whatsmine-logo-with-title.svg`
+
+§14 requires the printed QR artwork to carry "AutomationXpert logo only", and says to reuse an
+existing asset if one exists. **There is no AutomationXpert asset.** The only logo files in the
+repository are `whatsmine-logo.png` and `whatsmine-logo-with-title.svg` — WhatsMine branding,
+inherited from the initial import (`4ec7e3e`), which is the product this platform was forked
+from.
+
+### What slice 8 does about it
+
+The renderer takes its logo from the **configured platform logo**
+(`SystemSetting::get('app_logo_path')`), which on a white-label install is that installation's
+own brand — one per installation, set by the platform owner, so it is not a "customer logo" and
+§14 and R-2 both hold.
+
+⚠️ **When none is configured it renders the QR PLAIN, and it must never fall back to the
+inherited asset.** A plain QR is honest; a competitor's brand printed onto a customer's stickers
+is not recoverable once the run is done. Pinned by
+`no_configured_logo_renders_plain_and_never_the_inherited_asset`.
+
+### Why it still needs closing
+
+Nothing in the code is wrong, but **a Business Kit printed today would carry either the
+platform-configured logo or no logo at all** — never an AutomationXpert mark, because none
+exists to use. That is a decision for the owner before any print run:
+
+1. commit an AutomationXpert asset (PNG or JPEG — **not SVG**, GD cannot rasterise it and the
+   renderer refuses it deliberately, which also keeps this path clear of SEC-004), or
+2. confirm that the configured platform logo is the intended mark and set it, or
+3. confirm that plain, unbranded codes are intended for the MVP.
+
+Recorded here rather than only in the rulings because it is the one item in this module that
+**cannot be resolved in code**.

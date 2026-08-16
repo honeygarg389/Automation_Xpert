@@ -121,6 +121,10 @@ class JobWorkspaceContextGuardTest extends TestCase
         // scope. It also receives only HASHES — never an IP or a user agent —
         // so the durable `jobs` payload cannot hold what §10 forbids storing.
         'App\Modules\SmartQr\Jobs\RecordQrScanJob',
+        // Renders PLATFORM inventory into a ZIP. smart_qr_codes has no
+        // workspace_id (R-4), so there is no tenant to establish — a workspace
+        // context here would have nothing to scope.
+        'App\Modules\SmartQr\Jobs\GenerateQrExportJob',
         'App\Modules\Entitlements\Jobs\ReconcileWorkspaceEntitlements',
         'App\Jobs\DispatchWebhookJob',
         'App\Jobs\GenerateWorkspaceExportJob',

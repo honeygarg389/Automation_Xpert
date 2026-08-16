@@ -179,16 +179,17 @@ class SmartQrImageExportTest extends TestCase
     #[Test]
     public function the_structural_readability_properties_hold(): void
     {
-        $checks = $this->renderer()->structuralChecks();
-
-        $this->assertTrue($checks['error_correction_is_high'], '§14 requires Level H.');
-        $this->assertTrue($checks['logo_within_tolerance'],
+        // ⚠️ The CONSTANTS are what this asserts. structuralChecks() reports
+        // values; asserting its booleans would be asserting a comparison between
+        // two constants, which is always true and guards nothing.
+        $this->assertLessThan(0.30, SmartQrImageRenderer::LOGO_RATIO,
             'The logo covers more than Level H\'s ~30% damage tolerance, so a scuffed sticker '
             .'stops decoding.');
-        $this->assertTrue($checks['quiet_zone_present'], '§14 requires a quiet zone.');
+        $this->assertGreaterThan(0, SmartQrImageRenderer::MARGIN, '§14 requires a quiet zone.');
 
-        $this->assertLessThan(0.30, SmartQrImageRenderer::LOGO_RATIO);
-        $this->assertGreaterThan(0, SmartQrImageRenderer::MARGIN);
+        $checks = $this->renderer()->structuralChecks();
+        $this->assertSame('High', $checks['error_correction_level'], '§14 requires Level H.');
+        $this->assertSame(SmartQrImageRenderer::LOGO_RATIO, $checks['logo_ratio']);
     }
 
     // ══ ⚠️ THE ZIP CAP ═════════════════════════════════════════════════════
@@ -251,22 +252,34 @@ class SmartQrImageExportTest extends TestCase
     public function a_failed_export_leaves_no_partial_archive(): void
     {
         Storage::fake('local');
-        $code = SmartQrCode::factory()->create();
+        // ⚠️ TWO codes, and the renderer succeeds ONCE before throwing.
+        //
+        // Measured: with a single code that fails immediately, the archive has
+        // ZERO entries — and ZipArchive::close() DELETES an empty archive, so
+        // nothing leaks and the test cannot fail. A genuinely HALF-BUILT archive
+        // needs at least one successful entry, which is also the only case that
+        // matters in production.
+        $codes = SmartQrCode::factory()->count(2)->create();
         $tempBefore = $this->tempFileCount();
 
-        // Make rendering blow up midway: a renderer that throws on any call.
         $this->app->bind(SmartQrImageRenderer::class, function () {
             return new class extends SmartQrImageRenderer
             {
+                private int $calls = 0;
+
                 public function svg(string $url, string $serial): array
                 {
-                    throw new \RuntimeException('render exploded');
+                    if (++$this->calls > 1) {
+                        throw new \RuntimeException('render exploded');
+                    }
+
+                    return parent::svg($url, $serial);
                 }
             };
         });
 
         try {
-            (new GenerateQrExportJob([$code->id], 'svg'))->handle(app(SmartQrImageRenderer::class));
+            (new GenerateQrExportJob($codes->pluck('id')->all(), 'svg'))->handle(app(SmartQrImageRenderer::class));
             $this->fail('The export swallowed a render failure and reported success.');
         } catch (\RuntimeException) {
             // expected — the queue must see the job fail

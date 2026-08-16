@@ -1074,3 +1074,72 @@ title would have shipped with a green suite.
 
 The remaining pages named in the original OWED entry (Codes, Activity) are still uncovered by
 vitest; that part of the entry stands.
+
+---
+
+## ⚠️ Slice 8 — two library behaviours found by measurement, not by reading
+
+Both were silent, both would have reached print, and neither is in any documentation.
+
+### 1. `SvgWriter` accepts a label and discards it
+
+Same builder, same `labelText`:
+
+| Writer | Output | Serial |
+|---|---|---|
+| `PngWriter` | 1056 × 1094 | ✅ band rendered |
+| `SvgWriter` | 1056 × 1056 | ❌ **silently absent** |
+
+`SvgWriter::write()` takes a `LabelInterface $label` parameter and never uses it. Nothing errors.
+
+⚠️ **SVG is the ZIP default (ruled, for size) and the ZIP goes to a printer** — so this would
+have produced 500 stickers with no human-readable serial. The serial is how an operator matches a
+sticker to a row, and slice 4's whole enumeration argument depends on the serial being printed
+while the token is not. The band is appended in `appendSerialToSvg()`.
+
+### 2. Dompdf ignores INLINE `<svg>` entirely
+
+| Embed | Result |
+|---|---|
+| inline `<svg>` | **1,140 bytes — an empty page** |
+| `<img src="data:image/svg+xml;base64,…">` | ~5,300 bytes, rendered |
+| blank-SVG control | 1,141 bytes |
+
+The inline case produces a valid, openable, **blank** PDF. `the_module_matrix_survives_the_pdf_conversion`
+pins it, and its discriminator is that **two different codes must produce different PDFs** — if
+the matrix were dropped, both would be the same empty frame.
+
+---
+
+## ⚠️ Slice 8 measurement — what the structural checks actually guard
+
+`structuralChecks()` first returned `LOGO_RATIO < 0.30` and similar. PHPStan flagged them as
+"always true", and it was right: **comparisons between two constants assert nothing at runtime.**
+
+What guards the configuration is the **test asserting the constants directly** —
+mutation-verified, raising `LOGO_RATIO` to 0.45 fails it. The method now reports the values
+rather than self-evident booleans.
+
+⚠️ And the claim stays deliberately narrow. §14 says "validate scan readability"; this asserts
+that Level H is set, the logo is inside Level H's ~30% tolerance, and a quiet zone exists. It
+does **not** decode anything — that needs a QR *reader*, bacon is an encoder only, and avoiding a
+second library was R-6's entire argument. A well-formed code is a weaker claim than a scanning
+one, and the weaker claim is the true one.
+
+---
+
+## ⚠️ Slice 8 measurement — a "half-built archive" needs at least one entry
+
+The export's failure-cleanup test passed under mutation twice before it discriminated, and both
+reasons are worth keeping:
+
+1. **The destination cleanup is unreachable.** The archive is built at a temp path and moved to
+   the disk only on success, so nothing partial ever lands at the destination. That branch is
+   defence in depth, not the working guard.
+2. **`ZipArchive::close()` DELETES an archive with zero entries.** The first fixture threw on the
+   very first render, so there were no entries, the archive removed itself, and nothing leaked —
+   the test could not fail.
+
+A genuine half-built archive needs **one success then a failure**, which is also the only case
+that matters in production. The real leak is the **temp file**, which on a busy queue accumulates
+silently until the volume fills.

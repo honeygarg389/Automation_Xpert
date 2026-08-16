@@ -111,9 +111,7 @@ class GenerateQrExportJob implements ShouldQueue
             // ⚠️ LESSON 2 + 3. Clean up the partial artefact, then record the
             // reason OUTSIDE the cleanup so it survives, then rethrow so the
             // queue marks the job failed rather than silently succeeding.
-            if ($zip->filename !== false) {
-                @$zip->close();
-            }
+            @$zip->close();
 
             @unlink($temp);
 

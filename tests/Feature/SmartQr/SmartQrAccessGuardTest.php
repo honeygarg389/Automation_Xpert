@@ -57,6 +57,11 @@ class SmartQrAccessGuardTest extends TestCase
         // workspace would answer a different question and, worse, report every
         // assigned code deletable.
         'app/Modules/SmartQr/Services/SmartQrDeletability.php',
+        // ⚠️ Slice 8. Renders artwork for PLATFORM inventory — an admin export
+        // spans every code including unassigned ones, which is the whole reason
+        // SmartQrCode is lifecycle-owned. There is no workspace to bound a ZIP
+        // of print-run artwork to.
+        'app/Modules/SmartQr/Jobs/GenerateQrExportJob.php',
         // ⚠️ Slice 4, the PUBLIC redirect — and the one place a stranger's
         // request reaches this model. Permitted because the token IS the
         // boundary: it is 128 bits of entropy addressing exactly one code, and

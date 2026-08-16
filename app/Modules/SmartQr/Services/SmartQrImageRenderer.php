@@ -167,6 +167,8 @@ class SmartQrImageRenderer
      * Nothing errors in the inline case. A PDF whose QR is missing prints
      * before anyone notices, which is why this is asserted by test rather than
      * assumed — see `the_module_matrix_survives_the_pdf_conversion`.
+     *
+     * @return array{data: string, mime: string}
      */
     public function pdf(string $url, string $serial): array
     {
@@ -298,14 +300,27 @@ class SmartQrImageRenderer
      * A code satisfying all three is well-formed. That is a weaker claim than
      * "it scans", and the weaker claim is the true one.
      *
-     * @return array<string, bool>
+     * ⚠️ AND THIS METHOD REPORTS VALUES, NOT SELF-EVIDENT BOOLEANS.
+     *
+     * It first returned `LOGO_RATIO < 0.30` and friends — comparisons between
+     * two constants, which PHPStan correctly flagged as "always true". Those
+     * booleans asserted nothing at runtime: the compiler folds them.
+     *
+     * What actually guards the configuration is the TEST asserting the constants
+     * (mutation-verified: raising LOGO_RATIO to 0.45 fails it). This method
+     * exists to surface the values — for a log line, an admin diagnostic, or a
+     * reader wanting to know what was used — and the bounds travel with them.
+     *
+     * @return array<string, int|float|string>
      */
     public function structuralChecks(): array
     {
         return [
-            'error_correction_is_high' => ErrorCorrectionLevel::High === ErrorCorrectionLevel::High,
-            'logo_within_tolerance' => self::LOGO_RATIO < 0.30,
-            'quiet_zone_present' => self::MARGIN > 0,
+            'error_correction_level' => ErrorCorrectionLevel::High->name,
+            'logo_ratio' => self::LOGO_RATIO,
+            'logo_ratio_max' => 0.30,
+            'quiet_zone_modules' => self::MARGIN,
+            'render_size_px' => self::PNG_SIZE,
         ];
     }
 }
