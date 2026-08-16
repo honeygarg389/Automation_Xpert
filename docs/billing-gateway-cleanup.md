@@ -22,6 +22,26 @@ recorded verbatim in intent. Nothing here is recalled from memory.
 >
 > **When the branches meet: keep this version, discard the other.** Do not attempt a
 > line-level merge of the two.
+>
+> ### ✅ RESOLVED 2026-08-16 — that is what happened, and this is the record of it
+>
+> The other version reached `master` on branch `docs/billing-findings` (not `feature/smart-qr`
+> as predicted above — the file moved branches, the prediction was otherwise exact). It was
+> **97 lines against this file's 329**, and it was discarded whole at the add/add conflict, by
+> owner ruling.
+>
+> **What it claimed that this file does not:** that removing the eleven gateways forces a
+> product decision on in-place plan changes which was *"a product decision **awaiting the
+> owner**"*. That was the reason to discard it rather than merge it — the decision was not
+> awaited, it was **made**, and it is recorded here as Owner ruling 2. A union of the two files
+> would have said both things at once, which is the BUG-007 failure this note was written to
+> avoid.
+>
+> **Checked before discarding, at sentence level rather than by heading:** all 38 of its
+> sentences were compared against this file's 127. Every substantive claim it made appears here,
+> measured, usually with a file:line reference it lacked. The only content unique to it was its
+> own statement that its claims were unverified — which is precisely why it is the superseded
+> one. **Nothing was lost.**
 
 ---
 
