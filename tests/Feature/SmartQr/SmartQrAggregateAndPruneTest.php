@@ -9,6 +9,7 @@ use App\Modules\SmartQr\Models\SmartQrConversionEvent;
 use App\Modules\SmartQr\Models\SmartQrDailyStat;
 use App\Modules\SmartQr\Models\SmartQrScanEvent;
 use App\Modules\SmartQr\Services\SmartQrAggregator;
+use App\Modules\SmartQr\Services\SmartQrMetrics;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -98,8 +99,19 @@ class SmartQrAggregateAndPruneTest extends TestCase
             'attributed_new_contacts' => 30, 'attributed_conversations_started' => 28,
         ]);
 
-        // Its raw rows are long gone — exactly what the prune leaves behind.
-        $this->assertSame(0, (int) DB::table('smart_qr_scan_events')->count(), 'Precondition: pruned.');
+        // ⚠️ THE REALISTIC POST-PRUNE STATE, and the first version of this test
+        // got it wrong.
+        //
+        // The prune deletes SCAN rows only — conversion events are never pruned.
+        // So a pruned day still has conversions, which means the assignment IS
+        // still in the aggregator's id set and its scan figures DO get
+        // recomputed to zero. With no conversions at all the aggregator writes
+        // nothing and the hazard cannot fire, which made the original fixture
+        // unfalsifiable: removing the refusal left the test green.
+        $this->conversion($a, SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED, $old->copy()->addHours(9)->toDateTimeString(), contactId: 5);
+
+        $this->assertSame(0, (int) DB::table('smart_qr_scan_events')->count(), 'Precondition: scans pruned.');
+        $this->assertSame(1, (int) DB::table('smart_qr_conversion_events')->count(), 'Precondition: conversions survive the prune.');
 
         try {
             app(SmartQrAggregator::class)->aggregate($old);
@@ -216,6 +228,56 @@ class SmartQrAggregateAndPruneTest extends TestCase
         $this->assertSame(2, $row->attributed_unique_contacts,
             'Unique contacts counted messages rather than people. §12 divides by this, so the '
             .'rate would exceed 100% for any customer who sent two messages.');
+    }
+
+    /**
+     * ⚠️ §12's rate divides UNIQUE CONTACTS by unique valid scans — not
+     * messages by scans.
+     *
+     * The numbers are chosen so the two formulas give DIFFERENT answers: 4
+     * messages from 2 people over 8 unique scans is 25% by §12's definition and
+     * 50% by slice 6's original one. Equal numbers would let the wrong formula
+     * pass by coincidence.
+     */
+    #[Test]
+    public function the_rate_uses_unique_contacts_not_message_count(): void
+    {
+        $a = $this->assignment();
+        $at = now()->toDateTimeString();
+
+        for ($i = 0; $i < 8; $i++) {
+            $this->scan($a, $at);
+        }
+
+        // 4 messages, 2 distinct people.
+        $this->conversion($a, SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED, $at, contactId: 11);
+        $this->conversion($a, SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED, $at, contactId: 11);
+        $this->conversion($a, SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED, $at, contactId: 12);
+        $this->conversion($a, SmartQrConversionEvent::TYPE_CUSTOMER_MESSAGED, $at, contactId: 12);
+
+        $kpis = app(SmartQrMetrics::class)
+            ->overview((int) $a->workspace_id);
+
+        $this->assertSame(8, $kpis['unique_scans']);
+        $this->assertSame(4, $kpis['attributed_messages']);
+        $this->assertSame(25.0, $kpis['attributed_message_rate'],
+            'The rate divided MESSAGES by scans (50%) rather than UNIQUE CONTACTS by unique '
+            .'valid scans (25%). §12 is explicit, and counting messages lets one talkative '
+            .'customer push a conversion rate above 100%.');
+    }
+
+    /** ⚠️ null on zero scans, never 0 — "0%" claims nobody responded. */
+    #[Test]
+    public function the_rate_is_null_rather_than_zero_when_nothing_has_happened(): void
+    {
+        $a = $this->assignment();
+
+        $kpis = app(SmartQrMetrics::class)
+            ->overview((int) $a->workspace_id);
+
+        $this->assertNull($kpis['attributed_message_rate'],
+            '0% reads as "nobody responded"; null reads as "nothing has happened yet", which is '
+            .'the truth for a QR nobody has scanned.');
     }
 
     // ══ ⚠️ THE PRUNE ═══════════════════════════════════════════════════════
