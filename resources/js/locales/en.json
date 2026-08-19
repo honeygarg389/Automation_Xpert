@@ -4183,10 +4183,13 @@
         "export_format_svg": "SVG — vector, recommended for print",
         "export_format_png": "PNG — 1024 px raster",
         "export_size_estimate": "Estimated archive size: about {{size}}.",
-        "export_size_compare": "The same selection as {{other}} would be about {{otherSize}}.",
         "export_note_svg": "Vector artwork stays sharp at any physical size, so the same file works for a table sticker and a shopfront poster.",
         "export_note_png": "A 1024 px raster is fine for a sticker but will look soft printed larger than a few centimetres.",
         "export_over_cap": "You selected {{count}} codes. Export at most {{max}} at a time.",
-        "export_confirm": "Start export"
+        "export_confirm": "Start export",
+        "export_format_pdf": "PDF — print-ready, one page per code",
+        "export_size_compare_multi": "The same selection as {{others}}.",
+        "export_note_pdf": "One page per code with the serial beneath it — the format to hand to a print shop.",
+        "ready_exports": "Ready exports"
     }
 }

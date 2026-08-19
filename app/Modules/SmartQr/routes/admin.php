@@ -52,6 +52,14 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         // §5 export — queued, capped at 500, SVG by default. See the controller.
         Route::post('/inventory/export', [QrInventoryController::class, 'export'])
             ->name('inventory.export')->middleware('permission:view_qr_inventory');
+        // ⚠️ The archive was previously written to storage with NO WAY TO GET IT.
+        // The success flash said "it will appear in storage", which is true and
+        // useless: storage/app/private is not web-reachable, so every export
+        // ever run was unreachable by the admin who asked for it.
+        Route::get('/inventory/exports', [QrInventoryController::class, 'exports'])
+            ->name('inventory.exports')->middleware('permission:view_qr_inventory');
+        Route::get('/inventory/exports/{name}', [QrInventoryController::class, 'downloadExport'])
+            ->name('inventory.export-download')->middleware('permission:view_qr_inventory');
         Route::delete('/inventory', [QrInventoryController::class, 'destroy'])
             ->name('inventory.destroy')->middleware('permission:manage_qr_batches');
 

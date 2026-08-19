@@ -39,8 +39,9 @@ export default function SmartQrInventoryIndex({
     // ⚠️ Measured server-side — see SmartQrImageRenderer::ZIPPED_BYTES_PER_CODE.
     // The fallback is the no-logo pair, so a stale cached page understates
     // rather than invents.
-    exportBytesPerCode = { svg: 4495, png: 6809 },
+    exportBytesPerCode = { svg: 4495, png: 6809, pdf: 4984 },
     exportMaxCodes = 500,
+    readyExports = [],
 }) {
     const { t } = useTranslation();
     const page = usePage();
@@ -348,6 +349,37 @@ export default function SmartQrInventoryIndex({
                 </Card>
             </div>
 
+            {/* ⚠️ READY EXPORTS — the half that was missing entirely.
+                The job wrote a valid ZIP and the success message said it would
+                "appear in storage". storage/app/private is not web-reachable,
+                so every archive ever built was unreachable by the admin who
+                asked for it. Four of them were sitting on this machine. */}
+            {readyExports.length > 0 && (
+                <Card className="mt-4">
+                    <h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                        {t('smart_qr.ready_exports')}
+                    </h3>
+                    <ul className="divide-y divide-neutral-100 dark:divide-neutral-700">
+                        {readyExports.map((x) => (
+                            <li key={x.name} className="flex items-center justify-between py-2 text-sm">
+                                <span className="font-mono text-neutral-700 dark:text-neutral-200">{x.name}</span>
+                                <span className="flex items-center gap-4">
+                                    <span className="text-neutral-500 dark:text-neutral-400">
+                                        {formatBytes(x.size)} · {x.built_at}
+                                    </span>
+                                    <a
+                                        href={route('admin.qr.inventory.export-download', x.name)}
+                                        className="inline-flex items-center gap-1.5 font-medium text-brand-600 hover:text-brand-700"
+                                    >
+                                        <Download className="h-4 w-4" /> {t('smart_qr.download_label')}
+                                    </a>
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </Card>
+            )}
+
             {/* ── §5 export — format choice WITH its real cost ────── */}
             <Modal show={exportOpen} onClose={() => setExportOpen(false)} maxWidth="lg">
                 <Modal.Header title={t('smart_qr.export_title')} onClose={() => setExportOpen(false)} />
@@ -364,6 +396,7 @@ export default function SmartQrInventoryIndex({
                         options={[
                             { value: 'svg', label: t('smart_qr.export_format_svg') },
                             { value: 'png', label: t('smart_qr.export_format_png') },
+                            { value: 'pdf', label: t('smart_qr.export_format_pdf') },
                         ]}
                     />
 
@@ -379,17 +412,18 @@ export default function SmartQrInventoryIndex({
                             })}
                         </p>
                         <p className="mt-1 text-neutral-500 dark:text-neutral-400">
-                            {t('smart_qr.export_size_compare', {
-                                other: exportFormat === 'svg' ? 'PNG' : 'SVG',
-                                otherSize: formatBytes(
-                                    bytesPerCode[exportFormat === 'svg' ? 'png' : 'svg'] * selected.length
-                                ),
+                            {/* ⚠️ Was hard-coded to "the other" of two formats.
+                                With three, a PDF selection would have compared
+                                against SVG and called it the only alternative. */}
+                            {t('smart_qr.export_size_compare_multi', {
+                                others: ['svg', 'png', 'pdf']
+                                    .filter((f) => f !== exportFormat)
+                                    .map((f) => `${f.toUpperCase()} ${formatBytes(bytesPerCode[f] * selected.length)}`)
+                                    .join(', '),
                             })}
                         </p>
                         <p className="mt-2 text-neutral-500 dark:text-neutral-400">
-                            {exportFormat === 'svg'
-                                ? t('smart_qr.export_note_svg')
-                                : t('smart_qr.export_note_png')}
+                            {t(`smart_qr.export_note_${exportFormat}`)}
                         </p>
                         <p className="mt-2 text-neutral-500 dark:text-neutral-400">
                             {t('smart_qr.export_queued_note')}

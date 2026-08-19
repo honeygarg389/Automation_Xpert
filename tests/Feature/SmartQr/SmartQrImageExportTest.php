@@ -98,6 +98,157 @@ class SmartQrImageExportTest extends TestCase
         $this->assertNotFalse(simplexml_load_string($svg), 'The SVG is not well-formed XML.');
     }
 
+    /**
+     * ⚠️ AND THE BAND MUST BE INSIDE THE VIEWPORT. This is the assertion whose
+     * absence let a broken sticker reach the owner.
+     *
+     * The test above passes on an SVG nobody can read the serial on: the text
+     * element is in the file, so assertStringContainsString is satisfied, while
+     * the viewBox still describes the ORIGINAL square. Everything below y=1056
+     * is outside the viewport and no renderer draws it — browser, printer or
+     * Dompdf.
+     *
+     * The cause was a silent no-op: the tag was matched with a pattern that
+     * stopped at height="…", and endroid emits viewBox AFTER height, so the
+     * viewBox was never part of the string being rewritten. The height grew,
+     * the viewBox did not.
+     *
+     * ⚠️ Bytes present is not pixels drawn. This is the visual form of the trap
+     * already recorded twice in CLAUDE.md — assert the stored row, not the
+     * dispatched payload; assert the rendered label, not the translation key.
+     */
+    #[Test]
+    public function the_serial_band_is_inside_the_svg_viewport_and_not_clipped(): void
+    {
+        $svg = $this->renderer()->svg('https://x.test/q/abc', 'AX-000042')['data'];
+
+        $this->assertMatchesRegularExpression('/<svg\b[^>]*>/', $svg);
+        preg_match('/<svg\b[^>]*>/', $svg, $tag);
+
+        $this->assertMatchesRegularExpression('/\bviewBox="0 0 (\d+) (\d+)"/', $tag[0],
+            'The SVG lost its viewBox entirely — it would scale unpredictably in print.');
+        preg_match('/\bviewBox="0 0 (\d+) (\d+)"/', $tag[0], $box);
+        preg_match('/\bheight="(\d+)px"/', $tag[0], $canvas);
+
+        $this->assertSame($canvas[1], $box[2],
+            'The canvas height and the viewBox height disagree. When the serial band was '
+            .'appended the canvas grew and the viewBox did not, so the band is drawn outside '
+            .'the viewport: present in the file, invisible on the sticker and in the PDF.');
+
+        // The serial text must sit within the viewBox, not merely exist.
+        $this->assertMatchesRegularExpression('/<text[^>]*\by="(\d+)"/', $svg);
+        preg_match('/<text[^>]*\by="(\d+)"/', $svg, $text);
+
+        $this->assertLessThanOrEqual((int) $box[2], (int) $text[1],
+            'The serial text is below the bottom of the viewBox and will not render.');
+        $this->assertGreaterThan((int) $box[2] - self::BAND_TOLERANCE, (int) $text[1],
+            'Positive control: the serial should sit in the band at the BOTTOM, not floating '
+            .'somewhere in the middle of the QR where it would obscure modules.');
+    }
+
+    /** Height of the appended band, plus room for the baseline offset. */
+    private const BAND_TOLERANCE = 60;
+
+    // ══ ⚠️ RETRIEVAL — the half that was missing entirely ══════════════════
+
+    /**
+     * ⚠️ A BUILT ARCHIVE MUST BE REACHABLE.
+     *
+     * The job wrote a valid ZIP to storage and the flash said it would "appear
+     * in storage when ready" — with no route, no link and no listing. Four real
+     * archives sat unreachable on the owner's machine. An export whose output
+     * cannot be retrieved is not an export.
+     */
+    #[Test]
+    public function a_finished_export_can_be_listed_and_downloaded(): void
+    {
+        // ⚠️ FAKE THE DISK. Without this the assertions read the developer's
+        // REAL storage/app/private, which already held four archives — the
+        // test failed by counting them, and worse, it WROTE there too.
+        Storage::fake('local');
+
+        $admin = $this->adminWith(['view_qr_inventory']);
+
+        Storage::disk('local')->put('smartqr-exports/20260819-101010-abcdef01.zip', 'PK-fake-zip');
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.index'))
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p
+                ->has('readyExports', 1)
+                ->where('readyExports.0.name', '20260819-101010-abcdef01.zip'));
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.export-download', '20260819-101010-abcdef01.zip'))
+            ->assertOk()
+            ->assertDownload('20260819-101010-abcdef01.zip');
+    }
+
+    /**
+     * ⚠️ The filename is a route parameter interpolated into a storage path.
+     *
+     * Traversal is the obvious attack, and the guard is that the request must
+     * match a file we already listed — not a string check that a future edit
+     * could weaken.
+     */
+    #[Test]
+    public function the_export_download_refuses_a_path_outside_the_export_directory(): void
+    {
+        // ⚠️ FAKE THE DISK. Without this the assertions read the developer's
+        // REAL storage/app/private, which already held four archives — the
+        // test failed by counting them, and worse, it WROTE there too.
+        Storage::fake('local');
+
+        $admin = $this->adminWith(['view_qr_inventory']);
+
+        Storage::disk('local')->put('secrets.txt', 'not yours');
+        Storage::disk('local')->put('smartqr-exports/real.zip', 'PK-fake-zip');
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.export-download', '../secrets.txt'))
+            ->assertNotFound();
+
+        // POSITIVE CONTROL: the same route, same verb, same admin, succeeds for
+        // a legitimate name — so the 404 above is the guard, not a dead route.
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.export-download', 'real.zip'))
+            ->assertOk();
+    }
+
+    /**
+     * ⚠️ PDF was withheld from the bulk export on an unmeasured assumption that
+     * Dompdf would be too slow. Measured at 0.04 s and ~5 KB zipped per code, it
+     * is cheaper than the PNG it sat beside.
+     */
+    #[Test]
+    public function the_export_accepts_pdf_and_writes_pdf_entries(): void
+    {
+        // ⚠️ FAKE THE DISK. Without this the assertions read the developer's
+        // REAL storage/app/private, which already held four archives — the
+        // test failed by counting them, and worse, it WROTE there too.
+        Storage::fake('local');
+
+        $this->assertContains('pdf', GenerateQrExportJob::FORMATS,
+            'PDF is the format a print shop asks for; withholding it was an assumption, not a limit.');
+
+        $code = SmartQrCode::factory()->create(['serial_number' => 'AX-PDF-1']);
+
+        (new GenerateQrExportJob([$code->id], 'pdf'))->handle($this->renderer());
+
+        $files = Storage::disk('local')->files('smartqr-exports');
+        $this->assertCount(1, $files);
+
+        $zip = new \ZipArchive;
+        $zip->open(Storage::disk('local')->path($files[0]));
+
+        $this->assertSame('AX-PDF-1.pdf', $zip->getNameIndex(0),
+            'The archive entry must carry the .pdf extension, or the print shop gets a file '
+            .'their tooling will not open.');
+        $this->assertStringStartsWith('%PDF', (string) $zip->getFromIndex(0),
+            'The entry is not a real PDF.');
+        $zip->close();
+    }
+
     // ══ ⚠️ THE DOMPDF CONVERSION PROOF ═════════════════════════════════════
 
     /**

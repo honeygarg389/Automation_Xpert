@@ -12,11 +12,14 @@ use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use App\Services\AuditLogService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * §5 — QR inventory.
@@ -34,6 +37,8 @@ use Inertia\Response;
  */
 class QrInventoryController extends Controller
 {
+    private const EXPORT_DIR = 'smartqr-exports';
+
     public function index(Request $request): Response
     {
         $filters = $request->validate([
@@ -102,6 +107,8 @@ class QrInventoryController extends Controller
             'exportBytesPerCode' => app(SmartQrImageRenderer::class)
                 ->zippedBytesPerCode(),
             'exportMaxCodes' => GenerateQrExportJob::MAX_CODES,
+            'exportFormats' => GenerateQrExportJob::FORMATS,
+            'readyExports' => $this->readyExports(),
 
             // ⚠️ ADDED IN SLICE 3b, and it is a gap 3a did not notice.
             //
@@ -263,8 +270,66 @@ class QrInventoryController extends Controller
         );
 
         return back()->with('success', __(
-            'Preparing an export of :count code(s). It will appear in storage when ready.',
+            'Preparing an export of :count code(s). It will appear under "Ready exports" on this '
+            .'page once the queue worker has built it.',
             ['count' => count($data['code_ids'])]
         ));
+    }
+
+    /**
+     * Finished archives, newest first.
+     *
+     * ⚠️ THIS IS THE HALF THAT WAS MISSING. The job wrote a perfectly good ZIP
+     * to `storage/app/private/smartqr-exports/` and nothing in the application
+     * could reach it — not a link, not a route, not a listing. An export feature
+     * whose output cannot be retrieved is not a feature.
+     *
+     * @return array<int, array{name: string, size: int, built_at: string}>
+     */
+    private function readyExports(): array
+    {
+        $disk = Storage::disk('local');
+
+        if (! $disk->exists(self::EXPORT_DIR)) {
+            return [];
+        }
+
+        return collect($disk->files(self::EXPORT_DIR))
+            ->filter(fn (string $f) => str_ends_with($f, '.zip'))
+            ->map(fn (string $f) => [
+                'name' => basename($f),
+                'size' => $disk->size($f),
+                'built_at' => date('Y-m-d H:i', $disk->lastModified($f)),
+            ])
+            ->sortByDesc('built_at')
+            ->take(20)
+            ->values()
+            ->all();
+    }
+
+    public function exports(): JsonResponse
+    {
+        return response()->json(['exports' => $this->readyExports()]);
+    }
+
+    /**
+     * ⚠️ `$name` is BASENAME-ONLY and re-validated against the listing.
+     *
+     * A route parameter interpolated into a storage path is a directory
+     * traversal waiting to happen — `..%2f..%2f.env` is the classic. Matching
+     * the request against the files we already decided to expose means a path
+     * that is not in that list cannot be fetched, whatever it contains.
+     */
+    public function downloadExport(string $name): StreamedResponse
+    {
+        $safe = basename($name);
+
+        $known = collect($this->readyExports())->firstWhere('name', $safe);
+
+        if ($known === null) {
+            abort(404);
+        }
+
+        return Storage::disk('local')->download(self::EXPORT_DIR.'/'.$safe);
     }
 }

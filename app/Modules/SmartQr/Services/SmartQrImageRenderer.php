@@ -86,10 +86,13 @@ class SmartQrImageRenderer
      * became the default on a size argument. Measured, in a ZipArchive because
      * that is what the admin actually downloads:
      *
-     *   |          | SVG/code | PNG/code | 500 SVG | 500 PNG |
-     *   |----------|----------|----------|---------|---------|
-     *   | no logo  |   4.5 KB |   6.8 KB |  2.1 MB |  3.2 MB |
-     *   | logo     |  491  KB |  154  KB |  234 MB |   73 MB |
+     *   |          | SVG/code | PNG/code | PDF/code | 500 SVG | 500 PNG | 500 PDF |
+     *   |----------|----------|----------|----------|---------|---------|---------|
+     *   | no logo  |   4.5 KB |   6.8 KB |   4.9 KB |  2.1 MB |  3.2 MB |  2.4 MB |
+     *   | logo     |  491  KB |  154  KB |  486  KB |  234 MB |   73 MB |  232 MB |
+     *
+     * ⚠️ PDF tracks SVG, not PNG, because print.blade.php embeds the SVG as a
+     * base64 data URI — so it inherits the SVG's logo penalty exactly.
      *
      * ⚠️ WITH A LOGO CONFIGURED — the intended production state — SVG IS ROUGHLY
      * 3× LARGER THAN PNG, not smaller.
@@ -109,14 +112,14 @@ class SmartQrImageRenderer
      * format they pick. Re-measure if the logo pipeline changes.
      */
     public const ZIPPED_BYTES_PER_CODE = [
-        'no_logo' => ['svg' => 4_495, 'png' => 6_809],
-        'logo' => ['svg' => 491_000, 'png' => 153_866],
+        'no_logo' => ['svg' => 4_495, 'png' => 6_809, 'pdf' => 4_984],
+        'logo' => ['svg' => 491_000, 'png' => 153_866, 'pdf' => 486_005],
     ];
 
     /**
      * Bytes per code for the currently configured logo state.
      *
-     * @return array{svg: int, png: int}
+     * @return array{svg: int, png: int, pdf: int}
      */
     public function zippedBytesPerCode(): array
     {
@@ -159,20 +162,52 @@ class SmartQrImageRenderer
      */
     private function appendSerialToSvg(string $svg, string $serial): string
     {
-        if (! preg_match('/<svg[^>]*\bwidth="(\d+)px"[^>]*\bheight="(\d+)px"/', $svg, $m)) {
+        // ⚠️ MATCH THE WHOLE OPENING TAG, up to and including the '>'.
+        //
+        // The original pattern stopped at height="…", and in endroid's output the
+        // viewBox comes AFTER height — so the viewBox sat OUTSIDE the matched
+        // span and the replacement below was a silent no-op. The height grew to
+        // 1094 while the viewBox stayed 0 0 1056 1056, which put the serial band
+        // outside the viewport: present in the file, invisible in every renderer,
+        // and inherited by the PDF because pdf() embeds this same SVG.
+        //
+        // ⚠️ That shipped. The slice-8 test asserted the serial STRING was in the
+        // file, which it always was. Bytes present is not pixels drawn — the same
+        // trap as asserting a dispatched payload instead of the stored row.
+        if (! preg_match('/<svg\b[^>]*>/', $svg, $m)
+            || ! preg_match('/\bwidth="(\d+)px"/', $m[0], $w)
+            || ! preg_match('/\bheight="(\d+)px"/', $m[0], $h)) {
             // Shape changed under us — return the QR unlabelled rather than a
             // corrupted file. The test below fails loudly if this ever happens.
             return $svg;
         }
 
-        [$full, $width, $height] = [$m[0], (int) $m[1], (int) $m[2]];
+        [$full, $width, $height] = [$m[0], (int) $w[1], (int) $h[1]];
         $newHeight = $height + self::SVG_LABEL_BAND;
 
-        $svg = str_replace($full, str_replace(
-            ['height="'.$height.'px"', 'viewBox="0 0 '.$width.' '.$height.'"'],
-            ['height="'.$newHeight.'px"', 'viewBox="0 0 '.$width.' '.$newHeight.'"'],
-            $full
-        ), $svg);
+        $tag = preg_replace(
+            '/\bheight="'.$height.'px"/',
+            'height="'.$newHeight.'px"',
+            $full,
+            1
+        );
+
+        // The viewBox must grow with the canvas or the band is clipped. Rewritten
+        // by pattern rather than by exact string, because its value is only
+        // predictable while endroid keeps emitting "0 0 W H".
+        if (preg_match('/\bviewBox="\s*0\s+0\s+'.$width.'\s+'.$height.'\s*"/', $tag)) {
+            $tag = preg_replace(
+                '/\bviewBox="\s*0\s+0\s+'.$width.'\s+'.$height.'\s*"/',
+                'viewBox="0 0 '.$width.' '.$newHeight.'"',
+                $tag,
+                1
+            );
+        } elseif (! str_contains($tag, 'viewBox')) {
+            // No viewBox at all: add one, so the band is inside the viewport.
+            $tag = substr($tag, 0, -1).' viewBox="0 0 '.$width.' '.$newHeight.'">';
+        }
+
+        $svg = str_replace($full, $tag, $svg);
 
         $text = sprintf(
             '<rect x="0" y="%d" width="%d" height="%d" fill="#ffffff"/>'
