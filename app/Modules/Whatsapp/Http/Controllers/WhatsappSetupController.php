@@ -26,6 +26,22 @@ class WhatsappSetupController extends Controller
      * Connect a WhatsApp Business Account with a system-user token supplied by
      * the workspace administrator. The token is encrypted by the model cast
      * before it reaches the database.
+     *
+     * ⚠️ NO app_id IS COLLECTED, deliberately — it was asked for, stored in
+     * meta_json and never read by anything.
+     *
+     * Webhook signature verification uses the PLATFORM Meta app secret
+     * (`CredentialResolver::system()->meta()->appSecret()`), never a per-WABA
+     * app id, and this form collects no app secret — so a customer-supplied
+     * app_id structurally cannot participate in it. Every appId() call site in
+     * the codebase reads the platform credential.
+     *
+     * A required field that is stored and never read is a question the customer
+     * answers for nothing, and it reads as load-bearing to whoever finds it
+     * next. If a future feature needs the customer's own app identity it will
+     * need the SECRET too, and that is a credential decision with its own
+     * storage and rotation questions — not a field to leave lying around
+     * against the possibility.
      */
     public function storeManual(Request $request): RedirectResponse
     {
@@ -33,7 +49,6 @@ class WhatsappSetupController extends Controller
             'waba_id' => ['required', 'string', 'regex:/^\d{5,64}$/'],
             'system_user_token' => ['required', 'string', 'min:20', 'max:4096'],
             'phone_number_id' => ['required', 'string', 'regex:/^\d{5,64}$/'],
-            'app_id' => ['required', 'string', 'regex:/^\d{5,64}$/'],
         ]);
 
         $workspaceId = (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
@@ -118,7 +133,6 @@ class WhatsappSetupController extends Controller
                         'display_name' => $wabaResponse->json('name') ?? $validated['waba_id'],
                         'currency' => $wabaResponse->json('currency'),
                         'timezone_id' => $wabaResponse->json('timezone_id'),
-                        'app_id' => $validated['app_id'],
                         'connected_via' => 'manual_setup',
                     ]),
                 ],

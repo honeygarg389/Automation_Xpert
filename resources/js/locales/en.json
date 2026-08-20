@@ -2686,8 +2686,6 @@
         "manual_access_token": "Meta Access Token",
         "manual_access_token_placeholder": "System user access token",
         "manual_phone_id": "Business Phone Number ID",
-        "manual_app_id": "App ID",
-        "manual_app_id_placeholder": "Meta App ID",
         "manual_save_connect": "Save and connect",
         "manual_connecting": "Saving and connecting…",
         "continue_meta_whatsapp": "Continue with Meta — Connect WhatsApp",

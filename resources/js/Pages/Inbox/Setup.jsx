@@ -552,13 +552,12 @@ function WabaCard({ waba, webhookGlobalUrl, webhookUrl, webhookToken, channelAcc
 
 function ManualWhatsAppForm({ onSuccess }) {
     const { t } = useTranslation();
-    const form = useForm({ waba_id: '', system_user_token: '', phone_number_id: '', app_id: '' });
+    const form = useForm({ waba_id: '', system_user_token: '', phone_number_id: '' });
 
     const fields = [
         { key: 'waba_id', label: t('inbox.manual_waba_id'), placeholder: 'e.g. 123456789012345', inputMode: 'numeric' },
         { key: 'system_user_token', label: t('inbox.manual_access_token'), placeholder: t('inbox.manual_access_token_placeholder'), type: 'password' },
         { key: 'phone_number_id', label: t('inbox.manual_phone_id'), placeholder: 'e.g. 109876543210987', inputMode: 'numeric' },
-        { key: 'app_id', label: t('inbox.manual_app_id'), placeholder: t('inbox.manual_app_id_placeholder'), inputMode: 'numeric' },
     ];
 
     const submit = (event) => {
