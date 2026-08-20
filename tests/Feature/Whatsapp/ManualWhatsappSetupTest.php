@@ -82,7 +82,27 @@ class ManualWhatsappSetupTest extends TestCase
         $this->assertSame($token, $waba->credentials['system_user_token']);
         $this->assertSame('manual_setup', $waba->meta_json['connected_via']);
         $this->assertSame('987654321012345', $waba->meta_json['app_id']);
-        $this->assertNotSame($token, DB::table('whatsapp_business_accounts')->where('id', $waba->id)->value('credentials'));
+        // ⚠️ THE STORED BYTES MUST NOT CONTAIN THE TOKEN.
+        //
+        // This assertion was `assertNotSame($token, $raw)`, which CANNOT FAIL:
+        // if the cast were lost the column would hold
+        //   {"system_user_token":"manual-…","token_source":"manual_setup"}
+        // — plaintext, and not identical to $token, so the comparison passed.
+        // A test named "…encrypts its token" was the only thing between the
+        // owner and credentials stored in the clear, and it could not detect
+        // the failure it is named for.
+        $raw = (string) DB::table('whatsapp_business_accounts')->where('id', $waba->id)->value('credentials');
+
+        $this->assertStringNotContainsString($token, $raw,
+            'The system user token appears verbatim in the stored column. The encrypted:array '
+            .'cast is not being applied — check that `credentials` is still cast and that the '
+            .'write goes through the model rather than the query builder.');
+
+        // POSITIVE CONTROL: it is Laravel ciphertext, not merely absent. A write
+        // that dropped the key entirely would satisfy the assertion above.
+        $this->assertNotSame('', $raw, 'The credentials column is empty — the value was dropped, not encrypted.');
+        $this->assertIsArray(json_decode(base64_decode($raw), true),
+            'The stored value is not a Laravel encryption payload.');
 
         $this->assertDatabaseHas((new WhatsappPhoneNumber())->getTable(), [
             'waba_id_fk' => $waba->id,
