@@ -123,6 +123,29 @@ only because the run was scoped to five files. See BUG-017 in `docs/found-bugs.m
 has never been Pint-formatted, so a full run produces a ~694-file reformat diff that buries
 every real review.
 
+⚠️ **A running `queue:listen` is not evidence that jobs are being processed.** Measured
+2026-08-19: `queue:listen --tries=1 --timeout=0` was up and visible in `ps`, and had consumed
+**nothing since 2026-08-15**. Three days of `GenerateQrExportJob` rows sat at `attempts=0`,
+`reserved_at=NULL` — never picked up, never failed, so `failed_jobs` was empty and every
+dashboard looked clean.
+
+This is not a Smart QR problem. **It silently swallows every queued job in the application** —
+scan recording, automation runs, reconciliation, anything dispatched. The owner's symptom was
+"the QR export does nothing"; the actual blast radius was the whole queue.
+
+Check the queue itself, not the process list:
+
+```bash
+php artisan tinker --execute='foreach (DB::table("jobs")->get() as $j) {
+  printf("%s queue=%s attempts=%s reserved=%s\n", $j->id, $j->queue, $j->attempts,
+    $j->reserved_at ? "yes" : "NEVER"); }'
+```
+
+**`reserved=NEVER` on a row older than a few seconds means no worker is really consuming.**
+`php artisan queue:work --once` in the foreground processes one job and tells you whether the
+queue is healthy — it drained four exports at ~130 ms each with zero failures, which is how the
+listener was proved to be the broken part rather than the jobs.
+
 **Tests run against `whatsmine_test`, never the working database.** `phpunit.xml` pins
 `DB_CONNECTION=mysql` and `DB_DATABASE=whatsmine_test`; `tests/bootstrap.php` aborts the run
 if the resolved schema name does not end in `_test`, and `Tests\TestCase::setUp()` re-checks
@@ -357,6 +380,45 @@ saying adjacent things — which is the duplicate-BUG-007 shape in prose.
   was correct all the way to `create()`. Only reading the row back caught it. Mass assignment
   fails quietly by design, so the payload and the persisted row are two different claims — test
   the second.
+
+- **Bytes present is not pixels drawn.** The third instance of the same trap, and the one that
+  reached a printed artefact. Assert what the user perceives, not what the file contains.
+
+  Smart QR slice 8 found that endroid's `SvgWriter` silently discards a label, and appended the
+  serial band by hand. `appendSerialToSvg()` matched the opening tag with a pattern that stopped
+  at `height="…"` — and endroid emits `viewBox` **after** `height`, so the viewBox sat outside
+  the matched span and its replacement was a **silent no-op**:
+
+      <svg ... width="1056px" height="1094px" viewBox="0 0 1056 1056">
+                              ↑ canvas grew          ↑ viewport did not
+
+  Everything below y=1056 is outside the viewport, so no renderer draws it — browser, printer,
+  or Dompdf, which embeds the same SVG. Every sticker and every PDF shipped without the
+  human-readable serial, which is the only thing tying a sticker back to a row.
+
+  The test asserted `assertStringContainsString($serial, $svg)`. **It always passed** — the text
+  element was in the file the whole time. What was needed was `canvas height == viewBox height`
+  and the text's `y` inside the box. Found by the owner looking at the output, not by the suite.
+
+  The three together — payload vs stored row, translation key vs rendered label, file contents
+  vs rendered pixels — are one rule: **the artefact you assert on must be the artefact the user
+  receives.** Every layer between the two is a place the value can be silently dropped.
+
+- **A written artefact with no route is not a feature.** Ask "how does the user GET this?" before
+  calling an output path done, and make the success message describe only what actually happened.
+
+  Smart QR slice 8's export queued a job that built a correct ZIP into
+  `storage/app/private/smartqr-exports/`. There was no route, no link and no listing — the path
+  is not web-reachable. The admin's success flash read *"It will appear in storage when ready"*,
+  which was **true and useless**: it described a filesystem the admin cannot browse, and it read
+  like completion. Four real archives accumulated unreachable before the owner asked why nothing
+  printed.
+
+  The failure survives review because every piece works: the job is correct, the file is valid,
+  the message is accurate. Only the *join* is missing, and nothing tests a join that was never
+  conceived. Whenever a feature ends in "written to storage", "sent to the queue" or "recorded",
+  name the specific screen or endpoint where a person sees the result — and if there isn't one,
+  that is the unfinished half.
 
 - **Flag ambiguity instead of guessing**, especially on money, entitlements, and isolation.
 - Prefer editing existing files over creating new ones. No new top-level directories without
