@@ -8,7 +8,61 @@ use Database\Factories\WhatsappBusinessAccountFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * A Meta WhatsApp Business Account connected to one workspace.
+ *
+ * ⚠️ @property annotations added following the decision recorded on
+ * ChannelAccount for BUG-002: annotate properly rather than let
+ * `property.notFound` accumulate. `checkModelProperties` is on and larastan
+ * cannot infer columns for this model.
+ *
+ * Types are taken from the live schema, not guessed:
+ * `credentials`, `webhook_verify_token`, `webhook_verify_token_hash` and
+ * `meta_json` are all NULLABLE columns, and typing them non-null would have
+ * been a worse lie than the missing annotation.
+ *
+ * ⚠️ CORRECTION — an earlier version of this comment claimed the annotation
+ * caused, and would remove, the `nullsafe.neverNull` warnings on
+ * `WhatsappSetupController`. THAT WAS WRONG, twice over.
+ *
+ * It was wrong on cause: module-wide `nullsafe.neverNull` measured 4 before the
+ * annotation and 4 after, so the annotation neither created nor removed them.
+ * PHPStan was never inferring the model non-null — a `dumpType` probe on
+ * `WhatsappBusinessAccount::where(...)->first()` returns
+ * `WhatsappBusinessAccount|null`, correctly.
+ *
+ * It was wrong on substance: those warnings were not spurious. Both sites sat
+ * on the LEFT of `??`, and in PHP 8 a property read on null under `??` is
+ * suppressed and yields null. So `$x?->p ?? $d` and `$x->p ?? $d` are identical
+ * in every case INCLUDING null — there is no null dereference in either form,
+ * and PHPStan flags the `?->` as genuinely redundant for exactly that reason.
+ * Both have been simplified to `->`.
+ *
+ * ⚠️ That reasoning applies ONLY to `?->` sitting on the left of `??`. It says
+ * nothing about a bare `$x->p` with no coalesce, which does still fatal on null,
+ * and it is unrelated to the DecryptException point below — do not merge the
+ * two.
+ *
+ * ⚠️ `credentials` is `encrypted:array` and `webhook_verify_token` is
+ * `encrypted`, so the annotated types describe the value AFTER the cast. As
+ * ChannelAccount records, typing a decrypted attribute can make PHPStan believe
+ * the access cannot throw, while at runtime a corrupt payload raises
+ * DecryptException. Any catch around a read of these two is live — do not
+ * remove one because the tool calls it unreachable.
+ *
+ * @property int $id
+ * @property int $workspace_id
+ * @property string $waba_id
+ * @property array<string, mixed>|null $credentials
+ * @property string|null $webhook_verify_token
+ * @property string|null $webhook_verify_token_hash
+ * @property string $status
+ * @property array<string, mixed>|null $meta_json
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ */
 class WhatsappBusinessAccount extends Model
 {
     use HasFactory;
@@ -35,6 +89,18 @@ class WhatsappBusinessAccount extends Model
         ];
     }
 
+    /**
+     * ⚠️ TYPED, and not decoration. Without the generics `->first()` on this
+     * relation degrades to a bare Illuminate\...\Model, so reading
+     * `->phone_number_id` off it was `property.notFound` — an error that looked
+     * like a missing @property on THIS model but belongs to the related one.
+     *
+     * The form matches the Partner / Client / User precedent already in the
+     * codebase for larastan v3.9.6: <TRelatedModel, TDeclaringModel>, which is
+     * the pair PHPStan names in its own message.
+     *
+     * @return HasMany<WhatsappPhoneNumber, $this>
+     */
     public function phoneNumbers(): HasMany
     {
         return $this->hasMany(WhatsappPhoneNumber::class, 'waba_id_fk');

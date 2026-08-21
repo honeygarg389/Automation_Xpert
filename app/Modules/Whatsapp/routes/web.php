@@ -16,6 +16,7 @@ Route::middleware(['web', 'client-app'])->prefix('app/whatsapp')->name('client.w
     // Setup GET redirects to the unified Channel Setup page
     Route::get('/setup', fn () => redirect()->route('client.inbox.setup'))->name('setup');
     Route::post('/setup/embedded-signup', [WhatsappEmbeddedSignupController::class, 'store'])->name('setup.embedded-signup');
+    Route::post('/setup/manual', [WhatsappSetupController::class, 'storeManual'])->name('setup.manual');
     Route::post('/setup/{waba}/reregister-webhook', [WhatsappEmbeddedSignupController::class, 'reregisterWebhook'])->name('setup.reregister-webhook');
     Route::delete('/setup/{waba}', [WhatsappSetupController::class, 'destroy'])->name('setup.destroy');
     Route::post('/setup/{waba}/sync-phone-numbers', [WhatsappSetupController::class, 'syncPhoneNumbers'])->name('setup.sync-phone-numbers');

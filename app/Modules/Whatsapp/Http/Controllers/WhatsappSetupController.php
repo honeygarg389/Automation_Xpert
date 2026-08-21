@@ -2,6 +2,7 @@
 
 namespace App\Modules\Whatsapp\Http\Controllers;
 
+use App\Exceptions\ChannelAlreadyConnectedException;
 use App\Http\Controllers\Controller;
 use App\Modules\Integrations\Services\CredentialResolver;
 use App\Modules\Shared\Models\ChannelAccount;
@@ -14,10 +15,135 @@ use Illuminate\Http\Client\ConnectionException as HttpConnectionException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class WhatsappSetupController extends Controller
 {
+    /**
+     * Connect a WhatsApp Business Account with a system-user token supplied by
+     * the workspace administrator. The token is encrypted by the model cast
+     * before it reaches the database.
+     *
+     * ⚠️ NO app_id IS COLLECTED, deliberately — it was asked for, stored in
+     * meta_json and never read by anything.
+     *
+     * Webhook signature verification uses the PLATFORM Meta app secret
+     * (`CredentialResolver::system()->meta()->appSecret()`), never a per-WABA
+     * app id, and this form collects no app secret — so a customer-supplied
+     * app_id structurally cannot participate in it. Every appId() call site in
+     * the codebase reads the platform credential.
+     *
+     * A required field that is stored and never read is a question the customer
+     * answers for nothing, and it reads as load-bearing to whoever finds it
+     * next. If a future feature needs the customer's own app identity it will
+     * need the SECRET too, and that is a credential decision with its own
+     * storage and rotation questions — not a field to leave lying around
+     * against the possibility.
+     */
+    public function storeManual(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'waba_id' => ['required', 'string', 'regex:/^\d{5,64}$/'],
+            'system_user_token' => ['required', 'string', 'min:20', 'max:4096'],
+            'phone_number_id' => ['required', 'string', 'regex:/^\d{5,64}$/'],
+        ]);
+
+        $workspaceId = (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
+
+        $ownedElsewhere = WhatsappBusinessAccount::where('waba_id', $validated['waba_id'])
+            ->where('workspace_id', '!=', $workspaceId)
+            ->exists();
+        if ($ownedElsewhere) {
+            return back()->withErrors([
+                'waba_id' => 'This WhatsApp Business Account is already connected to another workspace.',
+            ]);
+        }
+
+        try {
+            app(ChannelAccountRouting::class)->resolveForAttach(
+                $workspaceId,
+                'whatsapp',
+                ['phone_number_id' => $validated['phone_number_id']],
+            );
+        } catch (ChannelAlreadyConnectedException $exception) {
+            return back()->withErrors(['phone_number_id' => $exception->getMessage()]);
+        }
+
+        try {
+            $wabaResponse = Http::withToken($validated['system_user_token'])
+                ->timeout(20)
+                ->get("https://graph.facebook.com/v20.0/{$validated['waba_id']}", [
+                    'fields' => 'id,name,currency,timezone_id',
+                ]);
+
+            if (! $wabaResponse->successful() || (string) $wabaResponse->json('id') !== $validated['waba_id']) {
+                return back()->withErrors([
+                    'waba_id' => 'Meta could not validate this WhatsApp Business Account ID with the supplied access token.',
+                ]);
+            }
+
+            $phoneNumbers = CloudApiClient::fetchWabaPhoneNumbers($validated['waba_id'], $validated['system_user_token']);
+            $phoneRow = collect($phoneNumbers)->first(
+                fn (array $row) => (string) ($row['id'] ?? '') === $validated['phone_number_id'],
+            );
+            if (! $phoneRow) {
+                return back()->withErrors([
+                    'phone_number_id' => 'This phone number is not assigned to the WhatsApp Business Account provided.',
+                ]);
+            }
+
+            $phoneDetails = CloudApiClient::fetchPhoneNumberDetails(
+                $validated['phone_number_id'],
+                $validated['system_user_token'],
+            );
+            if (is_array($phoneDetails)) {
+                $phoneRow = array_merge($phoneRow, $phoneDetails);
+            }
+        } catch (\Throwable $exception) {
+            Log::warning('WhatsApp manual setup validation failed', [
+                'workspace_id' => $workspaceId,
+                'waba_id' => $validated['waba_id'],
+                'phone_number_id' => $validated['phone_number_id'],
+                'exception' => $exception->getMessage(),
+            ]);
+
+            return back()->withErrors([
+                'system_user_token' => 'Meta could not validate these credentials. Check the token permissions and try again.',
+            ]);
+        }
+
+        $existingWaba = WhatsappBusinessAccount::where('workspace_id', $workspaceId)
+            ->where('waba_id', $validated['waba_id'])
+            ->first();
+
+        DB::transaction(function () use ($existingWaba, $workspaceId, $validated, $wabaResponse, $phoneRow): void {
+            $waba = WhatsappBusinessAccount::updateOrCreate(
+                ['workspace_id' => $workspaceId, 'waba_id' => $validated['waba_id']],
+                [
+                    'credentials' => [
+                        'system_user_token' => $validated['system_user_token'],
+                        'token_source' => 'manual_setup',
+                    ],
+                    'webhook_verify_token' => $existingWaba->webhook_verify_token ?? Str::random(48),
+                    'status' => 'active',
+                    'meta_json' => array_merge($existingWaba->meta_json ?? [], [
+                        'display_name' => $wabaResponse->json('name') ?? $validated['waba_id'],
+                        'currency' => $wabaResponse->json('currency'),
+                        'timezone_id' => $wabaResponse->json('timezone_id'),
+                        'connected_via' => 'manual_setup',
+                    ]),
+                ],
+            );
+
+            $this->attachPhoneNumberToWaba($waba, $validated['phone_number_id'], $phoneRow);
+        });
+
+        return back()->with('success', 'WhatsApp Business Account connected successfully. Configure the displayed webhook URL in Meta to receive messages.');
+    }
+
     public function syncPhoneNumbers(Request $request, WhatsappBusinessAccount $waba): RedirectResponse
     {
         $workspaceId = WorkspaceContext::id() ?? $request->user()->workspace_id;

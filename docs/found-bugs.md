@@ -2707,3 +2707,81 @@ exists to use. That is a decision for the owner before any print run:
 
 Recorded here rather than only in the rulings because it is the one item in this module that
 **cannot be resolved in code**.
+
+---
+
+## BUG-039 — `CampaignController::index()` line 462 returns a collection PHPStan cannot reconcile with itself
+
+- **Severity:** Low — static-analysis only. No runtime symptom has been observed, and the page
+  works; the value of recording it is that it currently sits behind two baseline patterns that no
+  longer match it.
+- **Status:** **OPEN — not fixed, deliberately.** Surfaced 2026-08-21 while annotating
+  `WhatsappPhoneNumber` for BUG-002.
+- **Files:** `app/Modules/Broadcasting/Http/Controllers/CampaignController.php:462`
+
+### The error, quoted in full
+
+```
+Anonymous function should return Illuminate\Support\Collection<int, array{phone_number_id: mixed,
+display_phone: mixed, verified_name: mixed, waba_id: string}> but returns
+Illuminate\Support\Collection<int, array{phone_number_id: mixed, display_phone: mixed,
+verified_name: mixed, waba_id: string}>.  [identifier=return.type]
+```
+
+⚠️ **The expected type and the actual type print identically.** That is not a transcription
+error — it is the whole oddity. PHPStan is distinguishing two types it renders with the same
+string, which points at generic variance inside the collection rather than at a visibly wrong
+value being returned.
+
+The code:
+
+```php
+$whatsappPhoneNumbers = WhatsappBusinessAccount::where('workspace_id', $workspaceId)
+    ->where('status', 'active')
+    ->with('phoneNumbers')
+    ->get()
+    ->flatMap(fn ($waba) => $waba->phoneNumbers->map(fn ($p) => [
+        'phone_number_id' => $p->phone_number_id,
+        ...
+    ]))
+    ->values();
+```
+
+### ⚠️ It PRE-EXISTED. It was surfaced, not caused
+
+`CampaignController.php` is **untouched by the `manual-setup` branch** — `git diff master` on it
+is empty, and it was last modified on 2026-08-06 by an unrelated WorkspaceContext change. The
+defect has been there since.
+
+What changed is only how PHPStan *describes* it. Adding
+`@return HasMany<WhatsappPhoneNumber, $this>` to `WhatsappBusinessAccount::phoneNumbers()` let
+the analyser resolve `$waba->phoneNumbers` to its real type instead of falling back, so the
+message text moved from `Collection<int, WhatsappBusinessAccount>` to
+`Collection<int, array{…}>`.
+
+### ⚠️ Two baseline patterns are now stale BY WORDING, and must not be deleted
+
+`phpstan-baseline.neon` carries two entries for this line:
+
+- `#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,…WhatsappBusinessAccount…$#`
+- `#^Return type of call to method Illuminate\\Support\\Collection\<int,…WhatsappBusinessAccount…$#`
+
+Both now report `ignore.unmatched`, because the message they were written against no longer
+appears. **They were deliberately left in place.** Deleting them is the obvious-looking move and
+it is wrong: the defect at 462 is still live, and removing the patterns would simply un-suppress
+it under its new name while pretending something had been fixed.
+
+Rewriting the two patterns to match the new text would be worse — it re-suppresses a live defect
+and buys nothing but a quieter baseline.
+
+**The correct fix is at line 462**, either by giving the closure an explicit return type or by
+normalising the inner `map()` through `->all()` / a base collection so the generic stops being
+invariant against itself. Until someone does that, the two stale patterns are the honest record
+that something there is unresolved.
+
+### Why this is recorded rather than fixed here
+
+Fixing it means changing broadcasting behaviour in a task about model annotations, on a branch
+whose diff is meant to be reviewable as BUG-002 work. The annotation task's job was to stop
+hiding it; the fix belongs to whoever owns that controller.
+

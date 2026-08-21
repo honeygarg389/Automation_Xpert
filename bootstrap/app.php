@@ -146,6 +146,30 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        // ⚠️ NEVER FLASH CREDENTIALS BACK INTO THE SESSION.
+        //
+        // On a validation failure Laravel calls
+        //   withInput(Arr::except($request->input(), $dontFlash))
+        // and the framework default covers only password fields. Everything else
+        // the user typed is written to the session store — which here is the
+        // `sessions` TABLE with `session.encrypt = false`, so the payload is
+        // base64 of serialized PHP and trivially recoverable.
+        //
+        // A pasted Meta system-user token is a long-lived credential for the
+        // customer's entire WhatsApp Business Account. One mistyped field length
+        // was enough to persist it in the clear.
+        //
+        // The identifiers travel with it: they are not secret on their own, but
+        // together they are the whole connection, and there is no reason to keep
+        // any of it after the request fails.
+        $exceptions->dontFlash([
+            'system_user_token',
+            'access_token',
+            'waba_id',
+            'phone_number_id',
+            'app_id',
+        ]);
+
         $exceptions->reportable(function (Throwable $e) {
             Log::channel('errors')->error($e->getMessage(), [
                 'exception' => get_class($e),

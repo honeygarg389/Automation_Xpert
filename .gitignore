@@ -43,3 +43,8 @@ database/.DS_Store
 # nobody ran `git add -A` while it sat in the working tree. These files hold
 # credentials and machine-specific paths; they must never be tracked again.
 .claude/
+
+# Design-QA output. Regenerated per run and frequently reports "blocked" when no
+# browser render was possible — committing that would record a QA that did not
+# happen. Keep it local.
+design-qa.md

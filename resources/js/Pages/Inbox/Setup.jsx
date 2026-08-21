@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useForm } from '@inertiajs/react';
 
 /* brand logos (accurate official paths) */
 
@@ -377,7 +378,7 @@ function CodeField({ label, value, icon: Icon }) {
     );
 }
 
-function WabaCard({ waba, webhookGlobalUrl, channelAccounts, chatbots }) {
+function WabaCard({ waba, webhookGlobalUrl, webhookUrl, webhookToken, channelAccounts, chatbots }) {
     const { t } = useTranslation();
     const [confirmDelete, setConfirmDelete] = useState(false);
     const [deleting, setDeleting]           = useState(false);
@@ -385,6 +386,8 @@ function WabaCard({ waba, webhookGlobalUrl, channelAccounts, chatbots }) {
     const [reregistering, setReregistering] = useState(false);
     const [reregisterMsg, setReregisterMsg] = useState(null);
     const phoneList = waba.phone_numbers ?? waba.phoneNumbers ?? [];
+    const isManualSetup = waba.meta_json?.connected_via === 'manual_setup';
+    const callbackUrl = isManualSetup && webhookToken ? `${webhookUrl}/${webhookToken}` : webhookGlobalUrl;
 
     const caByPhone = {};
     (channelAccounts ?? []).forEach(ca => { caByPhone[String(ca.phone_number_id)] = ca; });
@@ -477,22 +480,26 @@ function WabaCard({ waba, webhookGlobalUrl, channelAccounts, chatbots }) {
             )}
 
             <div className="p-4 space-y-4">
-                {/* Webhook — always global for embedded signup */}
+                {/* Embedded signup uses a shared callback; manual setup has a per-WABA callback. */}
                 <div className="space-y-2">
-                    <CodeField label={t('inbox.webhook_url')} value={webhookGlobalUrl} icon={Webhook} />
+                    <CodeField label={t('inbox.webhook_url')} value={callbackUrl} icon={Webhook} />
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">
-                        {t('inbox.registered_via_embedded')}
+                        {isManualSetup ? t('inbox.registered_via_manual') : t('inbox.registered_via_embedded')}
                     </p>
-                    <div className="flex items-center gap-2 flex-wrap">
-                        <button type="button" onClick={reregisterWebhook} disabled={reregistering}
-                            className="flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 disabled:opacity-60 font-medium transition">
-                            <RefreshCw className={`h-3 w-3 ${reregistering ? 'animate-spin' : ''}`} />
-                            {reregistering ? t('inbox.reregistering') : t('inbox.reregister_webhook')}
-                        </button>
-                        {reregisterMsg && (
-                            <span className="text-xs text-neutral-500 dark:text-neutral-400">{reregisterMsg}</span>
-                        )}
-                    </div>
+                    {isManualSetup ? (
+                        <CodeField label={t('inbox.verify_token')} value={webhookToken} icon={ShieldCheck} />
+                    ) : (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button type="button" onClick={reregisterWebhook} disabled={reregistering}
+                                className="flex items-center gap-1 text-xs text-brand-600 dark:text-brand-400 hover:text-brand-700 disabled:opacity-60 font-medium transition">
+                                <RefreshCw className={`h-3 w-3 ${reregistering ? 'animate-spin' : ''}`} />
+                                {reregistering ? t('inbox.reregistering') : t('inbox.reregister_webhook')}
+                            </button>
+                            {reregisterMsg && (
+                                <span className="text-xs text-neutral-500 dark:text-neutral-400">{reregisterMsg}</span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Phone numbers */}
@@ -543,10 +550,63 @@ function WabaCard({ waba, webhookGlobalUrl, channelAccounts, chatbots }) {
     );
 }
 
-function WhatsAppSection({ wabas, webhookGlobalUrl, channelAccountsByWaba, chatbots, showForm, setShowForm, metaConfigIdWhatsapp, metaAppId }) {
+function ManualWhatsAppForm({ onSuccess }) {
+    const { t } = useTranslation();
+    const form = useForm({ waba_id: '', system_user_token: '', phone_number_id: '' });
+
+    const fields = [
+        { key: 'waba_id', label: t('inbox.manual_waba_id'), placeholder: 'e.g. 123456789012345', inputMode: 'numeric' },
+        { key: 'system_user_token', label: t('inbox.manual_access_token'), placeholder: t('inbox.manual_access_token_placeholder'), type: 'password' },
+        { key: 'phone_number_id', label: t('inbox.manual_phone_id'), placeholder: 'e.g. 109876543210987', inputMode: 'numeric' },
+    ];
+
+    const submit = (event) => {
+        event.preventDefault();
+        form.post(route('client.whatsapp.setup.manual'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                form.reset();
+                onSuccess?.();
+            },
+        });
+    };
+
+    return (
+        <form onSubmit={submit} className="space-y-4">
+            <p className="text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">
+                {t('inbox.manual_setup_help')}
+            </p>
+            {fields.map(({ key, label, placeholder, type = 'text', inputMode }) => (
+                <label key={key} className="block">
+                    <span className="mb-1.5 block text-xs font-semibold text-neutral-700 dark:text-neutral-200">{label}</span>
+                    <input
+                        type={type}
+                        inputMode={inputMode}
+                        autoComplete="off"
+                        value={form.data[key]}
+                        onChange={event => form.setData(key, event.target.value)}
+                        placeholder={placeholder}
+                        className={`w-full rounded-xl border bg-white px-3.5 py-2.5 text-sm text-neutral-800 placeholder:text-neutral-400 focus:outline-none focus:ring-2 dark:bg-neutral-800 dark:text-neutral-100 ${form.errors[key] ? 'border-red-400 focus:border-red-500 focus:ring-red-500/20' : 'border-neutral-300 focus:border-green-500 focus:ring-green-500/20 dark:border-neutral-600'}`}
+                    />
+                    {form.errors[key] && <span className="mt-1.5 block text-xs text-red-500">{form.errors[key]}</span>}
+                </label>
+            ))}
+            <button
+                type="submit"
+                disabled={form.processing}
+                className="w-full rounded-xl bg-[#25D366] px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#1ebe5d] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+                {form.processing ? t('inbox.manual_connecting') : t('inbox.manual_save_connect')}
+            </button>
+        </form>
+    );
+}
+
+function WhatsAppSection({ wabas, webhookGlobalUrl, webhookUrl, webhookTokensByWaba, channelAccountsByWaba, chatbots, showForm, setShowForm, metaConfigIdWhatsapp, metaAppId }) {
     const { t } = useTranslation();
     const [waApiError, setWaApiError] = useState(null);
     const [waSubmitting, setWaSubmitting] = useState(false);
+    const [connectionMethod, setConnectionMethod] = useState('manual');
 
     const handleWaEmbeddedCode = useCallback(async (code, wabaId, phoneNumberId = null) => {
         setWaApiError(null);
@@ -594,6 +654,8 @@ function WhatsAppSection({ wabas, webhookGlobalUrl, channelAccountsByWaba, chatb
                             key={waba.id}
                             waba={waba}
                             webhookGlobalUrl={webhookGlobalUrl}
+                            webhookUrl={webhookUrl}
+                            webhookToken={webhookTokensByWaba?.[waba.id]}
                             channelAccounts={channelAccountsByWaba?.[waba.id] ?? []}
                             chatbots={chatbots}
                         />
@@ -612,7 +674,19 @@ function WhatsAppSection({ wabas, webhookGlobalUrl, channelAccountsByWaba, chatb
 
             {showForm && (
                 <div className={`${wabas.length > 0 ? 'mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800' : ''} space-y-3`}>
-                    {metaConfigIdWhatsapp ? (
+                    <div className="grid grid-cols-2 rounded-xl border border-neutral-200 bg-neutral-50 p-1 dark:border-neutral-700 dark:bg-neutral-800">
+                        <button type="button" onClick={() => setConnectionMethod('embedded')}
+                            className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${connectionMethod === 'embedded' ? 'bg-white text-neutral-900 shadow-sm dark:bg-neutral-700 dark:text-white' : 'text-neutral-500 dark:text-neutral-400'}`}>
+                            {t('inbox.embed_login')}
+                        </button>
+                        <button type="button" onClick={() => setConnectionMethod('manual')}
+                            className={`rounded-lg px-3 py-2 text-xs font-semibold transition ${connectionMethod === 'manual' ? 'bg-[#25D366] text-white shadow-sm' : 'text-neutral-500 dark:text-neutral-400'}`}>
+                            {t('inbox.manual_setup')}
+                        </button>
+                    </div>
+                    {connectionMethod === 'manual' ? (
+                        <ManualWhatsAppForm onSuccess={() => setShowForm(false)} />
+                    ) : metaConfigIdWhatsapp ? (
                         <>
                             <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">
                                 {t('inbox.authorize_whatsapp_help')}
@@ -1106,7 +1180,7 @@ function ConnectDrawer({ open, onClose, title, icon: Icon, iconBg, children }) {
 /* â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ page root â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ */
 
 export default function ChannelSetup({
-    wabas, whatsappWebhookGlobalUrl,
+    wabas, whatsappWebhookUrl, whatsappWebhookGlobalUrl, webhookTokensByWaba,
     channelAccountsByWaba, instagramAccounts, messengerAccounts, metaWebhookUrl,
     metaAppId = null, metaConfigIdWhatsapp = null, metaConfigIdSocial = null,
     chatbots = [],
@@ -1180,6 +1254,8 @@ export default function ChannelSetup({
                 <WhatsAppSection
                     wabas={wabas}
                     webhookGlobalUrl={whatsappWebhookGlobalUrl}
+                    webhookUrl={whatsappWebhookUrl}
+                    webhookTokensByWaba={webhookTokensByWaba}
                     channelAccountsByWaba={channelAccountsByWaba ?? {}}
                     chatbots={chatbots}
                     showForm={false}
@@ -1305,6 +1381,8 @@ export default function ChannelSetup({
                 <WhatsAppSection
                     wabas={wabas}
                     webhookGlobalUrl={whatsappWebhookGlobalUrl}
+                    webhookUrl={whatsappWebhookUrl}
+                    webhookTokensByWaba={webhookTokensByWaba}
                     channelAccountsByWaba={channelAccountsByWaba ?? {}}
                     chatbots={chatbots}
                     showForm={showWabaForm}
@@ -1332,6 +1410,3 @@ export default function ChannelSetup({
         </ClientLayout>
     );
 }
-
-
-
