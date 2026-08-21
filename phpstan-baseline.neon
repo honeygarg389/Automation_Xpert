@@ -3722,11 +3722,6 @@ parameters:
 			count: 1
 			path: app/Modules/Broadcasting/Http/Controllers/CampaignController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$waba_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Broadcasting/Http/Controllers/CampaignController.php
 
 		-
 			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappTemplate\:\:\$status\.$#'
@@ -4208,17 +4203,7 @@ parameters:
 			count: 2
 			path: app/Modules/Inbox/Http/Controllers/InboxSetupController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$waba_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Inbox/Http/Controllers/InboxSetupController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$webhook_verify_token\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Inbox/Http/Controllers/InboxSetupController.php
 
 		-
 			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Modules\\Shared\\Models\\ChannelAccount\>\:\:map\(\) contains unresolvable type\.$#'
@@ -5480,17 +5465,7 @@ parameters:
 			count: 1
 			path: app/Modules/Whatsapp/Http/Controllers/WhatsappAutoReplyController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$waba_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappEmbeddedSignupController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$workspace_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappEmbeddedSignupController.php
 
 		-
 			message: '#^Method App\\Modules\\Whatsapp\\Http\\Controllers\\WhatsappEmbeddedSignupController\:\:attachPhoneNumber\(\) has parameter \$metaRow with no value type specified in iterable type array\.$#'
@@ -5498,53 +5473,13 @@ parameters:
 			count: 1
 			path: app/Modules/Whatsapp/Http/Controllers/WhatsappEmbeddedSignupController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$waba_id\.$#'
-			identifier: property.notFound
-			count: 6
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappSetupController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$webhook_verify_token\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappSetupController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$workspace_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappSetupController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$waba_id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappPhoneNumber\:\:\$display_phone\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappPhoneNumber\:\:\$phone_number_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappPhoneNumber\:\:\$verified_name\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappPhoneNumber\:\:\$waba_id_fk\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
 		-
 			message: '#^Anonymous function has an unused use \$wabaIdMap\.$#'
@@ -5564,29 +5499,9 @@ parameters:
 			count: 1
 			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Modules\\Whatsapp\\Models\\WhatsappPhoneNumber\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
-		-
-			message: '#^Return type of call to method Illuminate\\Database\\Eloquent\\Collection\<int,App\\Modules\\Whatsapp\\Models\\WhatsappPhoneNumber\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: method.unresolvableReturnType
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$webhook_verify_token\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappWebhookController.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$workspace_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Whatsapp/Http/Controllers/WhatsappWebhookController.php
 
 		-
 			message: '#^Unable to resolve the template type TFlatMapKey in call to method Illuminate\\Support\\Collection\<\(int\|string\),mixed\>\:\:flatMap\(\)$#'
@@ -5630,17 +5545,7 @@ parameters:
 			count: 1
 			path: app/Modules/Whatsapp/Jobs/ProcessInboundMessageJob.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$waba_id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Modules/Whatsapp/Jobs/TemplateSyncJob.php
 
-		-
-			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:\$workspace_id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Modules/Whatsapp/Jobs/TemplateSyncJob.php
 
 		-
 			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappAutoReply\:\:\$match_mode\.$#'
@@ -5666,11 +5571,6 @@ parameters:
 			count: 1
 			path: app/Modules/Whatsapp/Models/WhatsappBusinessAccount.php
 
-		-
-			message: '#^Method App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:phoneNumbers\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'
-			identifier: missingType.generics
-			count: 1
-			path: app/Modules/Whatsapp/Models/WhatsappBusinessAccount.php
 
 		-
 			message: '#^Method App\\Modules\\Whatsapp\\Models\\WhatsappBusinessAccount\:\:templates\(\) return type with generic class Illuminate\\Database\\Eloquent\\Relations\\HasMany does not specify its types\: TRelatedModel, TDeclaringModel$#'

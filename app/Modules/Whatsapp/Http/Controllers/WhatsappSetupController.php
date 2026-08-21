@@ -127,9 +127,9 @@ class WhatsappSetupController extends Controller
                         'system_user_token' => $validated['system_user_token'],
                         'token_source' => 'manual_setup',
                     ],
-                    'webhook_verify_token' => $existingWaba?->webhook_verify_token ?? Str::random(48),
+                    'webhook_verify_token' => $existingWaba->webhook_verify_token ?? Str::random(48),
                     'status' => 'active',
-                    'meta_json' => array_merge($existingWaba?->meta_json ?? [], [
+                    'meta_json' => array_merge($existingWaba->meta_json ?? [], [
                         'display_name' => $wabaResponse->json('name') ?? $validated['waba_id'],
                         'currency' => $wabaResponse->json('currency'),
                         'timezone_id' => $wabaResponse->json('timezone_id'),
