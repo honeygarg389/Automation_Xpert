@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination } from '@/Components/ui';
+import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Textarea } from '@/Components/ui';
 import { Layers, Plus, Pencil, Trash2, Archive } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BatchStatusBadge } from '../QrStatusBadge';
@@ -48,7 +48,13 @@ function CreateBatchModal({ show, onClose }) {
                         {t('smart_qr.create_batch_subtitle')}
                     </p>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Section heading matches Admin/Plans/PlanForm.jsx — the
+                        existing multi-section admin form. No new typography. */}
+                    <section>
+                        <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                            {t('smart_qr.section_batch_information')}
+                        </h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
                         <Input
                             label={t('smart_qr.field_batch_name')}
                             value={data.batch_name}
@@ -85,6 +91,7 @@ function CreateBatchModal({ show, onClose }) {
                             onChange={(e) => setData('quantity', e.target.value)}
                             min="1"
                             max="10000"
+                            hint={t('smart_qr.quantity_hint')}
                             error={errors.quantity}
                             required
                         />
@@ -110,19 +117,22 @@ function CreateBatchModal({ show, onClose }) {
                             placeholder={t('smart_qr.qr_type_placeholder')}
                             error={errors.qr_type}
                         />
-                    </div>
+                        </div>
 
-                    <div>
-                        <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                            {t('smart_qr.field_default_message')}
-                        </label>
-                        <textarea
-                            value={data.default_message}
-                            onChange={(e) => setData('default_message', e.target.value)}
-                            rows={2}
-                            className="w-full rounded-soft border border-soft border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 shadow-inner focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                        />
-                    </div>
+                        {/* ⚠️ Was a hand-rolled <textarea> with Input's classes
+                            pasted inline and NO error slot — a validation failure
+                            on this field rendered nothing. The shared Textarea
+                            carries the error branch. */}
+                        <div className="mt-4">
+                            <Textarea
+                                label={t('smart_qr.field_default_message')}
+                                value={data.default_message}
+                                onChange={(e) => setData('default_message', e.target.value)}
+                                rows={2}
+                                error={errors.default_message}
+                            />
+                        </div>
+                    </section>
 
                     {/* Preview of the range, so the operator sees what will be
                         printed before the queued job starts. Mirrors the server's
