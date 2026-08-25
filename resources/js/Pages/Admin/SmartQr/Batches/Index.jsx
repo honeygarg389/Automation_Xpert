@@ -5,6 +5,7 @@ import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Textar
 import { Layers, Plus, Pencil, Trash2, Archive } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BatchStatusBadge } from '../QrStatusBadge';
+import { formatDateTz } from '@/Utils/datetime';
 
 /**
  * §4 — QR batches.
@@ -155,6 +156,46 @@ function CreateBatchModal({ show, onClose }) {
     );
 }
 
+/**
+ * Neutral confirm for retiring a batch.
+ *
+ * ⚠️ NOT ConfirmDestructiveModal, deliberately. That component is documented as
+ * "Typed confirmation for an irreversible action" and renders a red button
+ * behind a type-the-word gate — correct for delete, wrong signal for retire.
+ * Retiring KEEPS every row: the codes stay in inventory, stop being assignable,
+ * and a scan reports the QR inactive. Framing a reversible state change in the
+ * same red as an unrecoverable delete teaches operators to click through both.
+ *
+ * Structure copied from DeleteConfirmModal in Admin/Plans/Index.jsx — the
+ * existing click-to-confirm precedent — minus its red button override.
+ */
+function RetireConfirmModal({ show, batch, onClose, onConfirm }) {
+    const { t } = useTranslation();
+    if (! batch) return null;
+    return (
+        <Modal show={show} onClose={onClose} maxWidth="sm">
+            <Modal.Header title={t('smart_qr.retire_batch')} onClose={onClose} />
+            <Modal.Body>
+                <p className="text-neutral-600 dark:text-neutral-400">
+                    {t('smart_qr.retire_batch_body')}
+                </p>
+                <p className="mt-2 font-medium text-neutral-900 dark:text-neutral-100">
+                    {batch.batch_name}
+                </p>
+                <p className="mt-0.5 font-mono text-xs text-neutral-500 dark:text-neutral-400">
+                    {batch.batch_number}
+                </p>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+                <Button variant="primary" onClick={() => onConfirm(batch)}>
+                    {t('smart_qr.retire_batch')}
+                </Button>
+            </Modal.Footer>
+        </Modal>
+    );
+}
+
 /** Rename only — see UpdateQrBatchRequest for why the serial range is absent. */
 function RenameBatchModal({ batch, onClose }) {
     const { t } = useTranslation();
@@ -206,9 +247,12 @@ export default function SmartQrBatchesIndex({ batches }) {
     const permissions = page.props.auth?.permissions ?? [];
     const canManage = permissions.includes('manage_qr_batches');
 
+    const adminTz = page.props.timezone || 'UTC';
+
     const [createOpen, setCreateOpen] = useState(false);
     const [renaming, setRenaming] = useState(null);
     const [deleting, setDeleting] = useState(null);
+    const [retiring, setRetiring] = useState(null);
     const rows = batches?.data ?? [];
 
     return (
@@ -254,29 +298,37 @@ export default function SmartQrBatchesIndex({ batches }) {
                         <table className="min-w-full text-sm">
                             <thead>
                                 <tr className="border-b border-neutral-200 dark:border-neutral-700 text-left text-neutral-500 dark:text-neutral-400">
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_batch_number')}</th>
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_name')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_name_number')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_range')}</th>
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_generated')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_created')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_assigned')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_status')}</th>
-                                    <th className="pb-2 pr-4"></th>
+                                    <th className="pb-2 pr-4 text-right font-medium uppercase">{t('smart_qr.col_action')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {rows.map((batch) => (
                                     <tr key={batch.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                                        <td className="py-3 pr-4 font-mono font-medium text-neutral-900 dark:text-neutral-100">
-                                            {batch.batch_number}
+                                        {/* Reference merges name and number into one
+                                            cell: name on top, number muted beneath. */}
+                                        <td className="py-3 pr-4">
+                                            <div className="font-medium text-neutral-900 dark:text-neutral-100">
+                                                {batch.batch_name}
+                                            </div>
+                                            <div className="mt-0.5 font-mono text-xs text-neutral-500 dark:text-neutral-400">
+                                                {batch.batch_number}
+                                            </div>
                                         </td>
-                                        <td className="py-3 pr-4 text-neutral-700 dark:text-neutral-300">{batch.batch_name}</td>
                                         <td className="py-3 pr-4 font-mono text-xs text-neutral-500 dark:text-neutral-400">
                                             {`${batch.prefix}-${String(batch.serial_start).padStart(6, '0')}`}
                                             {' … '}
                                             {`${batch.prefix}-${String(batch.serial_start + batch.quantity - 1).padStart(6, '0')}`}
                                         </td>
-                                        <td className="py-3 pr-4 text-neutral-600 dark:text-neutral-300">
-                                            {batch.generated_count} / {batch.quantity}
+                                        {/* Created date — formatDateTz + the page
+                                            timezone, the same helper the sibling
+                                            Assignments table uses. */}
+                                        <td className="py-3 pr-4 text-neutral-500 dark:text-neutral-400">
+                                            {batch.created_at ? formatDateTz(batch.created_at, adminTz) : '—'}
                                         </td>
                                         {/* ⚠️ R-12 — `assigned_count` is DERIVED by
                                             withCount on the server, never a stored
@@ -309,7 +361,7 @@ export default function SmartQrBatchesIndex({ batches }) {
                                                         </button>
                                                         <button
                                                             type="button"
-                                                            onClick={() => { if (confirm(t('smart_qr.retire_confirm'))) router.post(route('admin.qr.batches.retire', batch.uuid), {}, { preserveScroll: true }); }}
+                                                            onClick={() => setRetiring(batch)}
                                                             aria-label={t('smart_qr.retire_batch')}
                                                             className="p-1 text-neutral-400 transition hover:text-amber-600"
                                                         >
@@ -340,6 +392,20 @@ export default function SmartQrBatchesIndex({ batches }) {
 
             {canManage && <CreateBatchModal show={createOpen} onClose={() => setCreateOpen(false)} />}
             {canManage && renaming && <RenameBatchModal batch={renaming} onClose={() => setRenaming(null)} />}
+
+            {/* Retire — NEUTRAL confirm, replacing a native confirm(). Route,
+                payload, uuid param and gate are unchanged. */}
+            {canManage && (
+                <RetireConfirmModal
+                    show={!! retiring}
+                    batch={retiring}
+                    onClose={() => setRetiring(null)}
+                    onConfirm={(batch) => {
+                        router.post(route('admin.qr.batches.retire', batch.uuid), {}, { preserveScroll: true });
+                        setRetiring(null);
+                    }}
+                />
+            )}
 
             {/* ⚠️ Typed confirmation. Deleting a batch deletes every code in it,
                 and the server refuses outright if ANY was printed or ever

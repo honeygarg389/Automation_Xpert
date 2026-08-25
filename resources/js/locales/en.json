@@ -4203,6 +4203,9 @@
         "export_note_pdf": "One page per code with the serial beneath it — the format to hand to a print shop.",
         "ready_exports": "Ready exports",
         "section_batch_information": "Batch Information",
-        "quantity_hint": "Max 10,000 per batch"
+        "quantity_hint": "Max 10,000 per batch",
+        "col_name_number": "Name & batch no.",
+        "col_created": "Created date",
+        "col_action": "Action"
     }
 }
