@@ -36,7 +36,8 @@
         "dismiss": "Dismiss",
         "view": "View",
         "settings": "Settings",
-        "type_to_confirm": "Type {{word}} to confirm"
+        "type_to_confirm": "Type {{word}} to confirm",
+        "soon": "Soon"
     },
     "nav": {
         "home": "Home",
@@ -606,7 +607,9 @@
             "ai": "Ai",
             "qr_batches": "QR Batches",
             "qr_inventory": "QR Inventory",
-            "qr_assignments": "QR Assignments"
+            "qr_assignments": "QR Assignments",
+            "qr_management": "QR Management",
+            "qr_dashboard": "Dashboard"
         },
         "client_login": "Client login",
         "dashboard": "Dashboard",

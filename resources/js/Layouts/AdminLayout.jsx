@@ -41,23 +41,17 @@ const ADMIN_NAV_ITEMS = [
     { labelKey: 'admin.nav.plans', route: 'admin.plans.index', href: () => route('admin.plans.index'), icon: Package, permission: 'view_plans' },
     { labelKey: 'admin.nav.coupons', route: 'admin.coupons.index', href: () => route('admin.coupons.index'), icon: Tag, permission: 'view_plans' },
 
-    // ── Smart QR (slice 3b) ──────────────────────────────────────────────
+    // ⚠️ The Smart QR entries USED TO SIT HERE as flat links, with a note saying
+    // this sidebar had no grouping component and that building one for a single
+    // caller was not worth it. Both halves are now out of date: the client panel's
+    // grouping is reused (Sidebar's NavGroup), and the entries live in
+    // QR_NAV_ITEMS below, emitted as a collapsible group straight after Plans.
     //
-    // ⚠️ FLAT ENTRIES, not the spec's "QR Management" GROUP.
-    //
-    // §2 describes a collapsible group with seven children. This sidebar has no
-    // grouping component — ADMIN_NAV_ITEMS is a flat list and every one of the
-    // ~22 existing entries is a single link. Introducing a nested/collapsible
-    // nav to match the described UX means maintaining a pattern with one caller,
-    // which is R-9's reasoning applied to navigation.
-    //
-    // ⚠️ Only the THREE screens that exist are listed. §2 also names Dashboard,
-    // Print Exports, Analytics and Settings — those are later slices, and a nav
-    // entry pointing at a route that does not exist throws in `route()` at
-    // render time, taking the whole admin layout down.
-    { labelKey: 'admin.nav.qr_batches', route: 'admin.qr.batches.index', href: () => route('admin.qr.batches.index'), icon: Layers, permission: 'view_qr_inventory' },
-    { labelKey: 'admin.nav.qr_inventory', route: 'admin.qr.inventory.index', href: () => route('admin.qr.inventory.index'), icon: QrCode, permission: 'view_qr_inventory' },
-    { labelKey: 'admin.nav.qr_assignments', route: 'admin.qr.assignments.index', href: () => route('admin.qr.assignments.index'), icon: Link2, permission: 'view_qr_inventory' },
+    // ⚠️ What has NOT changed is the reason only the built screens are listed:
+    // a nav entry naming a route that does not exist is resolved by `route()` at
+    // render and throws, taking the whole admin layout down. The Dashboard entry
+    // in that group is a `disabled` placeholder carrying no route for exactly
+    // this reason.
     { labelKey: 'admin.tax_rates', route: 'admin.tax-rates.index', href: () => route('admin.tax-rates.index'), icon: Percent, permission: 'view_plans' },
     { labelKey: 'admin.payment_gateways', route: 'admin.payment-gateways.index', href: () => route('admin.payment-gateways.index'), icon: CreditCard, permission: 'view_payment_gateways' },
     { labelKey: 'admin.email', route: 'admin.email-system.index', href: () => route('admin.email-system.index'), icon: FileText, permission: 'view_email_settings' },
@@ -76,7 +70,19 @@ const ADMIN_NAV_ITEMS = [
     { labelKey: 'admin.nav.ai', route: 'admin.ai.index', href: () => route('admin.ai.index'), icon: Brain, permission: 'view_settings' },
 ];
 
-/** Dedupe and order: Dashboard first, then a single entry per route (first match wins). */
+/**
+ * QR Management — its own group in the sidebar.
+ *
+ * Same item shape as ADMIN_NAV_ITEMS and the same per-item `permission`, so the
+ * existing filter applies unchanged. Lifted out of the flat list verbatim; route,
+ * href, icon and permission are byte-identical to what they were there.
+ */
+const QR_NAV_ITEMS = [
+    { labelKey: 'admin.nav.qr_batches', route: 'admin.qr.batches.index', href: () => route('admin.qr.batches.index'), icon: Layers, permission: 'view_qr_inventory' },
+    { labelKey: 'admin.nav.qr_inventory', route: 'admin.qr.inventory.index', href: () => route('admin.qr.inventory.index'), icon: QrCode, permission: 'view_qr_inventory' },
+    { labelKey: 'admin.nav.qr_assignments', route: 'admin.qr.assignments.index', href: () => route('admin.qr.assignments.index'), icon: Link2, permission: 'view_qr_inventory' },
+];
+
 function useAdminNav() {
     const { t } = useTranslation();
     const { auth } = usePage().props;
@@ -84,17 +90,66 @@ function useAdminNav() {
     const hasPermission = (key) => permissions.includes(key);
 
     return useMemo(() => {
-        return ADMIN_NAV_ITEMS.filter((item) => {
+        const allowed = (item) => {
             const perm = item.permission;
             const alt = item.permissionAlt;
             if (perm && !hasPermission(perm) && (!alt || !hasPermission(alt))) return false;
             return true;
-        }).map((item) => ({
+        };
+
+        const shape = (item) => ({
             label: t(item.labelKey),
             route: item.route,
             href: typeof item.href === 'function' ? item.href() : item.href,
             icon: item.icon ? <item.icon className="h-5 w-5" /> : null,
-        }));
+        });
+
+        const qrItems = QR_NAV_ITEMS.filter(allowed).map(shape);
+
+        // ⚠️ Filter FIRST, then decide whether the group exists at all — the same
+        // guard useClientNav uses for its Smart QR group. A header with nothing
+        // under it advertises a section the viewer cannot open.
+        const qrGroup = qrItems.length
+            ? {
+                type: 'group',
+                key: 'qr-management',
+                label: t('admin.nav.qr_management'),
+                items: [
+                    /* ⚠️ STATIC PLACEHOLDER — `disabled`, carrying NO route and NO
+                       href. `admin.qr.dashboard` does not exist; naming it here
+                       would be resolved by route() during render and throw, taking
+                       every admin page down (R-15). Sidebar returns early on
+                       `disabled` before any route resolution. */
+                    {
+                        key: 'qr-dashboard-placeholder',
+                        label: t('admin.nav.qr_dashboard'),
+                        icon: <LayoutDashboard className="h-5 w-5" />,
+                        disabled: true,
+                        badge: t('common.soon'),
+                    },
+                    ...qrItems,
+                ],
+            }
+            : null;
+
+        /**
+         * Built in one ordered pass so the group lands immediately after Plans,
+         * rather than above or below the whole flat list.
+         *
+         * ⚠️ The group is emitted on the PLANS ENTRY ITSELF, not on the surviving
+         * item before it — so its position holds even for an admin who lacks
+         * `view_plans` and never sees Plans at all.
+         */
+        const items = [];
+        ADMIN_NAV_ITEMS.forEach((item) => {
+            if (allowed(item)) items.push(shape(item));
+            if (item.route === 'admin.plans.index' && qrGroup) items.push(qrGroup);
+        });
+
+        // ⚠️ Filter FIRST, then decide whether the group exists at all — the same
+        // guard useClientNav uses for its Smart QR group. A group header with no
+        // items under it advertises a section the viewer cannot open.
+        return items;
     }, [t, permissions]);
 }
 
@@ -157,11 +212,17 @@ export default function AdminLayout({ title = 'Admin', header, children }) {
                 title={t('nav.admin')}
                 logo={logoUrl ? <img src={logoUrl} alt="Logo" className="h-8 max-w-[160px] object-contain" /> : null}
                 showCreateButton={false}
-                navItems={adminNav.map((item, i) => ({
-                    ...item,
-                    key: `${item.route}-${item.label}-${i}`,
-                    active: () => route().current(item.route),
-                }))}
+                navItems={adminNav.map((item, i) => (
+                    // Group entries pass through untouched: they carry no `route`,
+                    // so route().current() on one would throw.
+                    item.type === 'group'
+                        ? item
+                        : {
+                            ...item,
+                            key: `${item.route}-${item.label}-${i}`,
+                            active: () => route().current(item.route),
+                        }
+                ))}
                 footer={<AdminLayoutFooter />}
             />
 
