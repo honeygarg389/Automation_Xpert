@@ -4005,7 +4005,7 @@
     },
     "smart_qr": {
         "batches_title": "QR Batches",
-        "batches_subtitle": "Generate, print, assign and track dynamic QR codes.",
+        "batches_subtitle": "Generated dynamic QR batches.",
         "inventory_title": "QR Inventory",
         "inventory_subtitle": "Every printed code, and who currently holds it.",
         "assignments_title": "QR Assignments",
