@@ -27,6 +27,31 @@ function NavGroup({ label, items, onClose }) {
             {open && (
                 <div id={`nav-group-${label.replace(/\s+/g, '-').toLowerCase()}`} className="mt-0.5 space-y-0.5">
                     {items.map((item, i) => {
+                        /* ⚠️ NON-NAVIGABLE ITEM — returns BEFORE any route()
+                           resolution below. A placeholder whose route does not
+                           exist must never reach `route(item.route)`: that throws
+                           at render and takes the whole sidebar — and therefore
+                           every admin page — down with it. Rendering a span rather
+                           than a disabled Link also means there is no href to
+                           middle-click or copy. */
+                        if (item.disabled) {
+                            return (
+                                <span
+                                    key={item.key ?? `disabled-${i}`}
+                                    aria-disabled="true"
+                                    className="flex cursor-not-allowed select-none items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-white/40"
+                                >
+                                    {item.icon && <span className="shrink-0 text-white/30">{item.icon}</span>}
+                                    <span className="truncate">{item.label}</span>
+                                    {item.badge && (
+                                        <span className="ml-auto shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/40 ring-1 ring-white/15">
+                                            {item.badge}
+                                        </span>
+                                    )}
+                                </span>
+                            );
+                        }
+
                         const isActive =
                             typeof item.active === 'function'
                                 ? item.active()
@@ -126,6 +151,21 @@ export default function Sidebar({
                     navItems.map((item, i) => {
                         if (item.type === 'divider') {
                             return <hr key={`div-${i}`} className="my-2 border-white/10" />;
+                        }
+                        /* A collapsible group placed INLINE in the flat list, so a
+                           grouped section can sit at an exact position rather than
+                           being forced above or below every loose item. Mirrors the
+                           divider case above; navGroups (whole-sidebar grouping, as
+                           the client panel uses) is untouched. */
+                        if (item.type === 'group') {
+                            return (
+                                <NavGroup
+                                    key={item.key ?? `group-${i}`}
+                                    label={item.label}
+                                    items={item.items ?? []}
+                                    onClose={onClose}
+                                />
+                            );
                         }
                         const isActive =
                             typeof item.active === 'function'
