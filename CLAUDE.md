@@ -525,6 +525,37 @@ scheduled, all would die quietly when Phase 0 closes:
   runs `i18n:seed-defaults`, so a fresh install damages en.json before anyone logs in. Non-English
   is worse than loss: the English string is written into hi/ar/zh and reads as translated.
   Predates all our work (`4ec7e3e`).
+- ⚠️ **A HAND-EDIT TO `resources/js/locales/*.json` IS INVISIBLE UNTIL THE i18n CACHE IS
+  CLEARED**, and it fails in the worst way: the change appears "not to work" for up to an hour,
+  then silently starts working, so nobody learns the rule.
+
+  ```bash
+  php artisan tinker --execute='app(App\Services\I18n\I18nFileService::class)->invalidateCache();'
+  ```
+
+  (`php artisan cache:clear` also works but flushes everything else too.)
+
+  `I18nFileService::getFlatDictionary()` wraps the file read in `Cache::remember(..., 3600)`,
+  keyed `i18n:file:{locale}:{i18n_version}`. `i18n_version` is bumped ONLY by
+  `invalidateCache()`, which the app calls on its own locale writes (the admin Locale UI).
+  Editing the JSON on disk bumps nothing, so `/i18n/{locale}` keeps replaying the previous
+  snapshot. A key missing from that snapshot renders as the RAW KEY in the UI — e.g. a filter
+  labelled `smart_qr.filter_all_workspaces`.
+
+  ⚠️ **Diagnose it at the endpoint, not in the file.** The file being correct proves nothing:
+
+  ```bash
+  curl -s http://127.0.0.1:8007/i18n/en | python3 -c "import json,sys; print(json.load(sys.stdin)['translation'].get('smart_qr.filter_all_workspaces'))"
+  ```
+
+  **Recurred three times** — `batches_subtitle`, then `filter_all_workspaces` and
+  `view_qr_coming_soon` together. The third instance under-reported itself: only one broken
+  label was noticed, but every key added since the last bump was stale.
+
+  ⚠️ **The same caching hides BUG-037 rather than helping.** A corrupted `en.json` on disk keeps
+  serving correct strings from cache long after the damage, so the seeder's corruption surfaces
+  an hour later with no obvious cause. Same shape as BUG-036 below: a cache invalidated only by
+  the application's own writes, never by the thing that actually changed the data.
 - **BUG-036**: editing a plan's limits through `Admin\PlanController` never invalidates the
   entitlement cache, so the OLD limits stay enforced for up to
   `entitlements.cache_fallback_ttl_minutes` (default 60) — silently, in both directions.
