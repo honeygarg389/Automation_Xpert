@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Textarea } from '@/Components/ui';
-import { Layers, Plus, Pencil, Trash2, Archive } from 'lucide-react';
+import { Layers, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BatchStatusBadge } from '../QrStatusBadge';
 import { formatDateTz } from '@/Utils/datetime';
@@ -156,89 +156,6 @@ function CreateBatchModal({ show, onClose }) {
     );
 }
 
-/**
- * Neutral confirm for retiring a batch.
- *
- * ⚠️ NOT ConfirmDestructiveModal, deliberately. That component is documented as
- * "Typed confirmation for an irreversible action" and renders a red button
- * behind a type-the-word gate — correct for delete, wrong signal for retire.
- * Retiring KEEPS every row: the codes stay in inventory, stop being assignable,
- * and a scan reports the QR inactive. Framing a reversible state change in the
- * same red as an unrecoverable delete teaches operators to click through both.
- *
- * Structure copied from DeleteConfirmModal in Admin/Plans/Index.jsx — the
- * existing click-to-confirm precedent — minus its red button override.
- */
-function RetireConfirmModal({ show, batch, onClose, onConfirm }) {
-    const { t } = useTranslation();
-    if (! batch) return null;
-    return (
-        <Modal show={show} onClose={onClose} maxWidth="sm">
-            <Modal.Header title={t('smart_qr.retire_batch')} onClose={onClose} />
-            <Modal.Body>
-                <p className="text-neutral-600 dark:text-neutral-400">
-                    {t('smart_qr.retire_batch_body')}
-                </p>
-                <p className="mt-2 font-medium text-neutral-900 dark:text-neutral-100">
-                    {batch.batch_name}
-                </p>
-                <p className="mt-0.5 font-mono text-xs text-neutral-500 dark:text-neutral-400">
-                    {batch.batch_number}
-                </p>
-            </Modal.Body>
-            <Modal.Footer>
-                <Button variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-                <Button variant="primary" onClick={() => onConfirm(batch)}>
-                    {t('smart_qr.retire_batch')}
-                </Button>
-            </Modal.Footer>
-        </Modal>
-    );
-}
-
-/** Rename only — see UpdateQrBatchRequest for why the serial range is absent. */
-function RenameBatchModal({ batch, onClose }) {
-    const { t } = useTranslation();
-    const { data, setData, patch, processing, errors } = useForm({
-        batch_name: batch?.batch_name ?? '',
-        batch_number: batch?.batch_number ?? '',
-    });
-
-    if (! batch) return null;
-
-    return (
-        <Modal show onClose={onClose} maxWidth="lg">
-            <Modal.Header title={t('smart_qr.rename_batch')} onClose={onClose} />
-            <form onSubmit={(e) => { e.preventDefault(); patch(route('admin.qr.batches.update', batch.uuid), { onSuccess: onClose }); }}>
-                <Modal.Body className="space-y-4">
-                    <Input
-                        label={t('smart_qr.field_batch_name')}
-                        value={data.batch_name}
-                        onChange={(e) => setData('batch_name', e.target.value)}
-                        error={errors.batch_name}
-                        required
-                    />
-                    {/* ⚠️ Editable — checked, not assumed. Nothing looks a batch
-                        up by this value: the route key is uuid, serials come from
-                        `prefix`, and the range rule matches on prefix too. It is
-                        an operator-facing label, kept unique. */}
-                    <Input
-                        label={t('smart_qr.field_batch_number')}
-                        value={data.batch_number}
-                        onChange={(e) => setData('batch_number', e.target.value)}
-                        error={errors.batch_number}
-                        required
-                    />
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-                    <Button type="submit" disabled={processing}>{t('smart_qr.save')}</Button>
-                </Modal.Footer>
-            </form>
-        </Modal>
-    );
-}
-
 export default function SmartQrBatchesIndex({ batches }) {
     const { t } = useTranslation();
     const page = usePage();
@@ -250,9 +167,7 @@ export default function SmartQrBatchesIndex({ batches }) {
     const adminTz = page.props.timezone || 'UTC';
 
     const [createOpen, setCreateOpen] = useState(false);
-    const [renaming, setRenaming] = useState(null);
     const [deleting, setDeleting] = useState(null);
-    const [retiring, setRetiring] = useState(null);
     const rows = batches?.data ?? [];
 
     return (
@@ -303,7 +218,7 @@ export default function SmartQrBatchesIndex({ batches }) {
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_created')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_assigned')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_status')}</th>
-                                    <th className="pb-2 pr-4 text-right font-medium uppercase">{t('smart_qr.col_action')}</th>
+                                    <th className="pb-2 pr-4 text-left font-medium uppercase">{t('smart_qr.col_action')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -347,30 +262,21 @@ export default function SmartQrBatchesIndex({ batches }) {
                                             )}
                                         </td>
                                         <td className="py-3 pr-4">
-                                            <div className="flex items-center justify-end gap-3">
+                                            <div className="flex items-center justify-start gap-3">
                                                 <Link
                                                     href={route('admin.qr.batches.show', batch.uuid)}
                                                     className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
                                                 >
                                                     {t('common.view')}
                                                 </Link>
+                                                {/* ⚠️ Rename and Retire MOVED to the batch
+                                                    detail page. The list keeps View and
+                                                    Delete only. Same routes, same gate —
+                                                    only the trigger's location changed. */}
                                                 {canManage && (
-                                                    <>
-                                                        <button type="button" onClick={() => setRenaming(batch)} aria-label={t('smart_qr.rename_batch')} className="p-1 text-neutral-400 transition hover:text-brand-600">
-                                                            <Pencil className="h-4 w-4" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setRetiring(batch)}
-                                                            aria-label={t('smart_qr.retire_batch')}
-                                                            className="p-1 text-neutral-400 transition hover:text-amber-600"
-                                                        >
-                                                            <Archive className="h-4 w-4" />
-                                                        </button>
-                                                        <button type="button" onClick={() => setDeleting(batch)} aria-label={t('smart_qr.delete_batch')} className="p-1 text-neutral-400 transition hover:text-red-600">
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                    </>
+                                                    <button type="button" onClick={() => setDeleting(batch)} aria-label={t('smart_qr.delete_batch')} className="p-1 text-neutral-400 transition hover:text-red-600">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
                                                 )}
                                             </div>
                                         </td>
@@ -391,21 +297,6 @@ export default function SmartQrBatchesIndex({ batches }) {
             </div>
 
             {canManage && <CreateBatchModal show={createOpen} onClose={() => setCreateOpen(false)} />}
-            {canManage && renaming && <RenameBatchModal batch={renaming} onClose={() => setRenaming(null)} />}
-
-            {/* Retire — NEUTRAL confirm, replacing a native confirm(). Route,
-                payload, uuid param and gate are unchanged. */}
-            {canManage && (
-                <RetireConfirmModal
-                    show={!! retiring}
-                    batch={retiring}
-                    onClose={() => setRetiring(null)}
-                    onConfirm={(batch) => {
-                        router.post(route('admin.qr.batches.retire', batch.uuid), {}, { preserveScroll: true });
-                        setRetiring(null);
-                    }}
-                />
-            )}
 
             {/* ⚠️ Typed confirmation. Deleting a batch deletes every code in it,
                 and the server refuses outright if ANY was printed or ever
