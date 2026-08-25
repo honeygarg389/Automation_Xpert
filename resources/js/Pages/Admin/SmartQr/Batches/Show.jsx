@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, Input, Modal, Pagination } from '@/Components/ui';
-import { ArrowLeft, Layers, Package, QrCode, Printer, Pencil, Archive, Download } from 'lucide-react';
+import { ArrowLeft, Layers, Package, QrCode, Printer, Pencil, TriangleAlert, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge, BatchStatusBadge } from '../QrStatusBadge';
 import { formatDateTz } from '@/Utils/datetime';
@@ -267,7 +267,7 @@ export default function SmartQrBatchShow({ batch, codes }) {
 
                             {canManage && (
                                 <Button variant="outline" size="sm" onClick={() => setRetiring(batch)}>
-                                    <Archive className="mr-1.5 h-4 w-4" /> {t('smart_qr.retire_batch')}
+                                    <TriangleAlert className="mr-1.5 h-4 w-4" /> {t('smart_qr.retire_batch')}
                                 </Button>
                             )}
                         </div>
