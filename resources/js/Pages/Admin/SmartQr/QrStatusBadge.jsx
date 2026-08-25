@@ -60,11 +60,17 @@ export function AssignmentStatusBadge({ status }) {
     );
 }
 
-export function BatchStatusBadge({ status }) {
+/**
+ * @param size defaults to 'sm' — the value this component hardcoded before, so
+ * every existing call site renders exactly as it did. Only the batch detail
+ * header opts into 'md', where the badge sits beside Button size="sm" controls
+ * and has to match their text-sm.
+ */
+export function BatchStatusBadge({ status, size = 'sm' }) {
     const { t } = useTranslation();
 
     return (
-        <Badge variant={BATCH_VARIANTS[status] ?? 'default'} size="sm">
+        <Badge variant={BATCH_VARIANTS[status] ?? 'default'} size={size}>
             {t(`smart_qr.batch_status.${status}`, status)}
         </Badge>
     );

@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination } from '@/Components/ui';
-import { Layers, Plus, Pencil, Trash2, Archive } from 'lucide-react';
+import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Textarea } from '@/Components/ui';
+import { Layers, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BatchStatusBadge } from '../QrStatusBadge';
+import { formatDateTz } from '@/Utils/datetime';
 
 /**
  * §4 — QR batches.
@@ -48,7 +49,13 @@ function CreateBatchModal({ show, onClose }) {
                         {t('smart_qr.create_batch_subtitle')}
                     </p>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    {/* Section heading matches Admin/Plans/PlanForm.jsx — the
+                        existing multi-section admin form. No new typography. */}
+                    <section>
+                        <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                            {t('smart_qr.section_batch_information')}
+                        </h4>
+                        <div className="grid gap-4 sm:grid-cols-2">
                         <Input
                             label={t('smart_qr.field_batch_name')}
                             value={data.batch_name}
@@ -85,6 +92,7 @@ function CreateBatchModal({ show, onClose }) {
                             onChange={(e) => setData('quantity', e.target.value)}
                             min="1"
                             max="10000"
+                            hint={t('smart_qr.quantity_hint')}
                             error={errors.quantity}
                             required
                         />
@@ -110,19 +118,22 @@ function CreateBatchModal({ show, onClose }) {
                             placeholder={t('smart_qr.qr_type_placeholder')}
                             error={errors.qr_type}
                         />
-                    </div>
+                        </div>
 
-                    <div>
-                        <label className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                            {t('smart_qr.field_default_message')}
-                        </label>
-                        <textarea
-                            value={data.default_message}
-                            onChange={(e) => setData('default_message', e.target.value)}
-                            rows={2}
-                            className="w-full rounded-soft border border-soft border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 shadow-inner focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
-                        />
-                    </div>
+                        {/* ⚠️ Was a hand-rolled <textarea> with Input's classes
+                            pasted inline and NO error slot — a validation failure
+                            on this field rendered nothing. The shared Textarea
+                            carries the error branch. */}
+                        <div className="mt-4">
+                            <Textarea
+                                label={t('smart_qr.field_default_message')}
+                                value={data.default_message}
+                                onChange={(e) => setData('default_message', e.target.value)}
+                                rows={2}
+                                error={errors.default_message}
+                            />
+                        </div>
+                    </section>
 
                     {/* Preview of the range, so the operator sees what will be
                         printed before the queued job starts. Mirrors the server's
@@ -145,49 +156,6 @@ function CreateBatchModal({ show, onClose }) {
     );
 }
 
-/** Rename only — see UpdateQrBatchRequest for why the serial range is absent. */
-function RenameBatchModal({ batch, onClose }) {
-    const { t } = useTranslation();
-    const { data, setData, patch, processing, errors } = useForm({
-        batch_name: batch?.batch_name ?? '',
-        batch_number: batch?.batch_number ?? '',
-    });
-
-    if (! batch) return null;
-
-    return (
-        <Modal show onClose={onClose} maxWidth="lg">
-            <Modal.Header title={t('smart_qr.rename_batch')} onClose={onClose} />
-            <form onSubmit={(e) => { e.preventDefault(); patch(route('admin.qr.batches.update', batch.uuid), { onSuccess: onClose }); }}>
-                <Modal.Body className="space-y-4">
-                    <Input
-                        label={t('smart_qr.field_batch_name')}
-                        value={data.batch_name}
-                        onChange={(e) => setData('batch_name', e.target.value)}
-                        error={errors.batch_name}
-                        required
-                    />
-                    {/* ⚠️ Editable — checked, not assumed. Nothing looks a batch
-                        up by this value: the route key is uuid, serials come from
-                        `prefix`, and the range rule matches on prefix too. It is
-                        an operator-facing label, kept unique. */}
-                    <Input
-                        label={t('smart_qr.field_batch_number')}
-                        value={data.batch_number}
-                        onChange={(e) => setData('batch_number', e.target.value)}
-                        error={errors.batch_number}
-                        required
-                    />
-                </Modal.Body>
-                <Modal.Footer>
-                    <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
-                    <Button type="submit" disabled={processing}>{t('smart_qr.save')}</Button>
-                </Modal.Footer>
-            </form>
-        </Modal>
-    );
-}
-
 export default function SmartQrBatchesIndex({ batches }) {
     const { t } = useTranslation();
     const page = usePage();
@@ -196,8 +164,9 @@ export default function SmartQrBatchesIndex({ batches }) {
     const permissions = page.props.auth?.permissions ?? [];
     const canManage = permissions.includes('manage_qr_batches');
 
+    const adminTz = page.props.timezone || 'UTC';
+
     const [createOpen, setCreateOpen] = useState(false);
-    const [renaming, setRenaming] = useState(null);
     const [deleting, setDeleting] = useState(null);
     const rows = batches?.data ?? [];
 
@@ -244,29 +213,37 @@ export default function SmartQrBatchesIndex({ batches }) {
                         <table className="min-w-full text-sm">
                             <thead>
                                 <tr className="border-b border-neutral-200 dark:border-neutral-700 text-left text-neutral-500 dark:text-neutral-400">
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_batch_number')}</th>
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_name')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_name_number')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_range')}</th>
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_generated')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_created')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_assigned')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_status')}</th>
-                                    <th className="pb-2 pr-4"></th>
+                                    <th className="pb-2 pr-4 text-left font-medium uppercase">{t('smart_qr.col_action')}</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {rows.map((batch) => (
                                     <tr key={batch.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                                        <td className="py-3 pr-4 font-mono font-medium text-neutral-900 dark:text-neutral-100">
-                                            {batch.batch_number}
+                                        {/* Reference merges name and number into one
+                                            cell: name on top, number muted beneath. */}
+                                        <td className="py-3 pr-4">
+                                            <div className="font-medium text-neutral-900 dark:text-neutral-100">
+                                                {batch.batch_name}
+                                            </div>
+                                            <div className="mt-0.5 font-mono text-xs text-neutral-500 dark:text-neutral-400">
+                                                {batch.batch_number}
+                                            </div>
                                         </td>
-                                        <td className="py-3 pr-4 text-neutral-700 dark:text-neutral-300">{batch.batch_name}</td>
                                         <td className="py-3 pr-4 font-mono text-xs text-neutral-500 dark:text-neutral-400">
                                             {`${batch.prefix}-${String(batch.serial_start).padStart(6, '0')}`}
                                             {' … '}
                                             {`${batch.prefix}-${String(batch.serial_start + batch.quantity - 1).padStart(6, '0')}`}
                                         </td>
-                                        <td className="py-3 pr-4 text-neutral-600 dark:text-neutral-300">
-                                            {batch.generated_count} / {batch.quantity}
+                                        {/* Created date — formatDateTz + the page
+                                            timezone, the same helper the sibling
+                                            Assignments table uses. */}
+                                        <td className="py-3 pr-4 text-neutral-500 dark:text-neutral-400">
+                                            {batch.created_at ? formatDateTz(batch.created_at, adminTz) : '—'}
                                         </td>
                                         {/* ⚠️ R-12 — `assigned_count` is DERIVED by
                                             withCount on the server, never a stored
@@ -285,30 +262,21 @@ export default function SmartQrBatchesIndex({ batches }) {
                                             )}
                                         </td>
                                         <td className="py-3 pr-4">
-                                            <div className="flex items-center justify-end gap-3">
+                                            <div className="flex items-center justify-start gap-3">
                                                 <Link
                                                     href={route('admin.qr.batches.show', batch.uuid)}
                                                     className="text-sm font-medium text-brand-600 hover:text-brand-700 dark:text-brand-400"
                                                 >
                                                     {t('common.view')}
                                                 </Link>
+                                                {/* ⚠️ Rename and Retire MOVED to the batch
+                                                    detail page. The list keeps View and
+                                                    Delete only. Same routes, same gate —
+                                                    only the trigger's location changed. */}
                                                 {canManage && (
-                                                    <>
-                                                        <button type="button" onClick={() => setRenaming(batch)} aria-label={t('smart_qr.rename_batch')} className="p-1 text-neutral-400 transition hover:text-brand-600">
-                                                            <Pencil className="h-4 w-4" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => { if (confirm(t('smart_qr.retire_confirm'))) router.post(route('admin.qr.batches.retire', batch.uuid), {}, { preserveScroll: true }); }}
-                                                            aria-label={t('smart_qr.retire_batch')}
-                                                            className="p-1 text-neutral-400 transition hover:text-amber-600"
-                                                        >
-                                                            <Archive className="h-4 w-4" />
-                                                        </button>
-                                                        <button type="button" onClick={() => setDeleting(batch)} aria-label={t('smart_qr.delete_batch')} className="p-1 text-neutral-400 transition hover:text-red-600">
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </button>
-                                                    </>
+                                                    <button type="button" onClick={() => setDeleting(batch)} aria-label={t('smart_qr.delete_batch')} className="p-1 text-neutral-400 transition hover:text-red-600">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
                                                 )}
                                             </div>
                                         </td>
@@ -329,7 +297,6 @@ export default function SmartQrBatchesIndex({ batches }) {
             </div>
 
             {canManage && <CreateBatchModal show={createOpen} onClose={() => setCreateOpen(false)} />}
-            {canManage && renaming && <RenameBatchModal batch={renaming} onClose={() => setRenaming(null)} />}
 
             {/* ⚠️ Typed confirmation. Deleting a batch deletes every code in it,
                 and the server refuses outright if ANY was printed or ever

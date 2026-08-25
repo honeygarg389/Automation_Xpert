@@ -4005,7 +4005,7 @@
     },
     "smart_qr": {
         "batches_title": "QR Batches",
-        "batches_subtitle": "Generate, print, assign and track dynamic QR codes.",
+        "batches_subtitle": "Generated dynamic QR batches.",
         "inventory_title": "QR Inventory",
         "inventory_subtitle": "Every printed code, and who currently holds it.",
         "assignments_title": "QR Assignments",
@@ -4114,7 +4114,7 @@
         "edit_qr": "Edit QR details",
         "delete_batch_body": "This permanently deletes the batch and all {{count}} of its codes. Only possible because none have been printed or assigned. This cannot be undone.",
         "delete_codes_body": "This permanently deletes {{count}} code(s). Only codes that were never printed and never assigned can be deleted. This cannot be undone.",
-        "retire_batch_body": "Retiring keeps every row. The codes stay in inventory, can no longer be assigned, and a scan will say the QR is no longer active.",
+        "retire_batch_body": "Retiring keeps every row. The codes stay in inventory, can no longer be assigned, and a scan will say the QR is no longer active. If retired by mistake, an admin can set each code’s status again from QR Inventory — the previous status is not stored, so it must be chosen manually.",
         "retire_confirm": "Retire this batch and all its codes?",
         "save": "Save changes",
         "title": "Smart QR",
@@ -4201,6 +4201,13 @@
         "export_format_pdf": "PDF — print-ready, one page per code",
         "export_size_compare_multi": "The same selection as {{others}}.",
         "export_note_pdf": "One page per code with the serial beneath it — the format to hand to a print shop.",
-        "ready_exports": "Ready exports"
+        "ready_exports": "Ready exports",
+        "section_batch_information": "Batch Information",
+        "quantity_hint": "Max 10,000 per batch",
+        "col_name_number": "Name & batch no.",
+        "col_created": "Created date",
+        "col_action": "Action",
+        "export_zip": "Export ZIP",
+        "export_zip_coming_soon": "Coming soon"
     }
 }

@@ -12,5 +12,6 @@ export { default as Modal } from './Modal';
 export { default as Select } from './Select';
 export { default as Skeleton } from './Skeleton';
 export { default as Tabs } from './Tabs';
+export { default as Textarea } from './Textarea';
 export { default as Toggle } from './Toggle';
 export { default as Tooltip } from './Tooltip';
