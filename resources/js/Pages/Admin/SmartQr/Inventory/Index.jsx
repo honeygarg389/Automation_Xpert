@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, ConfirmDestructiveModal, Modal, Pagination, Select } from '@/Components/ui';
-import { QrCode, Link2, Printer, Trash2, Download } from 'lucide-react';
+import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Select } from '@/Components/ui';
+import { QrCode, Link2, Printer, Trash2, Download, Layers, Eye } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge } from '../QrStatusBadge';
 import AssignQrModal from '../AssignQrModal';
@@ -57,6 +57,10 @@ export default function SmartQrInventoryIndex({
         assignment: filters.assignment ?? '',
         printed: filters.printed ?? '',
         qr_type: filters.qr_type ?? '',
+        // ⚠️ The controller has validated and queried `workspace_id` since slice
+        // 3a, but no control ever rendered it. Adding the input only — the filter
+        // key, validation and query are untouched.
+        workspace_id: filters.workspace_id ?? '',
     });
 
     const [selected, setSelected] = useState([]);
@@ -158,23 +162,26 @@ export default function SmartQrInventoryIndex({
                             </p>
                         </div>
                     </div>
-                    <Link
-                        href={route('admin.qr.batches.index')}
-                        className="inline-flex items-center gap-2 rounded-lg border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 transition"
-                    >
-                        {t('smart_qr.view_batches')}
+                    {/* ⚠️ NO "Delete QR history" button. The reference shows one and
+                        no such action exists — no route, no controller method, no
+                        concept anywhere in the module. The only inventory delete is
+                        `inventory.destroy`, which deletes SELECTED CODES and lives in
+                        the selection bar. A destructive-looking header control wired to
+                        nothing is not a placeholder worth having. */}
+                    <Link href={route('admin.qr.batches.index')}>
+                        <Button variant="outline" size="sm">
+                            <Layers className="mr-1.5 h-4 w-4" /> {t('smart_qr.view_batches')}
+                        </Button>
                     </Link>
                 </div>
 
                 {/* ── §5 filters ────────────────────────────────────────── */}
                 <Card>
-                    <form onSubmit={applyFilters} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <input
-                            type="text"
+                    <form onSubmit={applyFilters} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
+                        <Input
                             value={form.search}
                             onChange={(e) => setForm({ ...form, search: e.target.value })}
                             placeholder={t('smart_qr.filter_serial')}
-                            className="rounded-soft border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
                         />
                         <Select
                             value={form.batch_id}
@@ -208,12 +215,22 @@ export default function SmartQrInventoryIndex({
                                 { value: 'no', label: t('smart_qr.printed_no') },
                             ]}
                         />
-                        <input
-                            type="text"
+                        <Input
                             value={form.qr_type}
                             onChange={(e) => setForm({ ...form, qr_type: e.target.value })}
                             placeholder={t('smart_qr.filter_qr_type')}
-                            className="rounded-soft border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-sm text-neutral-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                        />
+                        {/* Workspace — the seventh filter the controller has always
+                            accepted. `workspaces` was already passed to this page for
+                            the assign modal, so nothing new is fetched. */}
+                        <Select
+                            value={form.workspace_id}
+                            onChange={(e) => setForm({ ...form, workspace_id: e.target.value })}
+                            placeholder={t('smart_qr.filter_all_workspaces')}
+                            options={workspaces.map((w) => ({
+                                value: w.id,
+                                label: w.client_name ? `${w.name} — ${w.client_name}` : w.name,
+                            }))}
                         />
                         <div className="flex items-center gap-2">
                             <Button type="submit" variant="outline" size="sm">{t('common.search')}</Button>
@@ -264,10 +281,12 @@ export default function SmartQrInventoryIndex({
                                 <Trash2 className="mr-1.5 h-4 w-4" /> {t('smart_qr.delete_codes')}
                             </Button>
                         )}
+                        {/* ml-auto: pushed away from the action cluster so
+                            "clear" is not mistaken for another bulk action. */}
                         <button
                             type="button"
                             onClick={() => setSelected([])}
-                            className="text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
+                            className="ml-auto text-sm text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300"
                         >
                             {t('smart_qr.clear_selection')}
                         </button>
@@ -302,6 +321,7 @@ export default function SmartQrInventoryIndex({
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_assignment')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_workspace')}</th>
                                     <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_qr_type')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_action')}</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -332,6 +352,26 @@ export default function SmartQrInventoryIndex({
                                         </td>
                                         <td className="py-3 pr-4 text-neutral-600 dark:text-neutral-300">
                                             {code.current_assignment?.qr_type ?? '—'}
+                                        </td>
+                                        {/* ⚠️ DISABLED PLACEHOLDER — no route, no onClick.
+                                            There is NO admin per-QR detail page: the only
+                                            per-serial routes are client.smartqr.codes.*,
+                                            which are workspace-scoped and 404 for an admin.
+                                            Building it needs a route, a controller method
+                                            and an admin preview endpoint — Slice B.
+
+                                            The title sits on the WRAPPER: Button applies
+                                            `disabled:pointer-events-none`, so a title on the
+                                            button itself would never render a tooltip. */}
+                                        <td className="py-3 pr-4">
+                                            <span
+                                                title={t('smart_qr.view_qr_coming_soon')}
+                                                className="inline-flex cursor-not-allowed"
+                                            >
+                                                <Button variant="outline" size="sm" disabled>
+                                                    <Eye className="mr-1.5 h-4 w-4" /> {t('common.view')}
+                                                </Button>
+                                            </span>
                                         </td>
                                     </tr>
                                 ))}

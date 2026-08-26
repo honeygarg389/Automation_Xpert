@@ -4211,6 +4211,8 @@
         "col_created": "Created date",
         "col_action": "Action",
         "export_zip": "Export ZIP",
-        "export_zip_coming_soon": "Coming soon"
+        "export_zip_coming_soon": "Coming soon",
+        "filter_all_workspaces": "All workspaces",
+        "view_qr_coming_soon": "Coming soon"
     }
 }
