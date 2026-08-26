@@ -53,6 +53,9 @@ export default [
                 confirm:   'readonly',
                 FormData:  'readonly',
                 Blob:      'readonly',
+                // ⚠️ Beside Blob, which it extends. Missing only because
+                // nothing had taken a File until ImageUploadField.
+                File:      'readonly',
                 URL:       'readonly',
             },
             parserOptions: {

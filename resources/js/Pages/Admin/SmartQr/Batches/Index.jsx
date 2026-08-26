@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Textarea } from '@/Components/ui';
+import { Button, Card, ConfirmDestructiveModal, ImageUploadField, Input, Modal, Pagination, Textarea } from '@/Components/ui';
 import { Layers, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BatchStatusBadge } from '../QrStatusBadge';
@@ -31,11 +31,22 @@ function CreateBatchModal({ show, onClose }) {
         qr_type: '',
         default_message: '',
         notes: '',
+
+        // ⚠️ A File, not a string — and it is why the submit below needs
+        // forceFormData. Null means "no logo", which the server accepts
+        // (`nullable`) and renders as a PLAIN QR with no fallback of any kind.
+        logo: null,
     });
 
     const submit = (e) => {
         e.preventDefault();
         post(route('admin.qr.batches.store'), {
+            // ⚠️ REQUIRED, NOT DEFENSIVE. Inertia serialises to JSON unless a
+            // File is detected or this is set — and a File cannot survive JSON,
+            // so without it the logo is silently dropped and the batch is
+            // created unbranded with no error anywhere. Same flag as
+            // Admin/Settings/Index.jsx and Contacts/Show.jsx.
+            forceFormData: true,
             onSuccess: () => { reset(); onClose(); },
         });
     };
@@ -133,6 +144,30 @@ function CreateBatchModal({ show, onClose }) {
                                 error={errors.default_message}
                             />
                         </div>
+                    </section>
+
+                    {/* ⚠️ ITS OWN SECTION, matching the reference. The logo is
+                        not a property of the serial range beside it — it is what
+                        gets composited into every sticker this run produces, and
+                        (per the backend slice) there is NO fallback: a batch with
+                        no logo prints plain, permanently, because the only logo
+                        assets in this repo belong to another product (BUG-038). */}
+                    <section>
+                        <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                            {t('smart_qr.section_batch_logo')}
+                        </h4>
+                        <ImageUploadField
+                            id="batch-logo"
+                            label={t('smart_qr.field_batch_logo')}
+                            value={data.logo}
+                            onChange={(file) => setData('logo', file)}
+                            hint={t('smart_qr.logo_hint')}
+                            error={errors.logo}
+                            buttonLabel={t('smart_qr.logo_upload')}
+                            changeLabel={t('smart_qr.logo_change')}
+                            removeLabel={t('smart_qr.logo_remove')}
+                            placeholder={t('smart_qr.logo_preview_empty')}
+                        />
                     </section>
 
                     {/* Preview of the range, so the operator sees what will be
