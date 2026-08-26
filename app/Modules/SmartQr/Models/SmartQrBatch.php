@@ -21,6 +21,8 @@ use Illuminate\Support\Str;
  * @property string $status
  * @property string|null $failure_reason
  * @property string|null $default_message
+ * @property string|null $logo_path
+ * @property string|null $logo_disk
  */
 class SmartQrBatch extends Model
 {
@@ -42,6 +44,13 @@ class SmartQrBatch extends Model
         'qr_type', 'status', 'generated_count', 'printed_count', 'default_message',
         'notes', 'created_by_admin_id', 'generated_at', 'printed_at',
         'failure_reason', 'failed_at',
+
+        // ⚠️ Set ONLY by QrBatchController from a stored upload, never from
+        // request input: StoreQrBatchRequest validates a FILE under the key
+        // `logo` and defines no rule for either of these, so validated() can
+        // never carry them into create(). Fillable so the controller can pass
+        // the resolved pair in one array — not because they are user input.
+        'logo_path', 'logo_disk',
     ];
 
     protected function casts(): array

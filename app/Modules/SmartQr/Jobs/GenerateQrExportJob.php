@@ -94,15 +94,35 @@ class GenerateQrExportJob implements ShouldQueue
             throw new \RuntimeException('Could not open a ZIP archive for writing.');
         }
 
+        // ⚠️ RESOLVED LOGO PATHS, CACHED BY BATCH ID.
+        //
+        // The logo is a property of the BATCH, and an export selection can span
+        // batches — the inventory screen selects codes, not runs. Resolving per
+        // CODE would run an exists() and an is_file() five hundred times for
+        // what is at most a handful of distinct answers. Keyed by batch id, with
+        // null cached as null (array_key_exists, not ??=, so "no logo" is
+        // remembered rather than re-resolved 499 times).
+        //
+        // @var array<int, string|null> $logoPaths
+        $logoPaths = [];
+
         try {
             foreach (array_chunk($ids, 50) as $chunk) {
-                foreach (SmartQrCode::whereIn('id', $chunk)->get() as $code) {
+                // ⚠️ EAGER-LOADED. Without this the batch is lazy-loaded per
+                // code — 500 extra queries inside the render loop.
+                foreach (SmartQrCode::whereIn('id', $chunk)->with('batch')->get() as $code) {
                     $url = route('smartqr.scan', ['token' => $code->public_token]);
 
+                    if (! array_key_exists($code->batch_id, $logoPaths)) {
+                        $logoPaths[$code->batch_id] = $renderer->batchLogoPath($code->batch);
+                    }
+
+                    $logo = $logoPaths[$code->batch_id];
+
                     $rendered = match ($format) {
-                        'png' => $renderer->png($url, $code->serial_number),
-                        'pdf' => $renderer->pdf($url, $code->serial_number),
-                        default => $renderer->svg($url, $code->serial_number),
+                        'png' => $renderer->png($url, $code->serial_number, $logo),
+                        'pdf' => $renderer->pdf($url, $code->serial_number, $logo),
+                        default => $renderer->svg($url, $code->serial_number, $logo),
                     };
 
                     $zip->addFromString($code->serial_number.'.'.$format, $rendered['data']);

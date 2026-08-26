@@ -158,9 +158,13 @@ class SmartQrCodeController extends Controller
             abort(404);
         }
 
+        // ⚠️ The batch's logo, not the platform's — and null renders plain.
+        // The preview must be the artwork the printer receives, or an admin
+        // approves one thing and ships another.
         $rendered = $this->renderer->svg(
             route('smartqr.scan', ['token' => $code->public_token]),
-            $code->serial_number
+            $code->serial_number,
+            $this->renderer->batchLogoPath($code->batch),
         );
 
         return response($rendered['data'], 200, [
@@ -191,10 +195,12 @@ class SmartQrCodeController extends Controller
 
         $url = route('smartqr.scan', ['token' => $code->public_token]);
 
+        $logo = $this->renderer->batchLogoPath($code->batch);
+
         $rendered = match ($format) {
-            'png' => $this->renderer->png($url, $code->serial_number),
-            'pdf' => $this->renderer->pdf($url, $code->serial_number),
-            default => $this->renderer->svg($url, $code->serial_number),
+            'png' => $this->renderer->png($url, $code->serial_number, $logo),
+            'pdf' => $this->renderer->pdf($url, $code->serial_number, $logo),
+            default => $this->renderer->svg($url, $code->serial_number, $logo),
         };
 
         return response($rendered['data'], 200, [

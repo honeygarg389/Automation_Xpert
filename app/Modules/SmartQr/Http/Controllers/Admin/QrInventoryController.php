@@ -102,10 +102,18 @@ class QrInventoryController extends Controller
 
             // ⚠️ The export size note is driven by MEASURED bytes, and it must
             // be computed here rather than hard-coded in React: the figures
-            // differ by ~100× depending on whether a platform logo is
-            // configured, which React cannot know.
+            // differ by ~100× depending on whether a logo is composited, which
+            // React cannot know.
+            //
+            // ⚠️ CONSERVATIVE, AND DELIBERATELY NOT EXACT. The logo now belongs
+            // to a BATCH, so a selection spanning batches can mix both branches
+            // and no single figure is right. `exists()` over all batches means:
+            // if ANY batch carries a logo, quote the larger number. This is a
+            // hint for somebody deciding whether to wait, not a billing figure —
+            // over-quoting a wait is a mild surprise, under-quoting it is an
+            // admin cancelling a download that was nearly done.
             'exportBytesPerCode' => app(SmartQrImageRenderer::class)
-                ->zippedBytesPerCode(),
+                ->zippedBytesPerCode(SmartQrBatch::whereNotNull('logo_path')->exists()),
             'exportMaxCodes' => GenerateQrExportJob::MAX_CODES,
             'exportFormats' => GenerateQrExportJob::FORMATS,
             'readyExports' => $this->readyExports(),

@@ -55,6 +55,28 @@ class StoreQrBatchRequest extends FormRequest
             'qr_type' => ['nullable', 'string', 'max:32'],
             'default_message' => ['nullable', 'string', 'max:1000'],
             'notes' => ['nullable', 'string', 'max:2000'],
+
+            // ═══ ⚠️ `file`, NOT `image` — AND THAT IS THE WHOLE RULE ══════
+            //
+            // SystemSettingsController::uploadLogo records the trap: Laravel
+            // 12's `image` rule hardcodes jpg/jpeg/png/gif/bmp/webp and adds
+            // svg only when passed `allow_svg` — so `image` OVERRIDES the
+            // `mimes:` list rather than intersecting with it. Written as
+            // ['image', 'mimes:png,jpg,jpeg'] this rule would still accept gif,
+            // bmp and webp, and on Laravel <=10 it accepted SVG outright.
+            //
+            // `file` leaves `mimes:` as the only allow-list, so png/jpg/jpeg
+            // means png/jpg/jpeg. The favicon rule is written this way for the
+            // same reason. UploadExtensionSpoofingTest pins it.
+            //
+            // ⚠️ `mimes:` validates the SNIFFED extension. The extension the
+            // file is STORED under comes from SafeUploadExtension::for(), never
+            // from the client filename — see the controller.
+            //
+            // 2048 KB matches the platform logo. A logo is composited at 22% of
+            // 1024px, so ~225px square is the useful ceiling anyway; a larger
+            // upload buys nothing and costs the queue memory 500 times over.
+            'logo' => ['nullable', 'file', 'mimes:png,jpg,jpeg', 'max:2048'],
         ];
     }
 }

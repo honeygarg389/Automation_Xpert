@@ -11,8 +11,14 @@ use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use App\Services\AuditLogService;
+use App\Services\StorageManager;
+use App\Support\Files\SafeUploadExtension;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -52,7 +58,16 @@ class QrBatchController extends Controller
 
     public function store(StoreQrBatchRequest $request): RedirectResponse
     {
-        $batch = SmartQrBatch::create($request->validated() + [
+        // ⚠️ `logo` IS IN validated() AND IS NOT A COLUMN.
+        //
+        // FormRequest::validated() returns the uploaded file under its own key,
+        // so passing it straight into create() would try to set an attribute
+        // named `logo` on a table that has no such column. Stripped explicitly
+        // rather than relied upon to be absent — it is present whenever a file
+        // was actually uploaded, which is the only case that matters.
+        $data = Arr::except($request->validated(), ['logo']);
+
+        $batch = SmartQrBatch::create($data + $this->storeBatchLogo($request->file('logo')) + [
             'status' => 'draft',
             'created_by_admin_id' => $request->user('admin')?->id,
         ]);
@@ -159,6 +174,42 @@ class QrBatchController extends Controller
         );
 
         return back()->with('success', __(':count code(s) retired.', ['count' => $affected]));
+    }
+
+    /**
+     * ═══ ⚠️ THE BATCH LOGO — WRITTEN TO THE PRIVATE DISK, ON PURPOSE ══════
+     *
+     * The platform logo lives on `public` because a browser fetches it. This
+     * one is never fetched by a browser: it is read SERVER-SIDE by GD/endroid
+     * during a render and composited into the output. Nothing links to it, so
+     * `local` (private) is both sufficient and tighter — the same disk the
+     * export ZIPs already use, and the same reason.
+     *
+     * ⚠️ THE DISK NAME IS STORED ALONGSIDE THE PATH. A path with no disk is a
+     * guess, and a wrong guess resolves to "file absent" rather than to an
+     * error — which is a plain sticker instead of a branded one, discovered in
+     * print.
+     *
+     * ⚠️ SEC-004: the stored extension comes from SafeUploadExtension::for(),
+     * which sniffs the CONTENT. getClientOriginalExtension() is an attacker
+     * string. The name is a UUID, so an upload cannot choose where it lands or
+     * overwrite anything.
+     *
+     * @return array{logo_path: string, logo_disk: string}|array{}
+     */
+    private function storeBatchLogo(?UploadedFile $file): array
+    {
+        if ($file === null) {
+            return [];
+        }
+
+        $path = app(StorageManager::class)->prefixedPath(
+            'branding/qr-logo-'.Str::uuid().'.'.SafeUploadExtension::for($file)
+        );
+
+        Storage::disk('local')->putFileAs(dirname($path), $file, basename($path));
+
+        return ['logo_path' => $path, 'logo_disk' => 'local'];
     }
 
     public function show(SmartQrBatch $batch): Response

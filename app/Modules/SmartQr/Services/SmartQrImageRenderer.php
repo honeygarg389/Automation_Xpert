@@ -2,7 +2,7 @@
 
 namespace App\Modules\SmartQr\Services;
 
-use App\Models\SystemSetting;
+use App\Modules\SmartQr\Models\SmartQrBatch;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
@@ -36,9 +36,22 @@ use Illuminate\Support\Facades\Storage;
  *     the failure is discovered by THEIR customer, in a shop, silently.
  *   - **A customer-logo upload would reopen SEC-004** — the unfixed stored-XSS
  *     finding about SVG accepted for upload and served from public storage — on
- *     a path whose output then gets PRINTED. Nothing here accepts an upload, so
- *     there is deliberately no sanitisation code: the vulnerability is avoided
- *     rather than mitigated.
+ *     a path whose output then gets PRINTED.
+ *
+ * ⚠️ THAT SECOND POINT IS NOW ONLY HALF TRUE, AND THE HALF THAT CHANGED IS
+ * NAMED HERE RATHER THAN LEFT AS A STALE COMMENT. A per-BATCH logo upload does
+ * exist (an admin-only control on batch creation, not a customer-facing
+ * designer, so R-2's colour/pattern ruling is untouched). The vulnerability is
+ * therefore MITIGATED rather than avoided, on three layers:
+ *
+ *     1. `mimes:png,jpg,jpeg` behind `file` — not `image`, which would override
+ *        the allow-list. See StoreQrBatchRequest.
+ *     2. SafeUploadExtension sniffs the content for the STORED extension.
+ *     3. The private `local` disk: nothing serves these to a browser, and
+ *        batchLogoPath() refuses SVG before GD ever sees it.
+ *
+ * Everything else below — colour, pattern, finder shape, error correction,
+ * margin, size — remains fixed and unexposed.
  *
  * ⚠️ §13 also asks for collapsed "advanced options" (error correction, margin,
  * resolution, logo size, print DPI) two lines after saying not to expose
@@ -117,19 +130,37 @@ class SmartQrImageRenderer
     ];
 
     /**
-     * Bytes per code for the currently configured logo state.
+     * Bytes per code for a given logo state.
+     *
+     * ⚠️ A HINT FOR THE EXPORT UI, NOT A BILLING FIGURE — and now that a logo
+     * belongs to a BATCH rather than to the installation, a selection spanning
+     * several batches can genuinely mix both branches. Deliberately not modelled
+     * exactly: the caller passes true if ANY batch in scope carries a logo, so
+     * a mixed selection is OVER-estimated. Over-estimating a wait is a mild
+     * surprise; under-estimating it is an admin abandoning a download that was
+     * about to finish.
+     *
+     * ⚠️ THE PARAMETER REPLACED A `logoPath()` CALL. This used to consult the
+     * platform logo, and it must not: the platform logo is no longer a Smart QR
+     * input in any form. See batchLogoPath().
      *
      * @return array{svg: int, png: int, pdf: int}
      */
-    public function zippedBytesPerCode(): array
+    public function zippedBytesPerCode(bool $hasLogo = false): array
     {
-        return self::ZIPPED_BYTES_PER_CODE[$this->logoPath() === null ? 'no_logo' : 'logo'];
+        return self::ZIPPED_BYTES_PER_CODE[$hasLogo ? 'logo' : 'no_logo'];
     }
 
-    /** @return array{data: string, mime: string} */
-    public function svg(string $url, string $serial): array
+    /**
+     * @param  string|null  $logoPath  Absolute path to the batch's logo, or null
+     *                                 for a PLAIN render. Resolve it with
+     *                                 batchLogoPath() — never by reading a
+     *                                 stored column directly.
+     * @return array{data: string, mime: string}
+     */
+    public function svg(string $url, string $serial, ?string $logoPath = null): array
     {
-        $result = $this->build($url, $serial, new SvgWriter);
+        $result = $this->build($url, $serial, new SvgWriter, $logoPath);
 
         return [
             'data' => $this->appendSerialToSvg($result->getString(), $serial),
@@ -222,9 +253,9 @@ class SmartQrImageRenderer
     }
 
     /** @return array{data: string, mime: string} */
-    public function png(string $url, string $serial): array
+    public function png(string $url, string $serial, ?string $logoPath = null): array
     {
-        $result = $this->build($url, $serial, new PngWriter);
+        $result = $this->build($url, $serial, new PngWriter, $logoPath);
 
         return ['data' => $result->getString(), 'mime' => 'image/png'];
     }
@@ -250,9 +281,13 @@ class SmartQrImageRenderer
      *
      * @return array{data: string, mime: string}
      */
-    public function pdf(string $url, string $serial): array
+    public function pdf(string $url, string $serial, ?string $logoPath = null): array
     {
-        $svg = $this->svg($url, $serial)['data'];
+        // ⚠️ THE LOGO MUST BE THREADED THROUGH THIS CALL. The PDF is the SVG
+        // embedded as a data URI, so dropping the argument here would produce a
+        // branded SVG download and an unbranded PDF from the same code — a
+        // difference nobody sees until both are printed side by side.
+        $svg = $this->svg($url, $serial, $logoPath)['data'];
 
         $html = view('smartqr.print', [
             'svgDataUri' => 'data:image/svg+xml;base64,'.base64_encode($svg),
@@ -271,8 +306,12 @@ class SmartQrImageRenderer
      * ⚠️ Nothing here is parameterised beyond the URL and the serial. That is
      * the point: see the class docblock.
      */
-    private function build(string $url, string $serial, SvgWriter|PngWriter $writer): ResultInterface
-    {
+    private function build(
+        string $url,
+        string $serial,
+        SvgWriter|PngWriter $writer,
+        ?string $logoPath = null,
+    ): ResultInterface {
         // ⚠️ The FLUENT builder — 5.1's API. Written once, so every format and
         // every caller gets byte-identical configuration.
         $builder = Builder::create()
@@ -296,11 +335,12 @@ class SmartQrImageRenderer
             ->labelText('S.No: '.$serial)
             ->labelFont(new OpenSans(28));
 
-        $logo = $this->logoPath();
-
-        if ($logo !== null) {
+        // ⚠️ NO FALLBACK. The logo is whatever the caller passed, and null
+        // means PLAIN. There is deliberately no `?? $this->somethingGlobal()`
+        // here — see batchLogoPath() for why that absence is the feature.
+        if ($logoPath !== null) {
             $builder = $builder
-                ->logoPath($logo)
+                ->logoPath($logoPath)
                 ->logoResizeToWidth((int) round(self::PNG_SIZE * self::LOGO_RATIO))
                 ->logoPunchoutBackground(true);
         }
@@ -309,50 +349,64 @@ class SmartQrImageRenderer
     }
 
     /**
-     * ═══ ⚠️ THE LOGO, AND THE FALLBACK MATTERS MORE THAN THE LOGO ═════════
+     * ═══ ⚠️ THE LOGO IS THE BATCH'S, AND THERE IS NO FALLBACK ═════════════
      *
-     * §14: "For MVP, use AutomationXpert logo only. If a logo asset already
-     * exists in the project, reuse it."
+     * §14 said "use the AutomationXpert logo", and this used to resolve the
+     * configured PLATFORM logo (`app_logo_path`) for every render. It no longer
+     * does, and the platform logo is not consulted here in ANY form — not as a
+     * default, not as a fallback when a batch has none.
      *
-     * ⚠️ THERE IS NO AutomationXpert ASSET IN THIS REPOSITORY. The only logo
-     * files are `public/whatsmine-logo.png` and `whatsmine-logo-with-title.svg`
-     * — WhatsMine branding inherited from the original import. Recorded in
-     * `docs/found-bugs.md` because it is a real gap the owner must close before
-     * any kit is printed.
+     * ⚠️ THAT IS THE POINT, NOT AN OVERSIGHT. A print run is a physical,
+     * irreversible artefact. If a batch created with no logo silently inherited
+     * whatever brand the installation happens to be configured with, the way it
+     * is discovered is a box of five hundred stickers carrying the wrong mark —
+     * and BUG-038 records that the only logo assets in this repository are
+     * WhatsMine-branded, inherited from the original import. A plain QR is
+     * honest. A competitor's brand printed onto a customer's stickers is not
+     * recoverable once the run is done.
      *
-     * So the source is the CONFIGURED PLATFORM LOGO (`app_logo_path`), which on
-     * a white-label install is that installation's own brand. It is not a
-     * customer logo — one per installation, set by the platform owner — so §14
-     * and R-2 both hold.
+     * So: batch has a logo -> that logo. Batch has none, or no batch at all ->
+     * null -> PLAIN. Full stop.
      *
-     * ⚠️ AND WHEN NONE IS CONFIGURED, THIS RETURNS NULL AND THE QR RENDERS
-     * PLAIN. It must NEVER fall back to the WhatsMine asset: a plain QR is
-     * honest, whereas a competitor's brand printed onto a customer's stickers is
-     * not recoverable once the run is done.
+     * ⚠️ SEC-004 DISCIPLINE, UNCHANGED FROM THE PLATFORM-LOGO VERSION:
+     *
+     *   - `$disk->exists()` before resolving, so a deleted file is "no logo"
+     *     rather than a render-time explosion 500 codes into a queued export.
+     *   - `is_file()` on the resolved absolute path — `$disk->path()` is a
+     *     string operation and asserts nothing about the filesystem.
+     *   - SVG is REFUSED. GD cannot rasterise it, so a PNG render would fail at
+     *     output rather than here, and it keeps this path out of SEC-004's
+     *     territory entirely. The extension is checked as a backstop only: what
+     *     actually keeps SVG off this disk is SafeUploadExtension, which sniffs
+     *     the content at upload and stores anything denied or unrecognised as
+     *     `.bin` — which then fails the check below on its own.
+     *
+     * ⚠️ `$disk->path()` EXISTS ONLY ON LOCAL-DRIVER DISKS. Batch logos are
+     * written to `local` for exactly this reason (QrBatchController). A row
+     * naming an s3-family disk resolves to null here rather than throwing —
+     * a plain render, not a 500.
      */
-    public function logoPath(): ?string
+    public function batchLogoPath(?SmartQrBatch $batch): ?string
     {
-        try {
-            $path = SystemSetting::get('app_logo_path');
-        } catch (\Throwable) {
-            return null;
-        }
+        $path = $batch?->logo_path;
 
         if (! is_string($path) || trim($path) === '') {
             return null;
         }
 
-        $disk = Storage::disk(SystemSetting::get('app_logo_disk', 'public'));
+        try {
+            $disk = Storage::disk($batch->logo_disk ?: 'local');
 
-        if (! $disk->exists($path)) {
+            if (! $disk->exists($path)) {
+                return null;
+            }
+
+            $absolute = $disk->path($path);
+        } catch (\Throwable) {
+            // Unknown disk name, or a driver with no local path. Plain, not fatal.
             return null;
         }
 
-        $absolute = $disk->path($path);
-
-        // ⚠️ SVG is refused as a logo source. GD cannot rasterise it, so a PNG
-        // render would fail at output time rather than here — and it keeps this
-        // path away from SEC-004's territory entirely.
         if (! is_file($absolute) || strtolower(pathinfo($absolute, PATHINFO_EXTENSION)) === 'svg') {
             return null;
         }
