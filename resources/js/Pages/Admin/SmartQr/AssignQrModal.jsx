@@ -129,7 +129,19 @@ export default function AssignQrModal({ show, onClose, onAssigned, codeIds = [],
             <Modal.Header title={t('smart_qr.assign_title')} onClose={close} />
 
             <form onSubmit={submit}>
-                <Modal.Body className="space-y-4">
+                {/* ═══ ⚠️ A SAFETY NET, ADDED — THIS MODAL HAD NO CAP AT ALL.
+                    Measured before adding it: 550px body / 690px panel in the
+                    default state, growing to 744px / 884px with the R-8
+                    override reason box expanded — a genuinely taller state,
+                    not just many validation errors. Header (66px), footer
+                    (72px) and Modal's own py-6 padding (48px) measure
+                    IDENTICAL to CreateBatchModal's — same single-line header,
+                    same standard Modal.Footer — so the same corrected
+                    formula applies, confirmed by measurement rather than
+                    copied on the assumption that the chrome matched.
+                    See Batches/Index.jsx's CreateBatchModal for the full
+                    arithmetic calc(100vh-13rem) is based on. */}
+                <Modal.Body className="max-h-[calc(100vh-13rem)] space-y-4 overflow-y-auto">
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
                         {t('smart_qr.assign_subtitle', { count: codeIds.length })}
                     </p>
