@@ -6,6 +6,8 @@ use Database\Factories\SmartQrBatchFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
@@ -65,6 +67,51 @@ class SmartQrBatch extends Model
     protected static function booted(): void
     {
         static::creating(fn (self $b) => $b->uuid ??= (string) Str::uuid());
+
+        // ═══ ⚠️ THE BATCH LOGO IS NOT PART OF THE DATABASE — DELETING THE ROW
+        //     LEAVES IT ON DISK UNLESS SOMETHING ELSE REMOVES IT ═════════════
+        //
+        // Registered here, not in QrBatchController::destroy(), on purpose: a
+        // controller-level fix only protects the one call site someone
+        // remembered to edit — and that is exactly how this file ended up
+        // orphaned in the first place, since storeBatchLogo() was added to the
+        // create path without anyone touching destroy(). A model hook runs on
+        // every deletion path — this controller, Model::destroy(), tinker, a
+        // future bulk-admin tool — because the guarantee belongs to "a batch
+        // with a logo was deleted", not to any one place that can delete one.
+        //
+        // ⚠️ DELIBERATELY NOT App\Models\Media::delete()'s SHAPE. That override
+        // calls Storage::delete() with no try/catch, so a genuine I/O failure
+        // there would stop parent::delete() from ever running — the file
+        // problem would block the row deletion too. That is acceptable for a
+        // record that IS the file. It is not acceptable here: a batch row and
+        // its serial range are the far more consequential object, and losing
+        // track of one branding image is a recoverable annoyance, not a reason
+        // to refuse an admin's delete.
+        //
+        // ⚠️ Measured, not assumed: Storage::disk('local')->delete() on a file
+        // that is ALREADY GONE returns true and throws nothing — Flysystem's
+        // local adapter treats a missing target as success. So the try/catch
+        // below exists for the rarer case (a bad logo_disk value, a permissions
+        // fault, a network-disk outage), not for the everyday "already cleaned
+        // up" case, which needs no special handling at all.
+        static::deleting(function (self $batch) {
+            if (! is_string($batch->logo_path) || $batch->logo_path === '') {
+                return;
+            }
+
+            try {
+                Storage::disk($batch->logo_disk ?: 'local')->delete($batch->logo_path);
+            } catch (\Throwable $e) {
+                // Logged, never rethrown — see the class-level note above.
+                Log::error('smart_qr.batch_logo_cleanup_failed', [
+                    'batch_id' => $batch->id,
+                    'logo_path' => $batch->logo_path,
+                    'logo_disk' => $batch->logo_disk,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        });
     }
 
     public function getRouteKeyName(): string

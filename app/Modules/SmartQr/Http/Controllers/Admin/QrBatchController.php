@@ -214,6 +214,51 @@ class QrBatchController extends Controller
 
     public function show(SmartQrBatch $batch): Response
     {
+        // ═══ ⚠️ assigned_count / active_count — DERIVED, MIRRORING R-12 ═════
+        //
+        // Not read from `codes` below: that prop is paginated at 50, and a
+        // batch's `quantity` runs up to 10,000 — deriving from the visible
+        // page would silently undercount every batch past its first page.
+        // loadCount() runs one extra query against the already-route-bound
+        // model rather than re-fetching it, the single-instance counterpart
+        // to index()'s withCount() on the same 'codes as X' => whereHas(...)
+        // shape (R-12: never a stored column, so nothing can drift).
+        //
+        // ⚠️ THE WorkspaceScope REMOVAL, KEPT FOR CONSISTENCY WITH R-12 —
+        // MEASURED TO BE A NO-OP ON THIS ROUTE, AND THAT IS WORTH RECORDING
+        // RATHER THAN LEAVING AS AN UNVERIFIED ASSUMPTION.
+        //
+        // The naive expectation (and what this comment originally claimed,
+        // before it was checked with a mutation test) is hazard H-2:
+        // whereHas()/withCount() build a fresh EXISTS subquery that does not
+        // inherit whatever was chained onto the relation *method*, so removing
+        // the closure-level unscoping should silently collapse both counts to
+        // 0. Mutation-tested directly against this action, and it does NOT:
+        // WorkspaceScope::apply() returns immediately when
+        // `Auth::guard('admin')->check()` is true, BEFORE it ever attaches a
+        // constraint — and `show()` sits under this module's `auth:admin`
+        // route group with no other entry point, so that check is always true
+        // whenever this code runs. The scope never filters here regardless of
+        // whether the closure re-removes it.
+        //
+        // Kept anyway: it matches R-12's established closure shape verbatim
+        // (index()'s own `assigned_count`, under the same admin route group,
+        // has the identical property — not touched here, out of this
+        // change's scope, but worth knowing before treating that comment as
+        // proof this one is load-bearing), and it costs nothing to leave in
+        // place against a future caller that is NOT admin-guard-only.
+        $batch->loadCount([
+            'codes as assigned_count' => fn ($q) => $q->whereHas(
+                'currentAssignment',
+                fn ($a) => $a->withoutGlobalScope(WorkspaceScope::class)
+            ),
+            'codes as active_count' => fn ($q) => $q->whereHas(
+                'currentAssignment',
+                fn ($a) => $a->withoutGlobalScope(WorkspaceScope::class)
+                    ->where('status', SmartQrStatus::ASSIGNMENT_ACTIVE)
+            ),
+        ]);
+
         return Inertia::render('Admin/SmartQr/Batches/Show', [
             'batch' => $batch,
             'codes' => $batch->codes()

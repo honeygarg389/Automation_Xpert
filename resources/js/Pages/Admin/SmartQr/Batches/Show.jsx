@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, Input, Modal, Pagination } from '@/Components/ui';
-import { ArrowLeft, Layers, Package, QrCode, Printer, Pencil, TriangleAlert, Download } from 'lucide-react';
+import { ArrowLeft, CircleCheck, Layers, Link2, Package, QrCode, Printer, Pencil, TriangleAlert, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge, BatchStatusBadge } from '../QrStatusBadge';
 import { formatDateTz } from '@/Utils/datetime';
@@ -111,11 +111,11 @@ function RetireConfirmModal({ show, batch, onClose, onConfirm }) {
  */
 function StatCard({ icon: Icon, label, value }) {
     return (
-        <Card className="p-5">
-            <div className="flex items-start gap-3">
+        <Card className="p-4">
+            <div className="flex items-start gap-2">
                 <div className="mt-0.5 text-brand-600 dark:text-brand-400"><Icon className="h-5 w-5" /></div>
                 <div>
-                    <p className="text-xs text-neutral-500 dark:text-neutral-400">{label}</p>
+                    <p className="text-sm font-medium text-neutral-500 dark:text-neutral-400">{label}</p>
                     <p className="text-2xl font-bold text-neutral-900 dark:text-neutral-100">{value}</p>
                 </div>
             </div>
@@ -163,6 +163,14 @@ export default function SmartQrBatchShow({ batch, codes }) {
         { icon: Package, label: t('smart_qr.stat_quantity'), value: batch.quantity },
         { icon: QrCode, label: t('smart_qr.stat_generated'), value: batch.generated_count },
         { icon: Printer, label: t('smart_qr.stat_printed'), value: batch.printed_count },
+        // ⚠️ assigned_count / active_count come from QrBatchController::show()'s
+        // loadCount() — derived (R-12), never a stored column. `Link2` is
+        // reused from Inventory/Index.jsx's "Bulk Assign" action rather than a
+        // new icon; `CircleCheck` matches AssignmentStateBadge's `success`
+        // (green) mapping for the same 'active' status elsewhere in this
+        // module, so the pill and the badge agree on what "active" looks like.
+        { icon: Link2, label: t('smart_qr.stat_assigned'), value: batch.assigned_count },
+        { icon: CircleCheck, label: t('smart_qr.stat_active'), value: batch.active_count },
     ];
 
     return (
@@ -288,7 +296,7 @@ export default function SmartQrBatchShow({ batch, codes }) {
                     </Card>
                 )}
 
-                <div className="grid gap-4 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-5">
                     {stats.map((s) => (
                         <StatCard key={s.label} icon={s.icon} label={s.label} value={s.value} />
                     ))}

@@ -56,7 +56,24 @@ export default function PlanModal({ show, onClose, plan = null, currencies = [],
                 title={isEdit ? t('admin.edit_plan') : t('admin.add_plan')}
                 onClose={onClose}
             />
-            <Modal.Body className="max-h-[70vh] overflow-y-auto">
+            {/* ═══ ⚠️ A SAFETY NET, NOT THE LAYOUT — SAME CORRECTION AS
+                CreateBatchModal's, WITH THIS MODAL'S OWN MEASURED CHROME ══
+                Measured uncapped in headless Chrome against the compiled
+                stylesheet: header 66px, Modal's own py-6 padding 48px — 114px
+                total. UNLIKE CreateBatchModal, PlanForm renders its own
+                Cancel/Save buttons INSIDE this Body (no separate
+                <Modal.Footer> exists here), so there is no footer height to
+                add — the buttons are already part of what the cap measures.
+
+                max-h-[70vh] was the same arithmetically-wrong shape as
+                CreateBatchModal's original: a fraction of the viewport
+                compared against a FIXED chrome only satisfies "panel fits"
+                above one specific viewport height, and fails on exactly the
+                small screens the cap exists for. calc(100vh-8rem) (128px,
+                ~14px of margin over the measured 114px) holds at every size
+                instead. See Batches/Index.jsx's CreateBatchModal for the
+                full arithmetic this pattern is based on. */}
+            <Modal.Body className="max-h-[calc(100vh-8rem)] overflow-y-auto">
                 <PlanForm
                     data={data}
                     setData={setData}

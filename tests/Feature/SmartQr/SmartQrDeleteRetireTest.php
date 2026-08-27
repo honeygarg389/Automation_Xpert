@@ -14,6 +14,8 @@ use App\Modules\SmartQr\Models\SmartQrScanEvent;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -323,5 +325,138 @@ class SmartQrDeleteRetireTest extends TestCase
             ->assertForbidden();
 
         $this->assertDatabaseHas('smart_qr_codes', ['id' => $code->id]);
+    }
+
+    // ══ BATCH LOGO CLEANUP ON DELETE ═══════════════════════════════════════
+
+    /**
+     * ⚠️ REGISTERED ON THE MODEL — SmartQrBatch::booted()'s static::deleting()
+     * hook — NOT in QrBatchController::destroy(), which this file's other
+     * tests already exercise. Going through the real HTTP delete flow here is
+     * what proves the hook actually fires from that path; a direct
+     * `$batch->delete()` call would prove the hook exists but not that the
+     * controller reaches it.
+     */
+    #[Test]
+    public function deleting_a_batch_through_the_real_flow_removes_its_logo_file_from_disk(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('branding/qr-logo-cleanup-test.png', 'fake-png-bytes');
+
+        $admin = $this->adminWith(['manage_qr_batches']);
+        $batch = SmartQrBatch::factory()->create([
+            'logo_path' => 'branding/qr-logo-cleanup-test.png',
+            'logo_disk' => 'local',
+        ]);
+
+        $this->assertTrue(Storage::disk('local')->exists('branding/qr-logo-cleanup-test.png'),
+            'Positive control: the file was never actually written, so its absence afterward '
+            .'would prove nothing.');
+
+        $this->actingAs($admin, 'admin')
+            ->delete(route('admin.qr.batches.destroy', $batch->uuid))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('smart_qr_batches', ['id' => $batch->id]);
+        $this->assertFalse(Storage::disk('local')->exists('branding/qr-logo-cleanup-test.png'),
+            'The batch row was deleted but its logo file survived on disk — the orphan this hook '
+            .'exists to prevent.');
+    }
+
+    /**
+     * ⚠️ THE MEASURED NON-THROWING CASE, PINNED ANYWAY.
+     *
+     * Storage::delete() on an already-missing file returns true and throws
+     * nothing — measured directly against this app's local Flysystem adapter
+     * before this hook was written. This test exists so that guarantee stays
+     * true rather than merely having been true once during development.
+     */
+    #[Test]
+    public function deleting_a_batch_whose_logo_file_is_already_gone_still_succeeds(): void
+    {
+        Storage::fake('local');
+        // ⚠️ Deliberately NEVER written to the fake disk — this IS the
+        // "already gone" state, not a file created then removed.
+
+        $admin = $this->adminWith(['manage_qr_batches']);
+        $batch = SmartQrBatch::factory()->create([
+            'logo_path' => 'branding/qr-logo-vanished.png',
+            'logo_disk' => 'local',
+        ]);
+
+        $this->actingAs($admin, 'admin')
+            ->delete(route('admin.qr.batches.destroy', $batch->uuid))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('smart_qr_batches', ['id' => $batch->id]);
+    }
+
+    /**
+     * ═══ ⚠️ THE CRITICAL CASE — A FILE-DELETE FAILURE MUST NOT BLOCK THE ROW ═══
+     *
+     * Simulated with an INVALID disk name rather than a mock, so the failure
+     * is a real one the framework produces (an unconfigured disk throws when
+     * Storage::disk() tries to resolve it), not a stand-in for a failure that
+     * might not match how PHP actually fails here.
+     *
+     * ⚠️ THIS TEST FAILS IF THE try/catch IS REMOVED — mutation-verified, not
+     * merely asserted to. Without the try/catch, the exception from
+     * Storage::disk('this-disk-does-not-exist') propagates out of the
+     * `deleting` listener, Eloquent aborts the delete, and both assertions
+     * below fail: the row survives and nothing is logged as a *caught*
+     * failure (Laravel's own unhandled-exception path would fire instead).
+     */
+    #[Test]
+    public function a_genuine_logo_delete_failure_is_logged_but_does_not_block_the_batch_delete(): void
+    {
+        Log::spy();
+
+        $admin = $this->adminWith(['manage_qr_batches']);
+        $batch = SmartQrBatch::factory()->create([
+            'logo_path' => 'branding/qr-logo-unreachable.png',
+            'logo_disk' => 'this-disk-does-not-exist',
+        ]);
+
+        $this->actingAs($admin, 'admin')
+            ->delete(route('admin.qr.batches.destroy', $batch->uuid))
+            ->assertSessionHasNoErrors();
+
+        // ⚠️ assertDatabaseMissing's 3rd param is a CONNECTION name in this
+        // Laravel version, not a message — confirmed against
+        // InteractsWithDatabase.php before fixing this. The comment above
+        // carries what the failure would mean instead.
+        $this->assertDatabaseMissing('smart_qr_batches', ['id' => $batch->id]);
+
+        Log::shouldHaveReceived('error')
+            ->once()
+            ->withArgs(function (string $message, array $context) use ($batch) {
+                return $message === 'smart_qr.batch_logo_cleanup_failed'
+                    && $context['batch_id'] === $batch->id
+                    && $context['logo_disk'] === 'this-disk-does-not-exist';
+            });
+    }
+
+    /**
+     * POSITIVE CONTROL for all three tests above: a batch with NO logo takes
+     * no Storage action at all and deletes exactly as it always did.
+     */
+    #[Test]
+    public function deleting_a_batch_without_a_logo_makes_no_storage_call_and_behaves_unchanged(): void
+    {
+        Storage::fake('local');
+
+        $admin = $this->adminWith(['manage_qr_batches']);
+        $batch = SmartQrBatch::factory()->create(['logo_path' => null, 'logo_disk' => null]);
+
+        $this->actingAs($admin, 'admin')
+            ->delete(route('admin.qr.batches.destroy', $batch->uuid))
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('smart_qr_batches', ['id' => $batch->id]);
+
+        // ⚠️ Storage::fake() records every operation; asserting NONE happened
+        // is the discriminator against a version of the hook that calls
+        // Storage unconditionally and only happens to no-op for null paths.
+        Storage::disk('local')->assertDirectoryEmpty('branding');
     }
 }
