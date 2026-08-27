@@ -177,6 +177,28 @@ describe('Create Batch — layout regressions found in the browser', () => {
         expect(caption.parentElement).toBe(uploadBtn.parentElement);
     });
 
+    /**
+     * ⚠️ THE SUBTITLE MUST NOT LIVE IN THE THING THAT SCROLLS.
+     *
+     * It reads identically in both places until the body overflows — and then
+     * it scrolls out of view exactly when the form is longest and the context
+     * is most wanted (every field showing an error). Asserting containment
+     * rather than appearance, because appearance is the part that looks fine.
+     */
+    it('renders the subtitle in the sticky header, never in the scrollable body', () => {
+        openCreate();
+
+        const subtitle = screen.getByText('smart_qr.create_batch_subtitle');
+        const scroller = document.querySelector('[class*="max-h-"]');
+
+        expect(scroller).not.toBeNull();
+        expect(scroller.contains(subtitle)).toBe(false);
+
+        // ...and it is under the heading, in the same fixed block.
+        const heading = screen.getByRole('heading', { name: 'smart_qr.create_batch' });
+        expect(heading.parentElement.contains(subtitle)).toBe(true);
+    });
+
     it('caps the modal body height so header and footer stay reachable', () => {
         // ⚠️ On a 13" MacBook the panel outgrew the viewport and Modal centres
         // with `flex items-center` over `overflow-y-auto`, which pushes the
@@ -184,9 +206,15 @@ describe('Create Batch — layout regressions found in the browser', () => {
         // unclickable. Mirrors Admin/Plans/PlanModal.jsx.
         openCreate();
 
-        const body = document.querySelector('.max-h-\\[70vh\\]');
+        const body = document.querySelector('[class*="max-h-"]');
         expect(body).not.toBeNull();
         expect(body.className).toContain('overflow-y-auto');
+
+        // ⚠️ The cap must be derived from the chrome, not a vh fraction: the
+        // panel is body + header + footer + the Modal's own padding, so a
+        // fraction of the viewport can still overflow it. See the note at the
+        // call site for the arithmetic.
+        expect(body.className).toContain('calc(100vh-13rem)');
 
         // Positive control: it is the BODY that scrolls, not the footer.
         expect(body.textContent).toContain('smart_qr.field_batch_name');

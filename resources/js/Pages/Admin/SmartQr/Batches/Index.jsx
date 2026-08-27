@@ -53,35 +53,54 @@ function CreateBatchModal({ show, onClose }) {
 
     return (
         <Modal show={show} onClose={onClose} maxWidth="2xl">
-            <Modal.Header title={t('smart_qr.create_batch')} onClose={onClose} />
+            {/* ⚠️ The subtitle lives in the HEADER, not at the top of the
+                body. The body is the only scrolling region, so a subtitle
+                placed there scrolls away precisely when the form is at its
+                longest — the all-fields-in-error state. */}
+            <Modal.Header
+                title={t('smart_qr.create_batch')}
+                subtitle={t('smart_qr.create_batch_subtitle')}
+                onClose={onClose}
+            />
             <form onSubmit={submit}>
-                {/* ═══ ⚠️ THE BODY SCROLLS; HEADER AND FOOTER DO NOT ═══════
-                    Measured on a 13" MacBook at 100%: this form is tall enough
-                    that the panel exceeded the viewport, and Modal's container
-                    centres with `flex items-center` over `overflow-y-auto` —
-                    which pushes the overflow ABOVE the scroll origin, so the
-                    header and the footer buttons become unreachable rather than
-                    merely off-screen. Create and Cancel could not be clicked.
+                {/* ═══ ⚠️ A SAFETY NET, NOT THE LAYOUT ═════════════════════
+                    The form is now spaced to FIT without scrolling. Measured in
+                    headless Chrome against the compiled stylesheet:
 
-                    Capping the BODY keeps the panel inside the viewport, so the
-                    header and footer stay pinned and only the fields scroll.
+                        default state   718 px panel + 48 px Modal padding
+                                        = 766 px required
+                        fits            1512x982, 1470x956 and 1440x900 13"
+                                        MacBooks, with or without a bookmarks
+                                        bar (781-898 px usable)
 
-                    ⚠️ Mirrors Admin/Plans/PlanModal.jsx, which is the only
-                    modal in this codebase that already solves this. It is NOT
-                    AssignQrModal — that one has as many fields and no cap, so
-                    it has the same latent defect; reported, not fixed here. */}
-                <Modal.Body className="max-h-[70vh] space-y-4 overflow-y-auto">
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                        {t('smart_qr.create_batch_subtitle')}
-                    </p>
+                    So this cap does nothing in normal use — `scrollHeight ===
+                    clientHeight`, no scrollbar. It exists for the one state
+                    that genuinely cannot be spaced away: every field showing a
+                    validation error grows the body to 722 px, and on a small
+                    display that has to scroll somewhere.
 
+                    ⚠️ calc(100vh-13rem), NOT A vh FRACTION, AND THE ARITHMETIC
+                    IS THE POINT. The panel is `body + header(66) + footer(72)`
+                    and the Modal adds `py-6` (48) — 186 px of chrome the body
+                    does not include. A fractional cap like the `max-h-[70vh]`
+                    this replaces satisfies `0.7*vh + 186 <= vh` only when the
+                    viewport exceeds 620 px, and `85vh` only above 920 px — so
+                    on the very screens that need the net, the panel STILL
+                    outgrows the viewport and Modal's `flex items-center` pushes
+                    the header and footer out of reach again. 13rem = 208 px
+                    leaves the panel at `vh - 70` at every size.
+
+                    ⚠️ Admin/Plans/PlanModal.jsx carries the same 70vh and the
+                    same latent flaw; AssignQrModal has no cap at all. Both
+                    reported, neither fixed here. */}
+                <Modal.Body className="max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto">
                     {/* Section heading matches Admin/Plans/PlanForm.jsx — the
                         existing multi-section admin form. No new typography. */}
                     <section>
-                        <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                        <h4 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                             {t('smart_qr.section_batch_information')}
                         </h4>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2.5 sm:grid-cols-2">
                         <Input
                             label={t('smart_qr.field_batch_name')}
                             value={data.batch_name}
@@ -169,7 +188,7 @@ function CreateBatchModal({ show, onClose }) {
                             pasted inline and NO error slot — a validation failure
                             on this field rendered nothing. The shared Textarea
                             carries the error branch. */}
-                        <div className="mt-4">
+                        <div className="mt-2.5">
                             <Textarea
                                 label={t('smart_qr.field_default_message')}
                                 value={data.default_message}

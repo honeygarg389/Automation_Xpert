@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react';
+import { RefreshCw, Trash2, Upload } from 'lucide-react';
 import Button from './Button';
 
 /**
@@ -100,20 +101,18 @@ export default function ImageUploadField({
 
             <div className="flex items-start gap-4">
                 <div className="flex flex-col gap-2">
-                    <Button type="button" variant="outline" size="sm" onClick={pick}>
+                    {/* ⚠️ The icon tracks the ACTION, not the presence of a
+                        file: Upload while empty, RefreshCw once something is
+                        held, because the second click replaces rather than
+                        adds. `aria-hidden` on both — the button's text is
+                        already its accessible name, and an unlabelled <svg>
+                        would otherwise be announced as an unnamed graphic. */}
+                    <Button type="button" variant="outline" size="sm" onClick={pick} className="gap-1.5">
+                        {value
+                            ? <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                            : <Upload className="h-3.5 w-3.5" aria-hidden="true" />}
                         {value ? (changeLabel ?? buttonLabel) : buttonLabel}
                     </Button>
-
-                    {/* ⚠️ Present ONLY once a file is held. The logo is optional
-                        server-side (`nullable`), so without this a user who
-                        picks one by mistake can swap it but never get back to
-                        "no logo" — and would have to close the modal, losing the
-                        other seven fields. */}
-                    {value && removeLabel && (
-                        <Button type="button" variant="ghost" size="sm" onClick={clear}>
-                            {removeLabel}
-                        </Button>
-                    )}
 
                     {/* ⚠️ THE CAPTION SITS UNDER THE BUTTON, NOT UNDER THE FIELD,
                         and that is a deliberate divergence from Input.jsx.
@@ -135,10 +134,38 @@ export default function ImageUploadField({
                     div, not a control — `disabled` is inert on it and would tell
                     assistive tech nothing. The greyed appearance and the state
                     are set together so they cannot drift apart. */}
+                {/* ⚠️ THE WRAPPER EXISTS SO THE TRASH BUTTON CAN OVERLAP.
+                    The preview box itself is `overflow-hidden` (it has to be —
+                    it clips the image to the rounded corners), which would clip
+                    a negatively-positioned child too. Positioning on this
+                    wrapper instead puts the button outside that clip. */}
+                <div className="relative shrink-0">
+                    {/* ⚠️ Present ONLY once a file is held. The logo is optional
+                        server-side (`nullable`), so without this a user who
+                        picks one by mistake can swap it but never get back to
+                        "no logo" — and would have to close the modal, losing the
+                        other seven fields.
+
+                        ⚠️ ICON-ONLY, SO IT CARRIES aria-label. Dropping the
+                        visible text removes the accessible name with it; the
+                        label prop is reused verbatim so screen readers and the
+                        existing tests both still find "Remove". */}
+                    {value && removeLabel && (
+                        <button
+                            type="button"
+                            onClick={clear}
+                            aria-label={removeLabel}
+                            title={removeLabel}
+                            className="absolute -right-2 -top-2 z-10 rounded-full border border-neutral-200 bg-white p-1 text-neutral-400 shadow-soft transition duration-150 hover:border-red-200 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-500/30 dark:border-neutral-700 dark:bg-neutral-800 dark:hover:border-red-900 dark:hover:bg-red-950 dark:hover:text-red-400"
+                        >
+                            <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        </button>
+                    )}
+
                 <div
                     aria-disabled={value ? undefined : 'true'}
                     className={[
-                        'flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-soft-lg border-2 border-dashed transition-colors duration-150',
+                        'flex h-24 w-24 items-center justify-center overflow-hidden rounded-soft-lg border-2 border-dashed transition-colors duration-150',
                         value
                             ? 'border-neutral-300 bg-white dark:border-neutral-600 dark:bg-neutral-800'
                             : 'border-neutral-200 bg-neutral-50 opacity-60 dark:border-neutral-700 dark:bg-neutral-800/50',
@@ -155,6 +182,7 @@ export default function ImageUploadField({
                             {placeholder}
                         </span>
                     )}
+                </div>
                 </div>
             </div>
 

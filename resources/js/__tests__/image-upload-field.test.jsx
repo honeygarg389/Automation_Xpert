@@ -150,6 +150,68 @@ describe('ImageUploadField — preview state', () => {
         expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument();
     });
 
+    /**
+     * ⚠️ THE ICONS ARE ASSERTED BY STATE, not merely "an svg is present".
+     *
+     * Upload and Change are the SAME button; only the icon and the word differ.
+     * A swap that renders the wrong one is invisible to every other assertion
+     * here, and it is the difference between "add a logo" and "replace the
+     * logo" — the second is destructive.
+     */
+    it('shows Upload while empty and RefreshCw once a file is held', () => {
+        const { container } = render(<Harness />);
+
+        expect(container.querySelector('.lucide-upload')).not.toBeNull();
+        expect(container.querySelector('.lucide-refresh-cw')).toBeNull();
+
+        fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [png()] } });
+
+        expect(container.querySelector('.lucide-refresh-cw')).not.toBeNull();
+        expect(container.querySelector('.lucide-upload')).toBeNull();
+    });
+
+    /**
+     * ⚠️ THE TRASH BUTTON MUST SIT OUTSIDE THE CLIPPED BOX.
+     *
+     * The preview box is `overflow-hidden` so the image respects the rounded
+     * corners — which would also clip a negatively-positioned child. The button
+     * therefore belongs to the WRAPPER, not to the box. Asserting the DOM
+     * relationship because jsdom cannot show the clipping itself.
+     */
+    it('renders Remove as a Trash2 icon button overlapping the preview corner', () => {
+        const { container } = render(<Harness />);
+        fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [png()] } });
+
+        const remove = screen.getByRole('button', { name: 'Remove' });
+
+        // Icon-only: the accessible name has to come from aria-label now.
+        expect(remove).toHaveAttribute('aria-label', 'Remove');
+        expect(remove.textContent).toBe('');
+        expect(remove.querySelector('.lucide-trash-2')).not.toBeNull();
+
+        // Positioned over the corner...
+        expect(remove.className).toContain('absolute');
+        expect(remove.className).toContain('-right-2');
+        expect(remove.className).toContain('-top-2');
+
+        // ...and NOT inside the overflow-hidden box, which would clip it.
+        const clipped = container.querySelector('.overflow-hidden');
+        expect(clipped).not.toBeNull();
+        expect(clipped.contains(remove)).toBe(false);
+    });
+
+    it('Trash2 clears the file exactly as the old text control did', () => {
+        const onChange = vi.fn();
+        const { container } = render(<Harness onChange={onChange} />);
+        fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [png()] } });
+
+        fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+        expect(onChange).toHaveBeenLastCalledWith(null);
+        expect(screen.queryByRole('img')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+    });
+
     it('Remove returns the field to empty and reports null upward', () => {
         // ⚠️ The logo is `nullable` server-side. Without a way back to null, a
         // mistaken pick could only be swapped, never undone — the user would

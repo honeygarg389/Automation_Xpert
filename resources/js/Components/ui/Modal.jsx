@@ -62,16 +62,38 @@ export default function Modal({
     );
 }
 
-Modal.Header = function ModalHeader({ title, onClose, showClose = true }) {
+/**
+ * ⚠️ THE HEADER IS OUTSIDE THE SCROLL CONTAINER, WHICH IS WHY A SUBTITLE
+ * BELONGS HERE RATHER THAN AT THE TOP OF THE BODY.
+ *
+ * Nothing here is `position: sticky`, and it does not need to be: Header, Body
+ * and Footer are siblings inside the panel, and only the Body is given
+ * `overflow-y-auto` by its call site. So the Header is fixed *structurally* —
+ * content placed in it cannot scroll away, because it is not in the thing that
+ * scrolls. A paragraph at the top of the Body looks identical until the body
+ * overflows, and then it scrolls out of view exactly when the form is longest
+ * and the context is most needed (the all-fields-in-error state).
+ *
+ * @param subtitle Optional second line under the title. OPTIONAL, and the
+ *   alignment below is conditional on it, so the 17 other call sites that pass
+ *   no subtitle render byte-identically to before — `items-center` is correct
+ *   for a single-line header and `items-start` is correct for a two-line one.
+ */
+Modal.Header = function ModalHeader({ title, subtitle, onClose, showClose = true }) {
     const { t } = useTranslation();
     return (
-        <div className="flex items-center justify-between border-b border-soft border-neutral-200 dark:border-neutral-800 px-5 py-4">
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h3>
+        <div className={`flex ${subtitle ? 'items-start' : 'items-center'} justify-between border-b border-soft border-neutral-200 dark:border-neutral-800 px-5 py-4`}>
+            <div className="min-w-0">
+                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h3>
+                {subtitle && (
+                    <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{subtitle}</p>
+                )}
+            </div>
             {showClose && onClose && (
                 <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-soft p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 transition duration-150"
+                    className="shrink-0 rounded-soft p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 transition duration-150"
                     aria-label={t('common.close')}
                 >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
