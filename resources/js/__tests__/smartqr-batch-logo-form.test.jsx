@@ -101,17 +101,25 @@ describe('Create Batch — the logo rides in the same multipart POST', () => {
         expect(formData).toHaveProperty('logo', null);
     });
 
-    it('leaves the other seven fields untouched', () => {
+    it('leaves the other six fields untouched', () => {
         // ⚠️ POSITIVE CONTROL for the assertion above: proves the form shape was
         // read at all, and that adding `logo` renamed nothing.
+        //
+        // ⚠️ SIX, NOT SEVEN. qr_type was removed from Create Batch's UI and
+        // useForm state — the field has no downstream reader (Inventory reads
+        // the ASSIGNMENT's qr_type, never the batch's) — so it must NOT appear
+        // here. Its absence is itself the thing this test protects: a re-add
+        // would only be caught because this list would then be short one key
+        // in the wrong direction.
         openCreate();
 
         for (const key of [
             'batch_name', 'batch_number', 'prefix', 'quantity',
-            'serial_start', 'qr_type', 'default_message',
+            'serial_start', 'default_message',
         ]) {
             expect(formData).toHaveProperty(key);
         }
+        expect(formData).not.toHaveProperty('qr_type');
     });
 
     it('setData is called with the `logo` key when a file is picked', () => {
@@ -163,8 +171,9 @@ describe('Create Batch — layout regressions found in the browser', () => {
         expect(serialIdx).toBeGreaterThan(-1);
         expect(logoIdx).toBe(serialIdx + 1);
 
-        // Left column == even index in a 2-col grid. If qr_type ever moves back
-        // into slot 6, serialIdx goes odd and this fails.
+        // Left column == even index in a 2-col grid. If a field is ever
+        // reinserted ahead of Serial Start (qr_type occupied this exact slot
+        // before it was removed), serialIdx goes odd and this fails.
         expect(serialIdx % 2).toBe(0);
     });
 
