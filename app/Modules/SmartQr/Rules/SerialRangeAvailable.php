@@ -69,15 +69,19 @@ class SerialRangeAvailable implements ValidationRule
             return;
         }
 
-        $clashEnd = (int) $clash->serial_start + (int) $clash->quantity - 1;
-
+        // ⚠️ ONE LINE, AND IT STILL CARRIES BOTH ACTIONABLE FACTS: which
+        // serials clashed, and which batch holds them.
+        //
+        // The version this replaces also restated the clashing batch's own
+        // range and explained why serials are globally unique. Accurate, but it
+        // rendered as a five-line red paragraph under the field and buried the
+        // batch number — the one thing an operator needs to go look at. The
+        // reasoning it spelled out lives in this class's docblock, which is
+        // where a maintainer reads it; the operator does not need it mid-form.
         $fail(sprintf(
-            'Serials %s-%06d to %s-%06d overlap batch %s, which already covers %s-%06d to %s-%06d. '
-            .'Serial numbers are globally unique, so one of these codes would carry a printed '
-            .'identifier belonging to another batch.',
+            'Serials %s-%06d to %s-%06d are already in use by batch %s.',
             $this->prefix, $start, $this->prefix, $end,
             $clash->batch_number,
-            $clash->prefix, $clash->serial_start, $clash->prefix, $clashEnd,
         ));
     }
 }

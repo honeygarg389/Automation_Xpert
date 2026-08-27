@@ -24,6 +24,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 const formPosts = [];
 let formData = {};
 const setData = vi.fn((k, v) => { formData[k] = v; });
+const clearErrors = vi.fn();
 
 vi.mock('@inertiajs/react', () => ({
     usePage: () => ({
@@ -48,7 +49,7 @@ vi.mock('@inertiajs/react', () => ({
             processing: false,
             errors: {},
             reset: vi.fn(),
-            clearErrors: vi.fn(),
+            clearErrors,
         };
     },
     Head: () => null,
@@ -70,6 +71,7 @@ beforeEach(() => {
     formPosts.length = 0;
     formData = {};
     setData.mockClear();
+    clearErrors.mockClear();
 });
 
 const openCreate = () => {
@@ -219,5 +221,57 @@ describe('Create Batch — layout regressions found in the browser', () => {
         // Positive control: it is the BODY that scrolls, not the footer.
         expect(body.textContent).toContain('smart_qr.field_batch_name');
         expect(body.textContent).not.toContain('common.cancel');
+    });
+});
+
+/**
+ * ⚠️ A STALE VALIDATION ERROR IS WORSE THAN NO ERROR.
+ *
+ * Inertia's useForm holds `errors` until the next submit — `setData` does not
+ * clear them. Reported from the browser: an .svg was rejected with "must be a
+ * file of type: png, jpg, jpeg", the user replaced it with a valid .png, and
+ * the message stayed put. It then names a format the user has already fixed
+ * and reads as though the new file failed too.
+ *
+ * Asserting the clearErrors CALL rather than the absence of text, because the
+ * mocked form owns the error state — the call is the actual contract between
+ * the field and the form.
+ */
+describe('Create Batch — a rejected logo must not leave its error behind', () => {
+    it('clears the logo error when a different file is picked', () => {
+        openCreate();
+
+        const input = document.querySelector('#batch-logo');
+        expect(input).not.toBeNull();
+
+        global.URL.createObjectURL = vi.fn(() => 'blob:mock/1');
+        global.URL.revokeObjectURL = vi.fn();
+
+        fireEvent.change(input, {
+            target: { files: [new File(['x'], 'brand.png', { type: 'image/png' })] },
+        });
+
+        expect(clearErrors).toHaveBeenCalledWith('logo');
+    });
+
+    /*
+     * ⚠️ NO SEPARATE TEST FOR REMOVE, DELIBERATELY.
+     *
+     * Remove calls the SAME onChange with null, so the assertion above already
+     * covers it — and it cannot be exercised here anyway: this file mocks
+     * useForm with a plain object, so setData mutates without re-rendering and
+     * the Remove control (which only exists while a file is held) never
+     * appears. Component-level coverage of Remove lives in
+     * image-upload-field.test.jsx, where the value is real React state.
+     */
+
+    it('clears every error when the modal is dismissed', () => {
+        // Otherwise reopening shows the previous attempt's errors against
+        // empty fields. Mirrors AssignQrModal's close() in this module.
+        openCreate();
+
+        fireEvent.click(screen.getByRole('button', { name: 'common.cancel' }));
+
+        expect(clearErrors).toHaveBeenCalledWith();
     });
 });

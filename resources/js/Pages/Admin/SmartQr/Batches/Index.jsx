@@ -22,7 +22,7 @@ import { formatDateTz } from '@/Utils/datetime';
  */
 function CreateBatchModal({ show, onClose }) {
     const { t } = useTranslation();
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         batch_name: '',
         batch_number: '',
         prefix: '',
@@ -38,6 +38,18 @@ function CreateBatchModal({ show, onClose }) {
         logo: null,
     });
 
+    /**
+     * ⚠️ Errors are cleared on CLOSE too, not only on change.
+     *
+     * Without this, dismissing the modal with validation errors showing and
+     * reopening it presents the previous attempt's errors against empty fields.
+     * Mirrors AssignQrModal's `close()` in this same module.
+     */
+    const close = () => {
+        clearErrors();
+        onClose();
+    };
+
     const submit = (e) => {
         e.preventDefault();
         post(route('admin.qr.batches.store'), {
@@ -52,7 +64,7 @@ function CreateBatchModal({ show, onClose }) {
     };
 
     return (
-        <Modal show={show} onClose={onClose} maxWidth="2xl">
+        <Modal show={show} onClose={close} maxWidth="2xl">
             {/* ⚠️ The subtitle lives in the HEADER, not at the top of the
                 body. The body is the only scrolling region, so a subtitle
                 placed there scrolls away precisely when the form is at its
@@ -60,7 +72,7 @@ function CreateBatchModal({ show, onClose }) {
             <Modal.Header
                 title={t('smart_qr.create_batch')}
                 subtitle={t('smart_qr.create_batch_subtitle')}
-                onClose={onClose}
+                onClose={close}
             />
             <form onSubmit={submit}>
                 {/* ═══ ⚠️ A SAFETY NET, NOT THE LAYOUT ═════════════════════
@@ -167,7 +179,21 @@ function CreateBatchModal({ show, onClose }) {
                             id="batch-logo"
                             label={t('smart_qr.section_batch_logo')}
                             value={data.logo}
-                            onChange={(file) => setData('logo', file)}
+                            onChange={(file) => {
+                                setData('logo', file);
+
+                                // ⚠️ THE ERROR MUST DIE WITH THE FILE THAT CAUSED IT.
+                                //
+                                // Inertia's useForm keeps `errors` until the next
+                                // submit; setData does not touch them. So after a
+                                // rejected .svg, picking a valid .png left "must be a
+                                // file of type: png, jpg, jpeg" sitting under the new
+                                // file — naming a format the user had already fixed,
+                                // and reading as though the PNG had failed too. The
+                                // same handler receives null from Remove, so clearing
+                                // here covers replace AND clear.
+                                clearErrors('logo');
+                            }}
                             hint={t('smart_qr.logo_hint')}
                             error={errors.logo}
                             buttonLabel={t('smart_qr.logo_upload')}
@@ -212,7 +238,7 @@ function CreateBatchModal({ show, onClose }) {
                 </Modal.Body>
 
                 <Modal.Footer>
-                    <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+                    <Button type="button" variant="outline" onClick={close}>{t('common.cancel')}</Button>
                     <Button type="submit" disabled={processing}>{t('smart_qr.create_batch')}</Button>
                 </Modal.Footer>
             </form>

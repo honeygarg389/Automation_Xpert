@@ -84,9 +84,24 @@ Modal.Header = function ModalHeader({ title, subtitle, onClose, showClose = true
     return (
         <div className={`flex ${subtitle ? 'items-start' : 'items-center'} justify-between border-b border-soft border-neutral-200 dark:border-neutral-800 px-5 py-4`}>
             <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h3>
+                {/* ⚠️ `leading-tight` ONLY WHEN THERE IS A SUBTITLE, and the
+                    reason is that the gap here is mostly NOT margin.
+
+                    Measured: title-to-subtitle reads as 10px, of which the
+                    margin is 2px. The other 8px is half-leading — text-lg puts
+                    18px type in a 28px line box (5px below the glyphs) and
+                    text-sm puts 14px in 20px (3px above). So shrinking the
+                    margin alone can never close it; it can only ever remove
+                    those 2px, which is invisible.
+
+                    leading-tight takes the pair to 22.5/17.5, dropping the
+                    half-leading to 2.25 + 1.75 and the visual gap to ~4px.
+
+                    Conditional so the 35 Modal.Header call sites that pass no
+                    subtitle keep their current single-line metrics exactly. */}
+                <h3 className={`text-lg font-semibold text-neutral-900 dark:text-neutral-100${subtitle ? ' leading-tight' : ''}`}>{title}</h3>
                 {subtitle && (
-                    <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{subtitle}</p>
+                    <p className="text-sm leading-tight text-neutral-500 dark:text-neutral-400">{subtitle}</p>
                 )}
             </div>
             {showClose && onClose && (
