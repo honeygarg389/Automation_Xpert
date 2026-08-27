@@ -62,16 +62,53 @@ export default function Modal({
     );
 }
 
-Modal.Header = function ModalHeader({ title, onClose, showClose = true }) {
+/**
+ * ⚠️ THE HEADER IS OUTSIDE THE SCROLL CONTAINER, WHICH IS WHY A SUBTITLE
+ * BELONGS HERE RATHER THAN AT THE TOP OF THE BODY.
+ *
+ * Nothing here is `position: sticky`, and it does not need to be: Header, Body
+ * and Footer are siblings inside the panel, and only the Body is given
+ * `overflow-y-auto` by its call site. So the Header is fixed *structurally* —
+ * content placed in it cannot scroll away, because it is not in the thing that
+ * scrolls. A paragraph at the top of the Body looks identical until the body
+ * overflows, and then it scrolls out of view exactly when the form is longest
+ * and the context is most needed (the all-fields-in-error state).
+ *
+ * @param subtitle Optional second line under the title. OPTIONAL, and the
+ *   alignment below is conditional on it, so the 17 other call sites that pass
+ *   no subtitle render byte-identically to before — `items-center` is correct
+ *   for a single-line header and `items-start` is correct for a two-line one.
+ */
+Modal.Header = function ModalHeader({ title, subtitle, onClose, showClose = true }) {
     const { t } = useTranslation();
     return (
-        <div className="flex items-center justify-between border-b border-soft border-neutral-200 dark:border-neutral-800 px-5 py-4">
-            <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{title}</h3>
+        <div className={`flex ${subtitle ? 'items-start' : 'items-center'} justify-between border-b border-soft border-neutral-200 dark:border-neutral-800 px-5 py-4`}>
+            <div className="min-w-0">
+                {/* ⚠️ `leading-tight` ONLY WHEN THERE IS A SUBTITLE, and the
+                    reason is that the gap here is mostly NOT margin.
+
+                    Measured: title-to-subtitle reads as 10px, of which the
+                    margin is 2px. The other 8px is half-leading — text-lg puts
+                    18px type in a 28px line box (5px below the glyphs) and
+                    text-sm puts 14px in 20px (3px above). So shrinking the
+                    margin alone can never close it; it can only ever remove
+                    those 2px, which is invisible.
+
+                    leading-tight takes the pair to 22.5/17.5, dropping the
+                    half-leading to 2.25 + 1.75 and the visual gap to ~4px.
+
+                    Conditional so the 35 Modal.Header call sites that pass no
+                    subtitle keep their current single-line metrics exactly. */}
+                <h3 className={`text-lg font-semibold text-neutral-900 dark:text-neutral-100${subtitle ? ' leading-tight' : ''}`}>{title}</h3>
+                {subtitle && (
+                    <p className="text-sm leading-tight text-neutral-500 dark:text-neutral-400">{subtitle}</p>
+                )}
+            </div>
             {showClose && onClose && (
                 <button
                     type="button"
                     onClick={onClose}
-                    className="rounded-soft p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 transition duration-150"
+                    className="shrink-0 rounded-soft p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 transition duration-150"
                     aria-label={t('common.close')}
                 >
                     <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

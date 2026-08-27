@@ -7,6 +7,7 @@ export { default as DatePicker } from './DatePicker';
 export { default as Pagination } from './Pagination';
 export { default as Dropdown } from './Dropdown';
 export { default as Drawer } from './Drawer';
+export { default as ImageUploadField } from './ImageUploadField';
 export { default as Input } from './Input';
 export { default as Modal } from './Modal';
 export { default as Select } from './Select';

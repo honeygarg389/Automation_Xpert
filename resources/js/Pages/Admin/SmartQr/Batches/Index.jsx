@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Textarea } from '@/Components/ui';
+import { Button, Card, ConfirmDestructiveModal, ImageUploadField, Input, Modal, Pagination, Textarea } from '@/Components/ui';
 import { Layers, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BatchStatusBadge } from '../QrStatusBadge';
@@ -22,7 +22,7 @@ import { formatDateTz } from '@/Utils/datetime';
  */
 function CreateBatchModal({ show, onClose }) {
     const { t } = useTranslation();
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
         batch_name: '',
         batch_number: '',
         prefix: '',
@@ -31,31 +31,88 @@ function CreateBatchModal({ show, onClose }) {
         qr_type: '',
         default_message: '',
         notes: '',
+
+        // ⚠️ A File, not a string — and it is why the submit below needs
+        // forceFormData. Null means "no logo", which the server accepts
+        // (`nullable`) and renders as a PLAIN QR with no fallback of any kind.
+        logo: null,
     });
+
+    /**
+     * ⚠️ Errors are cleared on CLOSE too, not only on change.
+     *
+     * Without this, dismissing the modal with validation errors showing and
+     * reopening it presents the previous attempt's errors against empty fields.
+     * Mirrors AssignQrModal's `close()` in this same module.
+     */
+    const close = () => {
+        clearErrors();
+        onClose();
+    };
 
     const submit = (e) => {
         e.preventDefault();
         post(route('admin.qr.batches.store'), {
+            // ⚠️ REQUIRED, NOT DEFENSIVE. Inertia serialises to JSON unless a
+            // File is detected or this is set — and a File cannot survive JSON,
+            // so without it the logo is silently dropped and the batch is
+            // created unbranded with no error anywhere. Same flag as
+            // Admin/Settings/Index.jsx and Contacts/Show.jsx.
+            forceFormData: true,
             onSuccess: () => { reset(); onClose(); },
         });
     };
 
     return (
-        <Modal show={show} onClose={onClose} maxWidth="2xl">
-            <Modal.Header title={t('smart_qr.create_batch')} onClose={onClose} />
+        <Modal show={show} onClose={close} maxWidth="2xl">
+            {/* ⚠️ The subtitle lives in the HEADER, not at the top of the
+                body. The body is the only scrolling region, so a subtitle
+                placed there scrolls away precisely when the form is at its
+                longest — the all-fields-in-error state. */}
+            <Modal.Header
+                title={t('smart_qr.create_batch')}
+                subtitle={t('smart_qr.create_batch_subtitle')}
+                onClose={close}
+            />
             <form onSubmit={submit}>
-                <Modal.Body className="space-y-4">
-                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                        {t('smart_qr.create_batch_subtitle')}
-                    </p>
+                {/* ═══ ⚠️ A SAFETY NET, NOT THE LAYOUT ═════════════════════
+                    The form is now spaced to FIT without scrolling. Measured in
+                    headless Chrome against the compiled stylesheet:
 
+                        default state   718 px panel + 48 px Modal padding
+                                        = 766 px required
+                        fits            1512x982, 1470x956 and 1440x900 13"
+                                        MacBooks, with or without a bookmarks
+                                        bar (781-898 px usable)
+
+                    So this cap does nothing in normal use — `scrollHeight ===
+                    clientHeight`, no scrollbar. It exists for the one state
+                    that genuinely cannot be spaced away: every field showing a
+                    validation error grows the body to 722 px, and on a small
+                    display that has to scroll somewhere.
+
+                    ⚠️ calc(100vh-13rem), NOT A vh FRACTION, AND THE ARITHMETIC
+                    IS THE POINT. The panel is `body + header(66) + footer(72)`
+                    and the Modal adds `py-6` (48) — 186 px of chrome the body
+                    does not include. A fractional cap like the `max-h-[70vh]`
+                    this replaces satisfies `0.7*vh + 186 <= vh` only when the
+                    viewport exceeds 620 px, and `85vh` only above 920 px — so
+                    on the very screens that need the net, the panel STILL
+                    outgrows the viewport and Modal's `flex items-center` pushes
+                    the header and footer out of reach again. 13rem = 208 px
+                    leaves the panel at `vh - 70` at every size.
+
+                    ⚠️ Admin/Plans/PlanModal.jsx carries the same 70vh and the
+                    same latent flaw; AssignQrModal has no cap at all. Both
+                    reported, neither fixed here. */}
+                <Modal.Body className="max-h-[calc(100vh-13rem)] space-y-2 overflow-y-auto">
                     {/* Section heading matches Admin/Plans/PlanForm.jsx — the
                         existing multi-section admin form. No new typography. */}
                     <section>
-                        <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
+                        <h4 className="mb-2 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
                             {t('smart_qr.section_batch_information')}
                         </h4>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2.5 sm:grid-cols-2">
                         <Input
                             label={t('smart_qr.field_batch_name')}
                             value={data.batch_name}
@@ -111,6 +168,39 @@ function CreateBatchModal({ show, onClose }) {
                             error={errors.serial_start}
                             required
                         />
+                        {/* ⚠️ POSITION 6 IN THE GRID — the right column of the
+                            same row as Serial Start, per the reference. The
+                            grid flows in source order, so serial_start (5) and
+                            this (6) pair up exactly the way batch_name/
+                            batch_number and prefix/quantity do. Moving qr_type
+                            below is what frees this slot; nothing else changes
+                            the pairing. */}
+                        <ImageUploadField
+                            id="batch-logo"
+                            label={t('smart_qr.section_batch_logo')}
+                            value={data.logo}
+                            onChange={(file) => {
+                                setData('logo', file);
+
+                                // ⚠️ THE ERROR MUST DIE WITH THE FILE THAT CAUSED IT.
+                                //
+                                // Inertia's useForm keeps `errors` until the next
+                                // submit; setData does not touch them. So after a
+                                // rejected .svg, picking a valid .png left "must be a
+                                // file of type: png, jpg, jpeg" sitting under the new
+                                // file — naming a format the user had already fixed,
+                                // and reading as though the PNG had failed too. The
+                                // same handler receives null from Remove, so clearing
+                                // here covers replace AND clear.
+                                clearErrors('logo');
+                            }}
+                            hint={t('smart_qr.logo_hint')}
+                            error={errors.logo}
+                            buttonLabel={t('smart_qr.logo_upload')}
+                            changeLabel={t('smart_qr.logo_change')}
+                            removeLabel={t('smart_qr.logo_remove')}
+                            placeholder={t('smart_qr.logo_preview_empty')}
+                        />
                         <Input
                             label={t('smart_qr.field_qr_type')}
                             value={data.qr_type}
@@ -124,7 +214,7 @@ function CreateBatchModal({ show, onClose }) {
                             pasted inline and NO error slot — a validation failure
                             on this field rendered nothing. The shared Textarea
                             carries the error branch. */}
-                        <div className="mt-4">
+                        <div className="mt-2.5">
                             <Textarea
                                 label={t('smart_qr.field_default_message')}
                                 value={data.default_message}
@@ -148,7 +238,7 @@ function CreateBatchModal({ show, onClose }) {
                 </Modal.Body>
 
                 <Modal.Footer>
-                    <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
+                    <Button type="button" variant="outline" onClick={close}>{t('common.cancel')}</Button>
                     <Button type="submit" disabled={processing}>{t('smart_qr.create_batch')}</Button>
                 </Modal.Footer>
             </form>

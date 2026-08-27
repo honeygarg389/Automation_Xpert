@@ -9,6 +9,7 @@ use App\Models\Role;
 use App\Models\SystemSetting;
 use App\Models\User;
 use App\Modules\SmartQr\Jobs\GenerateQrExportJob;
+use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -280,42 +281,191 @@ class SmartQrImageExportTest extends TestCase
             'The PDF is close to the empty-page size, so the QR did not render at all.');
     }
 
-    // ══ ⚠️ THE NO-LOGO FALLBACK ════════════════════════════════════════════
+    // ══ ⚠️ THE NO-LOGO BEHAVIOUR — AND WHERE THE LOGO COMES FROM ═════════
 
     /**
-     * ⚠️ With no logo configured, the QR renders PLAIN — never the WhatsMine
-     * asset that ships in `public/`.
+     * ⚠️ REWRITTEN WHEN THE LOGO MOVED FROM THE INSTALLATION TO THE BATCH.
      *
-     * A plain QR is honest. A competitor's brand printed onto a customer's
-     * stickers is not recoverable once the run is done.
+     * The property being protected has not changed by one word: a run with no
+     * logo renders PLAIN, and never the WhatsMine asset that ships in
+     * `public/`. What changed is where "no logo" is asked — the batch's own
+     * columns, not `app_logo_path`. The assertion followed its subject.
      */
     #[Test]
-    public function no_configured_logo_renders_plain_and_never_the_inherited_asset(): void
+    public function a_batch_with_no_logo_renders_plain_and_never_the_inherited_asset(): void
     {
-        SystemSetting::query()->where('key', 'app_logo_path')->delete();
+        $batch = SmartQrBatch::factory()->create(['logo_path' => null, 'logo_disk' => null]);
 
-        $this->assertNull($this->renderer()->logoPath(),
-            'A logo path was resolved with none configured. The only logo files in this repo are '
-            .'WhatsMine-branded, and printing those onto a customer\'s stickers is irreversible.');
+        $this->assertNull($this->renderer()->batchLogoPath($batch),
+            'A logo path was resolved for a batch that has none. The only logo files in this '
+            .'repo are WhatsMine-branded, and printing those onto a customer\'s stickers is '
+            .'irreversible.');
 
         // The render still succeeds — plain, not broken.
         $svg = $this->renderer()->svg('https://x.test/q/abc', 'AX-000001');
         $this->assertStringContainsString('<svg', $svg['data']);
     }
 
-    /** …and an SVG logo is refused: GD cannot rasterise it, and SEC-004 lives there. */
+    /**
+     * ═══ ⚠️ THE RULING, ASSERTED AS BYTES: THERE IS NO GLOBAL FALLBACK ════
+     *
+     * This is the test the owner decision actually needs, and it is not the one
+     * above. `batchLogoPath()` returning null proves the RESOLVER has no
+     * fallback; it proves nothing about the RENDERER, which could still consult
+     * the platform logo on its own and produce branded output from a null path.
+     *
+     * So the discriminator is a byte comparison: with a real, valid, configured
+     * platform logo present, a logo-less batch must render EXACTLY what it
+     * renders with no platform logo configured at all. Any inheritance at all
+     * changes the bytes.
+     *
+     * ⚠️ Why this matters more than it reads: a print run is irreversible. The
+     * failure mode is not an error, it is a box of five hundred stickers
+     * carrying a brand nobody chose, discovered after the printing is paid for.
+     */
     #[Test]
-    public function an_svg_logo_is_refused(): void
+    public function a_configured_platform_logo_never_reaches_a_batch_render(): void
     {
         Storage::fake('public');
-        Storage::disk('public')->put('brand/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>');
+        SystemSetting::query()->whereIn('key', ['app_logo_path', 'app_logo_disk'])->delete();
 
-        SystemSetting::updateOrCreate(['key' => 'app_logo_path'], ['value' => 'brand/logo.svg']);
-        SystemSetting::updateOrCreate(['key' => 'app_logo_disk'], ['value' => 'public']);
+        $withNothingConfigured = $this->renderer()->svg('https://x.test/q/abc', 'AX-000001')['data'];
 
-        $this->assertNull($this->renderer()->logoPath(),
+        // A REAL, resolvable PNG — the positive control for the control. If this
+        // were an absent or unreadable file the comparison below would pass
+        // trivially and assert nothing.
+        $image = imagecreatetruecolor(64, 64);
+        ob_start();
+        imagepng($image);
+        Storage::disk('public')->put('logo.png', (string) ob_get_clean());
+        SystemSetting::set('app_logo_path', 'logo.png');
+        SystemSetting::set('app_logo_disk', 'public');
+
+        $this->assertTrue(Storage::disk('public')->exists('logo.png'),
+            'Positive control: the platform logo was never actually written, so the comparison '
+            .'below would pass for the wrong reason.');
+
+        $withPlatformLogoConfigured = $this->renderer()->svg('https://x.test/q/abc', 'AX-000001')['data'];
+
+        $this->assertSame($withNothingConfigured, $withPlatformLogoConfigured,
+            'Configuring a platform logo changed the bytes of a batch render that specified no '
+            .'logo. The installation brand is leaking onto print artwork nobody asked to brand — '
+            .'and BUG-038 records that the only assets in this repo belong to a different '
+            .'product. There must be NO fallback, not a tidy one.');
+    }
+
+    /**
+     * POSITIVE CONTROL for the two above: a batch that DOES carry a logo
+     * produces different bytes.
+     *
+     * ⚠️ Without this, both tests above are equally consistent with the logo
+     * pipeline being entirely broken — a renderer that ignores every logo
+     * passes "renders plain" and "no fallback" perfectly.
+     */
+    #[Test]
+    public function a_batch_logo_is_actually_composited_into_the_render(): void
+    {
+        Storage::fake('local');
+
+        // ⚠️ NOISE, NOT A FLAT SQUARE. A blank truecolor image compresses to a
+        // few hundred bytes and moves the PDF below by only ~9%, which is not a
+        // margin worth asserting on. Seeded, so the figures are reproducible.
+        mt_srand(7);
+        $image = imagecreatetruecolor(160, 160);
+        for ($x = 0; $x < 160; $x++) {
+            for ($y = 0; $y < 160; $y++) {
+                imagesetpixel($image, $x, $y, imagecolorallocate(
+                    $image, mt_rand(0, 255), mt_rand(0, 255), mt_rand(0, 255)
+                ));
+            }
+        }
+        ob_start();
+        imagepng($image);
+        Storage::disk('local')->put('branding/qr-logo-test.png', (string) ob_get_clean());
+
+        $batch = SmartQrBatch::factory()->create([
+            'logo_path' => 'branding/qr-logo-test.png',
+            'logo_disk' => 'local',
+        ]);
+
+        $resolved = $this->renderer()->batchLogoPath($batch);
+        $this->assertNotNull($resolved, 'The batch logo did not resolve, so nothing below is tested.');
+
+        $plain = $this->renderer()->svg('https://x.test/q/abc', 'AX-000001')['data'];
+        $branded = $this->renderer()->svg('https://x.test/q/abc', 'AX-000001', $resolved)['data'];
+
+        $this->assertNotSame($plain, $branded,
+            'Passing a resolved batch logo produced byte-identical output to a plain render, so '
+            .'the logo is being dropped somewhere between the column and the canvas — and every '
+            .'batch would print unbranded.');
+
+        // ══ ⚠️ AND THE PDF, WHICH IS THE SVG RE-EMBEDDED ═════════════════
+        //
+        // A logo threaded into svg() but dropped in pdf() gives a branded
+        // download and an unbranded print from the same code.
+        //
+        // ⚠️ THIS ASSERTION IS ON LENGTH, AND assertNotSame WOULD BE A DEAD
+        // ASSERTION. Measured: rendering the SAME pdf twice produces different
+        // bytes, because Dompdf stamps a creation time and document id into
+        // every output. So `assertNotSame($plainPdf, $brandedPdf)` PASSES
+        // whatever pdf() does with the logo — it cannot fail, and it was
+        // written that way first. Mutation-checked: dropping $logoPath from
+        // pdf()'s call to svg() left it green.
+        //
+        // Length is stable across runs (3,927 bytes both times) because those
+        // stamps are fixed-width, so the embedded logo is the only thing that
+        // moves it. A NOISY logo is used rather than a flat one: a blank 64px
+        // square compresses to almost nothing and shifts the PDF by ~9%, which
+        // is too close to noise to assert on. Noise gives ~20x.
+        $plainPdf = $this->renderer()->pdf('https://x.test/q/abc', 'AX-000001')['data'];
+        $brandedPdf = $this->renderer()->pdf('https://x.test/q/abc', 'AX-000001', $resolved)['data'];
+
+        $this->assertGreaterThan(strlen($plainPdf) * 2, strlen($brandedPdf),
+            'pdf() ignored the logo argument: the branded PDF is the same size as the plain one. '
+            .'The SVG and the PDF of one code would carry different artwork — a branded proof on '
+            .'screen and an unbranded sheet at the printer.');
+    }
+
+    /** …and an SVG logo is refused: GD cannot rasterise it, and SEC-004 lives there. */
+    #[Test]
+    public function an_svg_batch_logo_is_refused(): void
+    {
+        Storage::fake('local');
+        Storage::disk('local')->put('branding/logo.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>');
+
+        $batch = SmartQrBatch::factory()->create([
+            'logo_path' => 'branding/logo.svg',
+            'logo_disk' => 'local',
+        ]);
+
+        $this->assertNull($this->renderer()->batchLogoPath($batch),
             'An SVG was accepted as a logo source. GD cannot rasterise it, so PNG output would '
             .'fail at render time — and it walks this path into SEC-004\'s territory.');
+    }
+
+    /**
+     * A logo row pointing at a file that is no longer there is "no logo", not a
+     * crash.
+     *
+     * ⚠️ The failure this prevents is specifically a QUEUED one: a deleted file
+     * discovered mid-export throws 400 codes into a job that then fails and
+     * leaves the admin with nothing, rather than 500 plain stickers.
+     */
+    #[Test]
+    public function a_batch_logo_whose_file_is_missing_resolves_to_null(): void
+    {
+        Storage::fake('local');
+
+        $batch = SmartQrBatch::factory()->create([
+            'logo_path' => 'branding/gone.png',
+            'logo_disk' => 'local',
+        ]);
+
+        $this->assertNull($this->renderer()->batchLogoPath($batch));
+
+        // And the render still happens.
+        $svg = $this->renderer()->svg('https://x.test/q/abc', 'AX-000001', $this->renderer()->batchLogoPath($batch));
+        $this->assertStringContainsString('<svg', $svg['data']);
     }
 
     // ══ ⚠️ STRUCTURAL CHECKS — NOT "VALIDATED READABILITY" ═════════════════
@@ -418,13 +568,17 @@ class SmartQrImageExportTest extends TestCase
             {
                 private int $calls = 0;
 
-                public function svg(string $url, string $serial): array
+                // ⚠️ SIGNATURE MUST TRACK THE PARENT. PHP fatals on an
+                // incompatible override at CLASS DECLARATION time, before any
+                // assertion runs — so a stale stub here does not fail this
+                // test, it kills the whole file.
+                public function svg(string $url, string $serial, ?string $logoPath = null): array
                 {
                     if (++$this->calls > 1) {
                         throw new \RuntimeException('render exploded');
                     }
 
-                    return parent::svg($url, $serial);
+                    return parent::svg($url, $serial, $logoPath);
                 }
             };
         });
@@ -507,8 +661,8 @@ class SmartQrImageExportTest extends TestCase
      * ⚠️ THE SIZE FIGURES ARE MEASURED, AND SLICE 8's PLAN HAD THEM BACKWARDS.
      *
      * The plan justified SVG-by-default with "a few hundred KB against 50–150 MB
-     * of PNG". Measured in a real ZipArchive, WITH a logo configured — the
-     * intended production state — SVG is roughly 3x LARGER, because endroid's
+     * of PNG". Measured in a real ZipArchive, WITH a logo — the intended
+     * production state — SVG is roughly 3x LARGER, because endroid's
      * SvgWriter embeds the logo as a base64 data URI in every single file while
      * the PNG writer rasterises it into one already-compressed bitmap.
      *
@@ -522,34 +676,88 @@ class SmartQrImageExportTest extends TestCase
      * number that happened to point at the right default.)
      */
     #[Test]
-    public function the_export_size_estimate_inverts_when_a_logo_is_configured(): void
+    public function the_export_size_estimate_inverts_when_a_logo_is_present(): void
     {
-        SystemSetting::set('app_logo_path', '');
-
-        $plain = $this->renderer()->zippedBytesPerCode();
+        // ⚠️ NOW DRIVEN BY THE ARGUMENT, NOT BY app_logo_path. The logo belongs
+        // to a batch; the estimate takes a boolean meaning "any batch in scope
+        // carries one". The INVERSION being pinned is unchanged — only its
+        // input moved.
+        $plain = $this->renderer()->zippedBytesPerCode(false);
 
         $this->assertLessThan($plain['png'], $plain['svg'],
             'With no logo, SVG should be the smaller format.');
 
-        Storage::fake('public');
-        $image = imagecreatetruecolor(64, 64);
-        ob_start();
-        imagepng($image);
-        Storage::disk('public')->put('logo.png', (string) ob_get_clean());
-        SystemSetting::set('app_logo_path', 'logo.png');
-        SystemSetting::set('app_logo_disk', 'public');
-
-        $withLogo = $this->renderer()->zippedBytesPerCode();
+        $withLogo = $this->renderer()->zippedBytesPerCode(true);
 
         // ⚠️ The whole point. If a refactor ever makes these two branches
         // return the same array, this is the assertion that notices.
         $this->assertGreaterThan($withLogo['png'], $withLogo['svg'],
-            'With a logo configured, SVG is the LARGER format — endroid embeds the logo as '
-            .'base64 in every file. A UI note claiming otherwise sends an admin to the wrong '
-            .'format believing it is the cheap one.');
+            'With a logo, SVG is the LARGER format — endroid embeds the logo as base64 in every '
+            .'file. A UI note claiming otherwise sends an admin to the wrong format believing it '
+            .'is the cheap one.');
 
         $this->assertGreaterThan($plain['svg'] * 10, $withLogo['svg'],
             'Positive control: the logo branch is genuinely a different, much larger figure.');
+    }
+
+    /**
+     * ⚠️ AND THE DEFAULT IS THE PLAIN BRANCH.
+     *
+     * `zippedBytesPerCode()` used to consult the platform logo, so its
+     * no-argument form once meant "whatever the installation is configured
+     * with". It now means "no logo". A caller that forgot to pass the flag must
+     * under-brand the estimate rather than silently keeping the old global
+     * behaviour, which is the failure a defaulted parameter invites.
+     */
+    #[Test]
+    public function the_export_estimate_defaults_to_the_no_logo_branch(): void
+    {
+        SystemSetting::set('app_logo_path', 'anything.png');
+        SystemSetting::set('app_logo_disk', 'public');
+
+        $this->assertSame(
+            $this->renderer()->zippedBytesPerCode(false),
+            $this->renderer()->zippedBytesPerCode(),
+            'The default estimate is not the plain one, so the platform logo is still steering a '
+            .'Smart QR figure somewhere.'
+        );
+    }
+
+    /**
+     * ⚠️ CONSERVATIVE, END TO END: one batch with a logo lifts the estimate the
+     * inventory page shows, even though other batches have none.
+     *
+     * The discriminator is the FIGURE, not the presence of the key — the
+     * previous version of this assertion checked `has('exportBytesPerCode.svg')`
+     * and would have passed against a hard-coded constant.
+     */
+    #[Test]
+    public function one_batch_with_a_logo_lifts_the_inventory_export_estimate(): void
+    {
+        $admin = $this->adminWith(['view_qr_inventory']);
+
+        SmartQrBatch::factory()->create(['logo_path' => null]);
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.index'))
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p->where(
+                'exportBytesPerCode.svg',
+                SmartQrImageRenderer::ZIPPED_BYTES_PER_CODE['no_logo']['svg']
+            ));
+
+        SmartQrBatch::factory()->create([
+            'logo_path' => 'branding/qr-logo-x.png',
+            'logo_disk' => 'local',
+        ]);
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.qr.inventory.index'))
+            ->assertOk()
+            ->assertInertia(fn ($p) => $p->where(
+                'exportBytesPerCode.svg',
+                SmartQrImageRenderer::ZIPPED_BYTES_PER_CODE['logo']['svg']
+            ));
     }
 
     /**

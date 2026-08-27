@@ -4014,7 +4014,7 @@
         "assignments_title": "QR Assignments",
         "assignments_subtitle": "Which workspace holds which code, and for how long.",
         "create_batch": "Create Batch",
-        "create_batch_subtitle": "Codes are generated in a queued job once the batch is created.",
+        "create_batch_subtitle": "Generated dynamic QR codes batch.",
         "view_batches": "View batches",
         "back_to_batches": "Back to batches",
         "generation_failed": "Generation failed",
@@ -4213,6 +4213,12 @@
         "export_zip": "Export ZIP",
         "export_zip_coming_soon": "Coming soon",
         "filter_all_workspaces": "All workspaces",
-        "view_qr_coming_soon": "Coming soon"
+        "view_qr_coming_soon": "Coming soon",
+        "section_batch_logo": "Upload Icon/Logo",
+        "logo_hint": "Upload Only PNG & JPG.",
+        "logo_upload": "Upload",
+        "logo_change": "Change",
+        "logo_remove": "Remove",
+        "logo_preview_empty": "Preview"
     }
 }
