@@ -76,6 +76,7 @@ function EditModal({ code, channels, users, onClose }) {
                             value={data.default_message}
                             onChange={(e) => setData('default_message', e.target.value)}
                             rows={3}
+                            placeholder={t('smart_qr.default_message_placeholder')}
                             className="w-full rounded-soft border border-soft border-neutral-300 px-3 py-2 text-sm text-neutral-900 shadow-inner focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-100"
                         />
                     </div>

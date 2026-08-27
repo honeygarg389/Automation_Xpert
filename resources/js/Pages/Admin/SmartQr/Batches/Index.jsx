@@ -28,7 +28,6 @@ function CreateBatchModal({ show, onClose }) {
         prefix: '',
         quantity: 500,
         serial_start: 1,
-        qr_type: '',
         default_message: '',
         notes: '',
 
@@ -117,7 +116,7 @@ function CreateBatchModal({ show, onClose }) {
                             label={t('smart_qr.field_batch_name')}
                             value={data.batch_name}
                             onChange={(e) => setData('batch_name', e.target.value)}
-                            placeholder="AutomationXpert Business Kit August 2026"
+                            placeholder="Whatsapp Business Kit"
                             error={errors.batch_name}
                             required
                         />
@@ -172,9 +171,17 @@ function CreateBatchModal({ show, onClose }) {
                             same row as Serial Start, per the reference. The
                             grid flows in source order, so serial_start (5) and
                             this (6) pair up exactly the way batch_name/
-                            batch_number and prefix/quantity do. Moving qr_type
-                            below is what frees this slot; nothing else changes
-                            the pairing. */}
+                            batch_number and prefix/quantity do.
+
+                            ⚠️ qr_type WAS position 7 here — alone in a row of
+                            its own, since 6 pairs into 3 full rows and a 7th
+                            item has no partner. It has been REMOVED entirely
+                            (UI only; smart_qr_batches.qr_type and its nullable
+                            validation are untouched — the field simply has no
+                            downstream reader, per inspection). Removing it
+                            leaves exactly 6 fields, i.e. 3 complete rows —
+                            this is a byproduct fix of the prior single-item
+                            row, not a separate layout change. */}
                         <ImageUploadField
                             id="batch-logo"
                             label={t('smart_qr.section_batch_logo')}
@@ -201,13 +208,6 @@ function CreateBatchModal({ show, onClose }) {
                             removeLabel={t('smart_qr.logo_remove')}
                             placeholder={t('smart_qr.logo_preview_empty')}
                         />
-                        <Input
-                            label={t('smart_qr.field_qr_type')}
-                            value={data.qr_type}
-                            onChange={(e) => setData('qr_type', e.target.value)}
-                            placeholder={t('smart_qr.qr_type_placeholder')}
-                            error={errors.qr_type}
-                        />
                         </div>
 
                         {/* ⚠️ Was a hand-rolled <textarea> with Input's classes
@@ -220,6 +220,7 @@ function CreateBatchModal({ show, onClose }) {
                                 value={data.default_message}
                                 onChange={(e) => setData('default_message', e.target.value)}
                                 rows={2}
+                                placeholder={t('smart_qr.default_message_placeholder')}
                                 error={errors.default_message}
                             />
                         </div>
