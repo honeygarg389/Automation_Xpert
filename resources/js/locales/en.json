@@ -4216,6 +4216,8 @@
         "logo_upload": "Upload",
         "logo_change": "Change",
         "logo_remove": "Remove",
-        "logo_preview_empty": "Preview"
+        "logo_preview_empty": "Preview",
+        "stat_assigned": "Assigned",
+        "stat_active": "Active"
     }
 }
