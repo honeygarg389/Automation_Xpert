@@ -116,7 +116,7 @@ function CreateBatchModal({ show, onClose }) {
                             label={t('smart_qr.field_batch_name')}
                             value={data.batch_name}
                             onChange={(e) => setData('batch_name', e.target.value)}
-                            placeholder="AutomationXpert Business Kit August 2026"
+                            placeholder="Whatsapp Business Kit"
                             error={errors.batch_name}
                             required
                         />
@@ -220,6 +220,7 @@ function CreateBatchModal({ show, onClose }) {
                                 value={data.default_message}
                                 onChange={(e) => setData('default_message', e.target.value)}
                                 rows={2}
+                                placeholder={t('smart_qr.default_message_placeholder')}
                                 error={errors.default_message}
                             />
                         </div>

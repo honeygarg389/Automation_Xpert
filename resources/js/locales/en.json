@@ -4027,7 +4027,7 @@
         "field_qr_type": "QR type",
         "qr_type_placeholder": "Counter, Table, Reception…",
         "field_default_message": "Default WhatsApp message",
-        "default_message_placeholder": "Hi! I scanned your QR code…",
+        "default_message_placeholder": "Enter Your Message...",
         "field_workspace": "Workspace",
         "choose_workspace": "Choose a workspace…",
         "field_channel": "WhatsApp channel",
