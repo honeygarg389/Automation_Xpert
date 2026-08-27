@@ -23,7 +23,7 @@ import Button from './Button';
  *
  * ⚠️ `accept` IS COSMETIC. It filters the OS file dialog and a determined user
  * can defeat it by typing a name or dragging. The real allow-list is the
- * server's `['nullable', 'file', 'mimes:png,jpg,jpeg', 'max:2048']`, and the
+ * server's `['nullable', 'file', 'mimes:png,jpg,jpeg', 'max:1900']`, and the
  * stored extension comes from SafeUploadExtension sniffing the content. Nothing
  * here should ever be described as validation.
  */
@@ -114,6 +114,21 @@ export default function ImageUploadField({
                             {removeLabel}
                         </Button>
                     )}
+
+                    {/* ⚠️ THE CAPTION SITS UNDER THE BUTTON, NOT UNDER THE FIELD,
+                        and that is a deliberate divergence from Input.jsx.
+                        "Upload Only PNG & JPG." describes what the BUTTON will
+                        accept, and the reference places it there. Below the
+                        whole field it reads as a footnote about the row —
+                        including the preview box, which accepts nothing.
+                        The error slot stays full-width below, where errors
+                        conventionally live and where a long server message has
+                        room. */}
+                    {hint && !error && (
+                        <p className="max-w-[9rem] text-xs leading-snug text-neutral-500 dark:text-neutral-400">
+                            {hint}
+                        </p>
+                    )}
                 </div>
 
                 {/* ⚠️ THE PREVIEW BOX IS `aria-disabled`, NOT `disabled`. It is a
@@ -154,12 +169,10 @@ export default function ImageUploadField({
                 className="hidden"
             />
 
-            {/* ⚠️ Error and hint mirror Input.jsx exactly, including that a hint
-                is suppressed while an error is showing. */}
+            {/* ⚠️ Error only. The hint is rendered above, beside the button —
+                see the note there. Suppression of the hint while an error shows
+                still matches Input.jsx; only its POSITION differs. */}
             {error && <p className="mt-1.5 text-sm text-red-500 dark:text-red-400">{error}</p>}
-            {hint && !error && (
-                <p className="mt-1.5 text-sm text-neutral-500 dark:text-neutral-400">{hint}</p>
-            )}
         </div>
     );
 }

@@ -127,10 +127,69 @@ describe('Create Batch — the logo rides in the same multipart POST', () => {
         expect(setData).toHaveBeenCalledWith('logo', file);
     });
 
-    it('renders the Upload Icon/Logo section with the PNG & JPG caption', () => {
+    it('renders the Upload Icon/Logo field with the PNG & JPG caption', () => {
         openCreate();
 
         expect(screen.getByText('smart_qr.section_batch_logo')).toBeInTheDocument();
         expect(screen.getByText('smart_qr.logo_hint')).toBeInTheDocument();
+    });
+});
+
+/**
+ * ⚠️ THE THREE BROWSER-FOUND DEFECTS, PINNED.
+ *
+ * All three were invisible to 1,315 PHP tests and 53 JS tests: they are
+ * layout and environment faults, and the suite asserted behaviour. These
+ * assertions are structural on purpose — they are the cheapest thing that
+ * fails if the grid or the height cap is undone.
+ */
+describe('Create Batch — layout regressions found in the browser', () => {
+    it('puts Serial Start and Upload Icon/Logo in the SAME grid row', () => {
+        // ⚠️ The grid flows in source order, so "same row" means "adjacent
+        // children of the 2-column grid, at an even boundary". Asserting the
+        // DOM relationship rather than a screenshot: it is the actual mechanism
+        // that produces the paired layout.
+        openCreate();
+
+        const grid = document.querySelector('.grid.sm\\:grid-cols-2');
+        expect(grid).not.toBeNull();
+
+        const children = Array.from(grid.children);
+        const serialIdx = children.findIndex((c) => c.textContent.includes('smart_qr.field_serial_start'));
+        const logoIdx = children.findIndex((c) => c.textContent.includes('smart_qr.section_batch_logo'));
+
+        expect(serialIdx).toBeGreaterThan(-1);
+        expect(logoIdx).toBe(serialIdx + 1);
+
+        // Left column == even index in a 2-col grid. If qr_type ever moves back
+        // into slot 6, serialIdx goes odd and this fails.
+        expect(serialIdx % 2).toBe(0);
+    });
+
+    it('renders the caption beside the Upload button, not below the whole field', () => {
+        openCreate();
+
+        const caption = screen.getByText('smart_qr.logo_hint');
+        const uploadBtn = screen.getByRole('button', { name: 'smart_qr.logo_upload' });
+
+        // Same column wrapper as the button — the reference places it there,
+        // and below the field it reads as a footnote about the preview box too.
+        expect(caption.parentElement).toBe(uploadBtn.parentElement);
+    });
+
+    it('caps the modal body height so header and footer stay reachable', () => {
+        // ⚠️ On a 13" MacBook the panel outgrew the viewport and Modal centres
+        // with `flex items-center` over `overflow-y-auto`, which pushes the
+        // overflow ABOVE the scroll origin — Create and Cancel became
+        // unclickable. Mirrors Admin/Plans/PlanModal.jsx.
+        openCreate();
+
+        const body = document.querySelector('.max-h-\\[70vh\\]');
+        expect(body).not.toBeNull();
+        expect(body.className).toContain('overflow-y-auto');
+
+        // Positive control: it is the BODY that scrolls, not the footer.
+        expect(body.textContent).toContain('smart_qr.field_batch_name');
+        expect(body.textContent).not.toContain('common.cancel');
     });
 });

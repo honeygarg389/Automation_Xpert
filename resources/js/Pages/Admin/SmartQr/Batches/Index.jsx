@@ -55,7 +55,22 @@ function CreateBatchModal({ show, onClose }) {
         <Modal show={show} onClose={onClose} maxWidth="2xl">
             <Modal.Header title={t('smart_qr.create_batch')} onClose={onClose} />
             <form onSubmit={submit}>
-                <Modal.Body className="space-y-4">
+                {/* ═══ ⚠️ THE BODY SCROLLS; HEADER AND FOOTER DO NOT ═══════
+                    Measured on a 13" MacBook at 100%: this form is tall enough
+                    that the panel exceeded the viewport, and Modal's container
+                    centres with `flex items-center` over `overflow-y-auto` —
+                    which pushes the overflow ABOVE the scroll origin, so the
+                    header and the footer buttons become unreachable rather than
+                    merely off-screen. Create and Cancel could not be clicked.
+
+                    Capping the BODY keeps the panel inside the viewport, so the
+                    header and footer stay pinned and only the fields scroll.
+
+                    ⚠️ Mirrors Admin/Plans/PlanModal.jsx, which is the only
+                    modal in this codebase that already solves this. It is NOT
+                    AssignQrModal — that one has as many fields and no cap, so
+                    it has the same latent defect; reported, not fixed here. */}
+                <Modal.Body className="max-h-[70vh] space-y-4 overflow-y-auto">
                     <p className="text-sm text-neutral-500 dark:text-neutral-400">
                         {t('smart_qr.create_batch_subtitle')}
                     </p>
@@ -122,6 +137,25 @@ function CreateBatchModal({ show, onClose }) {
                             error={errors.serial_start}
                             required
                         />
+                        {/* ⚠️ POSITION 6 IN THE GRID — the right column of the
+                            same row as Serial Start, per the reference. The
+                            grid flows in source order, so serial_start (5) and
+                            this (6) pair up exactly the way batch_name/
+                            batch_number and prefix/quantity do. Moving qr_type
+                            below is what frees this slot; nothing else changes
+                            the pairing. */}
+                        <ImageUploadField
+                            id="batch-logo"
+                            label={t('smart_qr.section_batch_logo')}
+                            value={data.logo}
+                            onChange={(file) => setData('logo', file)}
+                            hint={t('smart_qr.logo_hint')}
+                            error={errors.logo}
+                            buttonLabel={t('smart_qr.logo_upload')}
+                            changeLabel={t('smart_qr.logo_change')}
+                            removeLabel={t('smart_qr.logo_remove')}
+                            placeholder={t('smart_qr.logo_preview_empty')}
+                        />
                         <Input
                             label={t('smart_qr.field_qr_type')}
                             value={data.qr_type}
@@ -144,30 +178,6 @@ function CreateBatchModal({ show, onClose }) {
                                 error={errors.default_message}
                             />
                         </div>
-                    </section>
-
-                    {/* ⚠️ ITS OWN SECTION, matching the reference. The logo is
-                        not a property of the serial range beside it — it is what
-                        gets composited into every sticker this run produces, and
-                        (per the backend slice) there is NO fallback: a batch with
-                        no logo prints plain, permanently, because the only logo
-                        assets in this repo belong to another product (BUG-038). */}
-                    <section>
-                        <h4 className="mb-3 text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                            {t('smart_qr.section_batch_logo')}
-                        </h4>
-                        <ImageUploadField
-                            id="batch-logo"
-                            label={t('smart_qr.field_batch_logo')}
-                            value={data.logo}
-                            onChange={(file) => setData('logo', file)}
-                            hint={t('smart_qr.logo_hint')}
-                            error={errors.logo}
-                            buttonLabel={t('smart_qr.logo_upload')}
-                            changeLabel={t('smart_qr.logo_change')}
-                            removeLabel={t('smart_qr.logo_remove')}
-                            placeholder={t('smart_qr.logo_preview_empty')}
-                        />
                     </section>
 
                     {/* Preview of the range, so the operator sees what will be
