@@ -109,7 +109,7 @@ stdout_logfile=${basePath}/storage/logs/worker.log`;
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <h2 className="flex items-center gap-2 text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-                            <Clock className="h-5 w-5 text-primary-500" />
+                            <Clock className="h-5 w-5 text-brand-500" />
                             {t('cron.heading')}
                         </h2>
                         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">{t('cron.subheading')}</p>
