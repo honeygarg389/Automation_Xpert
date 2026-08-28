@@ -42,6 +42,28 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         Route::post('/batches/{batch}/retire', [QrBatchController::class, 'retire'])
             ->name('batches.retire')->middleware('permission:manage_qr_batches');
 
+        // ⚠️ Batch-scoped export — SEPARATE from /inventory/export, not a
+        // variant of it. That route takes a client-supplied code_ids[] because
+        // the inventory screen selects arbitrary codes across batches; this one
+        // reads ONLY `format` and resolves the ids from the batch server-side.
+        //
+        // ⚠️ Gated on view_qr_inventory, matching batches.show and
+        // inventory.export — exporting reads inventory and writes no domain
+        // state (the smart_qr_exports rows are bookkeeping for the archive, not
+        // a change to any batch or code). manage_qr_batches gates the actions
+        // that alter the batch itself: rename, delete, retire.
+        Route::post('/batches/{batch}/export', [QrBatchController::class, 'export'])
+            ->name('batches.export')->middleware('permission:view_qr_inventory');
+        Route::get('/batches/{batch}/exports', [QrBatchController::class, 'exports'])
+            ->name('batches.exports')->middleware('permission:view_qr_inventory');
+        // ⚠️ NOT inventory.export-download. That route validates the filename
+        // against readyExports()'s 20-most-recent listing, so parts of a
+        // 20-part batch export fall out of the window and 404 — the exact cap
+        // this feature exists to escape. This one is keyed on the
+        // smart_qr_exports row and scoped to the batch. See the controller.
+        Route::get('/batches/{batch}/exports/{export}', [QrBatchController::class, 'downloadExport'])
+            ->name('batches.export-download')->middleware('permission:view_qr_inventory');
+
         // ── Inventory (§5) ─────────────────────────────────────────────────
         Route::get('/inventory', [QrInventoryController::class, 'index'])
             ->name('inventory.index')->middleware('permission:view_qr_inventory');

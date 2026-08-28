@@ -3,6 +3,7 @@
 namespace App\Modules\SmartQr\Jobs;
 
 use App\Modules\SmartQr\Models\SmartQrCode;
+use App\Modules\SmartQr\Models\SmartQrExport;
 use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -64,15 +65,51 @@ class GenerateQrExportJob implements ShouldQueue
      */
     public const FORMATS = ['svg', 'png', 'pdf'];
 
-    /** @param list<int> $codeIds */
+    /**
+     * ⚠️ $exportId IS OPTIONAL AND TRAILING, AND THAT IS THE WHOLE CONTRACT.
+     *
+     * The Inventory bulk export (QrInventoryController::export) constructs this
+     * job with three arguments and is deliberately not being changed. Adding a
+     * NULLABLE trailing parameter means that call site keeps working untouched
+     * and keeps behaving identically: null means "no tracking row", and every
+     * status write below is skipped entirely. Anything that made the parameter
+     * required, or that defaulted it to something truthy, would silently change
+     * a path this slice is required to leave alone.
+     *
+     * @param  list<int>  $codeIds
+     * @param  int|null  $exportId  smart_qr_exports row to track, or null for the
+     *                              untracked Inventory path.
+     */
     public function __construct(
         public readonly array $codeIds,
         public readonly string $format,
         public readonly ?int $adminId = null,
+        public readonly ?int $exportId = null,
     ) {}
+
+    /**
+     * Update the tracking row, if there is one.
+     *
+     * ⚠️ Every status write goes through here so the null case is handled in ONE
+     * place. A row that has been deleted (its batch removed mid-export, which
+     * cascades) is a no-op rather than an error: the export is moot at that
+     * point, and throwing here would fail a job whose actual work succeeded.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    private function track(array $attributes): void
+    {
+        if ($this->exportId === null) {
+            return;
+        }
+
+        SmartQrExport::whereKey($this->exportId)->update($attributes);
+    }
 
     public function handle(SmartQrImageRenderer $renderer): void
     {
+        $this->track(['status' => SmartQrExport::STATUS_PROCESSING]);
+
         $format = in_array($this->format, self::FORMATS, true) ? $this->format : 'svg';
 
         // The cap is enforced at dispatch too; this is the backstop for a job
@@ -135,6 +172,15 @@ class GenerateQrExportJob implements ShouldQueue
             $zip->close();
 
             $disk->put($relative, file_get_contents($temp));
+
+            // ⚠️ Written INSIDE the try, immediately after the file lands. A
+            // row marked ready before the put would name an archive that does
+            // not exist yet; after the catch, a throw would leave it processing
+            // forever.
+            $this->track([
+                'status' => SmartQrExport::STATUS_READY,
+                'path' => $relative,
+            ]);
         } catch (\Throwable $e) {
             // ⚠️ LESSON 2 + 3. Clean up the partial artefact, then record the
             // reason OUTSIDE the cleanup so it survives, then rethrow so the
@@ -151,6 +197,18 @@ class GenerateQrExportJob implements ShouldQueue
                 'codes' => count($ids),
                 'format' => $format,
                 'admin_id' => $this->adminId,
+                'export_id' => $this->exportId,
+                'error' => $e->getMessage(),
+            ]);
+
+            // ⚠️ Recorded alongside the log line, not instead of it, and with
+            // the SAME value — slice 2's lesson that a failure reason written
+            // where it cannot survive leaves an operator with a stuck job and
+            // no explanation. The log serves whoever reads logs; this column
+            // serves the admin looking at the batch's export panel, who will
+            // never see a log line.
+            $this->track([
+                'status' => SmartQrExport::STATUS_FAILED,
                 'error' => $e->getMessage(),
             ]);
 

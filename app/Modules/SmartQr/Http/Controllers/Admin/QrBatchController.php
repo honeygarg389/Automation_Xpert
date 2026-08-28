@@ -7,20 +7,25 @@ use App\Models\Scopes\WorkspaceScope;
 use App\Modules\SmartQr\Http\Requests\StoreQrBatchRequest;
 use App\Modules\SmartQr\Http\Requests\UpdateQrBatchRequest;
 use App\Modules\SmartQr\Jobs\GenerateQrBatchJob;
+use App\Modules\SmartQr\Jobs\GenerateQrExportJob;
 use App\Modules\SmartQr\Models\SmartQrBatch;
+use App\Modules\SmartQr\Models\SmartQrExport;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use App\Services\AuditLogService;
 use App\Services\StorageManager;
 use App\Support\Files\SafeUploadExtension;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * §4 — QR batches. Super Admin only; a batch never belongs to a tenant.
@@ -177,6 +182,151 @@ class QrBatchController extends Controller
     }
 
     /**
+     * ═══ ⚠️ BATCH-SCOPED EXPORT — N PARTS, ONE JOB EACH ═══════════════════
+     *
+     * ⚠️ THE CODE IDS COME FROM THE BATCH, NEVER FROM THE REQUEST. The
+     * Inventory export accepts `code_ids[]` because that screen lets an admin
+     * hand-pick an arbitrary cross-batch selection; here the batch's own rows
+     * ARE the selection, so accepting a client-supplied list would add an input
+     * that can only disagree with the server's own answer. `format` is the only
+     * thing this reads from the request.
+     *
+     * ⚠️ N DISPATCHES, NOT ONE JOB LOOPING. Each execution gets at most
+     * MAX_CODES ids — the exact shape GenerateQrExportJob already runs safely
+     * today. A single job emitting N archives would put the whole batch inside
+     * one execution's timeout, which is the risk the 500 cap exists to bound.
+     *
+     * ⚠️ THE ROW IS WRITTEN BEFORE THE JOB IS QUEUED. `total_parts` is known up
+     * front because the ids are counted before anything is dispatched, so every
+     * part can say "3 of 20" from birth — and no job can ever be running with
+     * no row to record what happened to it.
+     */
+    public function export(Request $request, SmartQrBatch $batch): RedirectResponse
+    {
+        $data = $request->validate([
+            'format' => ['nullable', Rule::in(GenerateQrExportJob::FORMATS)],
+        ]);
+
+        $format = $data['format'] ?? 'svg';
+
+        $codeIds = $batch->codes()->orderBy('serial_number')->pluck('id')->all();
+
+        if ($codeIds === []) {
+            return back()->withErrors(['export' => __(
+                'This batch has no codes to export yet. Code generation may still be queued.'
+            )]);
+        }
+
+        $chunks = array_chunk($codeIds, GenerateQrExportJob::MAX_CODES);
+        $totalParts = count($chunks);
+
+        foreach ($chunks as $index => $chunk) {
+            $export = SmartQrExport::create([
+                'batch_id' => $batch->id,
+                'part_number' => $index + 1,
+                'total_parts' => $totalParts,
+                'format' => $format,
+                'status' => SmartQrExport::STATUS_QUEUED,
+            ]);
+
+            // ⚠️ No array_values() — array_chunk already returns a list, and
+            // PHPStan flags the wrap as having no effect. (The Inventory export
+            // does call it, correctly: there it re-indexes a client-supplied
+            // array whose keys are not guaranteed sequential.)
+            GenerateQrExportJob::dispatch(
+                $chunk,
+                $format,
+                $request->user('admin')?->id,
+                $export->id,
+            );
+        }
+
+        return back()->with('success', __(
+            'Preparing :parts export part(s) for :count code(s). Each part appears below as its '
+            .'queue job finishes.',
+            ['parts' => $totalParts, 'count' => count($codeIds)]
+        ));
+    }
+
+    /**
+     * The parts of this batch's export, with their statuses.
+     *
+     * ⚠️ Scoped to the batch and UNCAPPED — see SmartQrExport::scopeForBatch.
+     * QrInventoryController's readyExports() takes the 20 most recent files
+     * because it lists a shared directory; a 20-part batch would fill that
+     * entirely. Keyed on batch_id there is nothing to cap.
+     */
+    public function exports(SmartQrBatch $batch): JsonResponse
+    {
+        return response()->json([
+            'exports' => SmartQrExport::forBatch($batch->id)
+                ->get(['id', 'part_number', 'total_parts', 'format', 'status', 'path', 'error', 'updated_at'])
+                ->all(),
+        ]);
+    }
+
+    /**
+     * Download one ready export part.
+     *
+     * ═══ ⚠️ WHY THIS EXISTS RATHER THAN REUSING inventory.export-download ══
+     *
+     * That route validates the requested filename against readyExports(),
+     * which lists the export directory and TAKES THE 20 MOST RECENT. Batch
+     * parts are written to that same directory, so a 20-part batch export plus
+     * any other recent archive pushes the earliest parts out of that window —
+     * and out of the window means 404, for a file that exists and that the
+     * admin was just told was ready. That is precisely the cap this feature was
+     * built to escape, so reusing the route would reintroduce it at the last
+     * step.
+     *
+     * Keyed on the smart_qr_exports ROW instead: the row is the authority on
+     * what belongs to this batch and whether it is downloadable. No listing, no
+     * cap, no filename parsing.
+     *
+     * ⚠️ THE PART IS SCOPED TO THE BATCH IN THE QUERY, not just read by id — so
+     * a part id belonging to another batch 404s rather than being served under
+     * this batch's URL.
+     */
+    public function downloadExport(SmartQrBatch $batch, SmartQrExport $export): StreamedResponse
+    {
+        abort_unless($export->batch_id === $batch->id, 404);
+
+        // ⚠️ Only a READY row has an archive. queued/processing would 404 on
+        // the disk read anyway; failed never wrote one. Refusing here makes the
+        // reason explicit instead of surfacing a storage error.
+        abort_unless($export->status === SmartQrExport::STATUS_READY && $export->path !== null, 404);
+
+        $disk = Storage::disk('local');
+
+        // The row can outlive its file — the archive is disposable, the record
+        // is not. A missing file is a 404, not a 500.
+        abort_unless($disk->exists($export->path), 404);
+
+        // ⚠️ LITERAL .zip, AND $format IS A NAME SEGMENT — NOT THE EXTENSION.
+        //
+        // This shipped as `...-of%d.%s` with $format as the extension, which
+        // produced `AX-BK-001-part1-of1.svg` for a file whose bytes are
+        // `PK\x03\x04`. The archive would not open: an SVG viewer handed ZIP
+        // bytes reports "Start tag expected, '<' not found", which reads as a
+        // corrupt export rather than a misnamed one.
+        //
+        // The confusion was a category error. `format` describes the IMAGES
+        // INSIDE the archive — it is used correctly one line away in the job,
+        // naming members `T-000001.svg` — but the container is ALWAYS a ZIP,
+        // for every format. GenerateQrExportJob::FORMATS is svg|png|pdf and
+        // never contains "zip", so no value of $format was ever a correct
+        // extension here.
+        //
+        // Kept in the name rather than dropped: exporting one batch as SVG and
+        // again as PNG otherwise yields two files with identical names, and the
+        // second silently becomes "(1)" in the admin's downloads folder.
+        return $disk->download(
+            $export->path,
+            sprintf('%s-part%d-of%d-%s.zip', $batch->batch_number, $export->part_number, $export->total_parts, $export->format)
+        );
+    }
+
+    /**
      * ═══ ⚠️ THE BATCH LOGO — WRITTEN TO THE PRIVATE DISK, ON PURPOSE ══════
      *
      * The platform logo lives on `public` because a browser fetches it. This
@@ -265,6 +415,16 @@ class QrBatchController extends Controller
                 ->with(['currentAssignment' => fn ($q) => $q->withoutGlobalScope(WorkspaceScope::class)])
                 ->orderBy('serial_number')
                 ->paginate(50),
+
+            // ⚠️ AN INERTIA PROP, NOT A POLLED FETCH — matching this module's
+            // established "fire and forget, check back" pattern. The Inventory
+            // page's Ready Exports panel works identically (a prop at page
+            // load; its JSON endpoint has no caller anywhere in resources/js),
+            // and introducing a poller here would make this the only screen in
+            // the module that behaves differently. The JSON exports() route
+            // stays available for a future slice that wants live refresh.
+            'exports' => SmartQrExport::forBatch($batch->id)
+                ->get(['id', 'part_number', 'total_parts', 'format', 'status', 'path', 'error', 'updated_at']),
         ]);
     }
 }

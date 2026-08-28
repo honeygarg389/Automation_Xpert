@@ -12,6 +12,7 @@ use Endroid\QrCode\RoundBlockSizeMode;
 use Endroid\QrCode\Writer\PngWriter;
 use Endroid\QrCode\Writer\Result\ResultInterface;
 use Endroid\QrCode\Writer\SvgWriter;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 /**
@@ -92,41 +93,65 @@ class SmartQrImageRenderer
     private const SVG_LABEL_BAND = 38;
 
     /**
-     * ⚠️ MEASURED ZIPPED BYTES PER CODE — and the direction is the OPPOSITE of
-     * what slice 8's plan and my own controller docblock assumed.
+     * Masked logo temp files, keyed by source path + mtime + size.
      *
-     * The plan said "SVG is a few hundred KB for 500, PNG is 50–150 MB", so SVG
-     * became the default on a size argument. Measured, in a ZipArchive because
-     * that is what the admin actually downloads:
+     * @var array<string, string>
+     */
+    private array $maskedLogos = [];
+
+    /**
+     * ⚠️ MEASURED ZIPPED BYTES PER CODE. Not a formula, not an estimate derived
+     * from image dimensions — actual ZipArchive output, because a ZIP is what
+     * the admin downloads and it is the only number that predicts their wait.
      *
      *   |          | SVG/code | PNG/code | PDF/code | 500 SVG | 500 PNG | 500 PDF |
      *   |----------|----------|----------|----------|---------|---------|---------|
      *   | no logo  |   4.5 KB |   6.8 KB |   4.9 KB |  2.1 MB |  3.2 MB |  2.4 MB |
-     *   | logo     |  491  KB |  154  KB |  486  KB |  234 MB |   73 MB |  232 MB |
+     *   | logo     |  53.7 KB |  41.0 KB |  49.0 KB |   26 MB |   20 MB |   23 MB |
+     *
+     * ⚠️ THE LOGO ROW IS A WORST CASE ACROSS REAL UPLOADS, NOT A TYPICAL ONE,
+     * and the spread is wide enough that a single figure cannot be honest about
+     * it. Measured over the five logos actually uploaded on this installation,
+     * per code, SVG ranged 7.2 KB (51x51 source) to 53.7 KB (319x319). The
+     * larger end is stored deliberately: over-estimating a download is a mild
+     * surprise, under-estimating it is an admin cancelling a transfer that was
+     * nearly done.
      *
      * ⚠️ PDF tracks SVG, not PNG, because print.blade.php embeds the SVG as a
-     * base64 data URI — so it inherits the SVG's logo penalty exactly.
+     * base64 data URI — so it inherits the SVG's logo cost exactly.
      *
-     * ⚠️ WITH A LOGO CONFIGURED — the intended production state — SVG IS ROUGHLY
-     * 3× LARGER THAN PNG, not smaller.
+     * ⚠️ THE LOGO FIGURES ARE POST-MASK AND THE PRE-MASK ONES WERE 3.7-9.9x TOO
+     * HIGH. They were measured when the logo reached endroid as the admin's
+     * uploaded bytes. It now arrives as a GD re-encode (see
+     * circularlyMaskedLogo), which drops the XMP metadata block Canva-style
+     * exports carry — several hundred KB, base64'd into EVERY SVG. The old
+     * `svg => 491_000` told an admin a 500-code export was 234 MB when it
+     * renders at about 26 MB.
      *
-     * The cause is structural, not incidental: endroid's SvgWriter embeds the
-     * logo as a base64 data URI in EVERY file, and base64 of an already-
-     * compressed PNG neither shrinks in the SVG nor deflates in the ZIP. The
-     * PNG writer rasterises the same logo into one bitmap that is compressed
-     * once.
+     * ⚠️ DO NOT RESTORE THE CLAIM THAT SVG IS "ROUGHLY 3x LARGER THAN PNG".
+     * That held pre-mask and no longer generalises — it now depends on the
+     * source logo's size, and INVERTS for small ones:
      *
-     * SVG REMAINS THE DEFAULT, on the argument that actually holds: it is vector
-     * and prints crisply at any physical size, where a 1024 px PNG blurs on
-     * anything larger than a sticker. The size claim was never the real reason —
-     * it was a wrong number that happened to point at the right default.
+     *   51x51   source -> SVG  7.2 KB vs PNG 21.9 KB  (SVG ~3x SMALLER)
+     *   319x319 source -> SVG 53.7 KB vs PNG 37.1 KB  (SVG ~1.4x larger)
+     *
+     * The mechanism is unchanged — SvgWriter base64s the logo into every file
+     * while the PNG writer rasterises it once — but the logo is now small
+     * enough that the QR's own raster cost dominates at small sizes.
+     *
+     * SVG REMAINS THE DEFAULT, and on the argument that always actually held:
+     * it is vector and prints crisply at any physical size, where a 1024 px PNG
+     * blurs on anything larger than a sticker. Size was never the real reason,
+     * and it is now not even reliably in SVG's favour.
      *
      * These figures drive the UI note, so an admin sees the true cost of the
-     * format they pick. Re-measure if the logo pipeline changes.
+     * format they pick. ⚠️ RE-MEASURE IF THE LOGO PIPELINE CHANGES AGAIN — that
+     * instruction is why this staleness was caught rather than shipped, and it
+     * earns its place by having already paid off once.
      */
     public const ZIPPED_BYTES_PER_CODE = [
         'no_logo' => ['svg' => 4_495, 'png' => 6_809, 'pdf' => 4_984],
-        'logo' => ['svg' => 491_000, 'png' => 153_866, 'pdf' => 486_005],
+        'logo' => ['svg' => 53_702, 'png' => 41_041, 'pdf' => 49_011],
     ];
 
     /**
@@ -340,9 +365,29 @@ class SmartQrImageRenderer
         // here — see batchLogoPath() for why that absence is the feature.
         if ($logoPath !== null) {
             $builder = $builder
-                ->logoPath($logoPath)
+                ->logoPath($this->circularlyMaskedLogo($logoPath))
                 ->logoResizeToWidth((int) round(self::PNG_SIZE * self::LOGO_RATIO))
-                ->logoPunchoutBackground(true);
+
+                // ⚠️ FALSE, AND THE MASK IS WHY — do not "restore" this to true.
+                //
+                // endroid's punchout clears a RECTANGLE the full width and
+                // height of the logo (AbstractGdWriter::addLogo, nested for
+                // loops over getWidth() x getHeight()), which is precisely the
+                // white square this mask exists to remove. Leaving it on
+                // reinstates the square OUTSIDE our circle, on the raster path
+                // only, so SVG and PNG would disagree.
+                //
+                // Measured, comparing each render against the same code with no
+                // logo, over the 256 px box around the centre:
+                //
+                //   punchout=true  -> 4072 of 23607 pixels outside the circle
+                //                     differ from the plain render (clobbered)
+                //   punchout=false ->    0 of 23607 differ (QR fully intact)
+                //
+                // With the corners already transparent, GD blends the logo over
+                // the modules and the punchout has nothing left to do but
+                // damage. See SmartQrLogoMaskTest.
+                ->logoPunchoutBackground(false);
         }
 
         return $builder->build();
@@ -412,6 +457,171 @@ class SmartQrImageRenderer
         }
 
         return $absolute;
+    }
+
+    /**
+     * A copy of the batch logo with everything outside the inscribed circle made
+     * fully transparent. Returns the ORIGINAL path unchanged if masking fails.
+     *
+     * ═══ ⚠️ WHY THIS EXISTS AT ALL ═══════════════════════════════════════════
+     *
+     * Every logo an admin uploads in practice is an opaque rectangle — a mark on
+     * a white field, exported from Canva or similar. Measured across the three
+     * real uploads on this installation: 0.0% transparent pixels in all three.
+     *
+     * So the white square behind the centre logo was never drawn by this class.
+     * It is the logo file's own background, composited verbatim, and no amount
+     * of configuration on endroid's builder removes it — the bytes are opaque.
+     * The fix has to change the PIXELS, which is what this does.
+     *
+     * ⚠️ THE ORIGINAL UPLOAD IS NEVER MODIFIED. This writes a derived temp file
+     * and hands endroid that instead. An admin who re-downloads their logo, or
+     * whose batch is later rendered by different code, still has the file they
+     * uploaded. Masking in place would be irreversible and would silently
+     * destroy artwork on any future change of mind about the shape.
+     *
+     * ⚠️ ONE MASK PER SOURCE FILE PER INSTANCE, not per code. A 500-code export
+     * shares one renderer, and the mask is a per-pixel loop over the full source
+     * image — re-running it for every code would multiply that by 500 for a
+     * byte-identical result. Keyed by path + mtime + size so a re-uploaded logo
+     * at the same path is not served from a stale mask.
+     *
+     * ⚠️ COVERS ALL THREE FORMATS THROUGH ONE CHANGE, because both writers read
+     * this same file: the PNG path re-parses its bytes with imagecreatefromstring
+     * and composites them, and the SVG path base64s those same bytes into a data
+     * URI (LogoImageData::createDataUri). PDF embeds the SVG, so it follows.
+     * There is deliberately no second implementation to keep in step.
+     *
+     * ⚠️ A data:// URI CANNOT REPLACE THE TEMP FILE, though it looks like it
+     * should. LogoImageData runs the path through filter_var(FILTER_VALIDATE_URL),
+     * which ACCEPTS a data URI, and then resolves its mime type with
+     * get_headers() — which cannot fetch one. Verified before writing this.
+     */
+    private function circularlyMaskedLogo(string $logoPath): string
+    {
+        $key = $logoPath.'|'.(@filemtime($logoPath) ?: 0).'|'.(@filesize($logoPath) ?: 0);
+
+        if (isset($this->maskedLogos[$key])) {
+            return $this->maskedLogos[$key];
+        }
+
+        $masked = $this->writeCircularMask($logoPath);
+
+        if ($masked === null) {
+            // ⚠️ FALLS BACK TO THE ORIGINAL, WHICH IS NOT THE SAME AS
+            // "never fails". If the mask failed because the file is unreadable,
+            // endroid rejects the original too and the export fails loudly —
+            // deliberately, because the alternative is 500 silently unbranded
+            // stickers discovered after printing. See SmartQrLogoMaskTest.
+            //
+            // The case this fallback actually serves is a mask that fails on a
+            // VALID image (no temp space, a refused allocation): the original
+            // still renders, square but branded. Logged so that shows up as a
+            // cause rather than as "the mask sometimes does not work".
+            Log::warning('smart_qr.logo_mask_failed', ['path' => $logoPath]);
+
+            return $logoPath;
+        }
+
+        return $this->maskedLogos[$key] = $masked;
+    }
+
+    /**
+     * The pixel work. Null on any GD failure — the caller decides what that means.
+     */
+    private function writeCircularMask(string $logoPath): ?string
+    {
+        $raw = @file_get_contents($logoPath);
+
+        if (! is_string($raw) || $raw === '') {
+            return null;
+        }
+
+        $source = @imagecreatefromstring($raw);
+
+        if ($source === false) {
+            return null;
+        }
+
+        try {
+            $width = imagesx($source);
+            $height = imagesy($source);
+
+            $canvas = imagecreatetruecolor($width, $height);
+
+            // ⚠️ BOTH CALLS ARE LOAD-BEARING. alphablending(false) makes writes
+            // REPLACE the destination pixel instead of compositing onto it, so a
+            // transparent pixel actually lands as transparent; savealpha(true)
+            // makes imagepng() encode the alpha channel at all. Without the
+            // second, the file looks right in memory and is written opaque.
+            imagealphablending($canvas, false);
+            imagesavealpha($canvas, true);
+
+            $transparent = imagecolorallocatealpha($canvas, 0, 0, 0, 127);
+
+            if ($transparent === false) {
+                return null;
+            }
+
+            imagefilledrectangle($canvas, 0, 0, $width - 1, $height - 1, $transparent);
+
+            // The largest circle that fits, centred — matching how endroid
+            // centres the logo on the matrix.
+            $centreX = ($width - 1) / 2;
+            $centreY = ($height - 1) / 2;
+            $radius = min($width, $height) / 2;
+            $radiusSquared = $radius * $radius;
+
+            for ($y = 0; $y < $height; $y++) {
+                $dy = ($y - $centreY) ** 2;
+
+                for ($x = 0; $x < $width; $x++) {
+                    if ((($x - $centreX) ** 2 + $dy) <= $radiusSquared) {
+                        // Copied WITH its alpha, so a logo that already had
+                        // transparency keeps it inside the circle.
+                        imagesetpixel($canvas, $x, $y, imagecolorat($source, $x, $y));
+                    }
+                }
+            }
+
+            $target = tempnam(sys_get_temp_dir(), 'smartqr-logo-');
+
+            if ($target === false) {
+                return null;
+            }
+
+            if (! imagepng($canvas, $target)) {
+                @unlink($target);
+
+                return null;
+            }
+
+            return $target;
+        } catch (\Throwable) {
+            return null;
+        } finally {
+            if (isset($canvas) && $canvas !== false) {
+                imagedestroy($canvas);
+            }
+
+            imagedestroy($source);
+        }
+    }
+
+    /**
+     * ⚠️ THE MASKS ARE TEMP FILES AND SOMETHING HAS TO DELETE THEM. One per
+     * batch logo per renderer instance is small, but an export worker rendering
+     * batch after batch would accumulate them for the life of the process.
+     * SmartQrImageExportTest already counts sys_get_temp_dir()/smartqr* as a
+     * leak; these are named to fall under that same check rather than to dodge it.
+     */
+    public function __destruct()
+    {
+        foreach ($this->maskedLogos as $path) {
+            @unlink($path);
+        }
+
+        $this->maskedLogos = [];
     }
 
     /**
