@@ -42,6 +42,12 @@ export default [
                 console:   'readonly',
                 setTimeout: 'readonly',
                 clearTimeout: 'readonly',
+                // ⚠️ Beside setTimeout. Absent until the batch detail page
+                // polled, though Broadcasting/Campaigns had been using both
+                // since before this config existed — those six no-undef errors
+                // were sitting in the lint baseline, not a sign nobody used them.
+                setInterval: 'readonly',
+                clearInterval: 'readonly',
                 requestAnimationFrame: 'readonly',
                 Event:     'readonly',
                 // ⚠️ Beside Event — the DOM interface object, needed for

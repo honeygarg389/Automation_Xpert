@@ -4219,6 +4219,7 @@
         "logo_preview_empty": "Preview",
         "stat_assigned": "Assigned",
         "stat_active": "Active",
+        "poll_stalled": "Still processing. This page stopped refreshing automatically \u2014 reload to check again.",
         "exports_panel": "Export parts",
         "exports_empty": "No exports yet. Use Export ZIP above to build one.",
         "export_part": "Part {{part}} of {{total}}",

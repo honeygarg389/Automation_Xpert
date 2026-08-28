@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, Dropdown, Input, Modal, Pagination } from '@/Components/ui';
@@ -130,6 +130,42 @@ function StatCard({ icon: Icon, label, value }) {
  * the selection model and the bulk actions — duplicating them here would be two
  * places to change when a bulk action gains an option.
  */
+/**
+ * ═══ AUTO-REFRESH WHILE WORK IS IN FLIGHT ═══════════════════════════════════
+ *
+ * Batch generation and each export part run as queue jobs, so the interesting
+ * numbers on this page (generated_count, each part's status) change AFTER the
+ * response that rendered it. Without this the admin watches a static page and
+ * reloads by hand to find out whether anything happened.
+ *
+ * ⚠️ ALLOW-LIST OF LIVE STATES, NEVER A DENY-LIST OF TERMINAL ONES. Batches
+ * have FIVE statuses — draft, generating, generated, failed, AND printed. A
+ * guard written as "stop once status is generated or failed" polls a printed
+ * batch forever, because `printed` is in neither set. Asking "is it still
+ * working?" cannot be wrong when a sixth status is added; asking "is it done
+ * yet?" silently can.
+ */
+const LIVE_BATCH_STATUSES = ['draft', 'generating'];
+
+/** SmartQrExport::STATUS_QUEUED / STATUS_PROCESSING. */
+const LIVE_EXPORT_STATUSES = ['queued', 'processing'];
+
+const POLL_INTERVAL_MS = 5000;
+
+/**
+ * ⚠️ A CAP, BECAUSE "STILL WORKING" AND "NOTHING IS CONSUMING THE QUEUE" LOOK
+ * IDENTICAL FROM HERE.
+ *
+ * A row stuck at `generating` because no worker is running is indistinguishable
+ * in the props from one that is genuinely mid-flight — this codebase has the
+ * measured incident on record: a `queue:listen` up and visible in `ps` that had
+ * consumed nothing for three days, with every dashboard looking clean. Polling
+ * on that forever is the page quietly lying that something is happening.
+ *
+ * 60 attempts x 5s = 5 minutes, after which the page says so and stops asking.
+ */
+const MAX_POLL_ATTEMPTS = 60;
+
 export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
     const { t } = useTranslation();
     const flash = usePage().props.flash || {};
@@ -154,6 +190,74 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
     // 20 jobs in one request; without this, an impatient second click queues a
     // whole duplicate set of parts before the first response lands.
     const [exporting, setExporting] = useState(false);
+
+    /**
+     * Liveness, derived from the props themselves rather than tracked in state
+     * — the server's answer is the only authority on whether work is still
+     * running, and a local copy could disagree with it.
+     */
+    const batchIsLive = LIVE_BATCH_STATUSES.includes(batch.status);
+    const liveExportCount = exports.filter((e) => LIVE_EXPORT_STATUSES.includes(e.status)).length;
+    const isLive = batchIsLive || liveExportCount > 0;
+
+    /**
+     * ⚠️ EXHAUSTION IS KEYED TO WHAT WAS BEING WAITED ON, not a bare boolean.
+     *
+     * A bare flag needs an effect to reset it when the work changes, and
+     * setState inside an effect body is both a lint error here and a real
+     * cascading-render hazard. Storing WHICH liveness state gave up makes the
+     * reset fall out of the comparison for free: the moment the batch status or
+     * the live-part count changes, this key stops matching and polling resumes
+     * on its own.
+     */
+    const livenessKey = `${batch.status}:${liveExportCount}`;
+    const [exhaustedFor, setExhaustedFor] = useState(null);
+    const pollExhausted = exhaustedFor === livenessKey;
+
+    /**
+     * ⚠️ A REF, NOT STATE. Counting in state re-renders every tick and re-runs
+     * the effect on its own counter — tearing the interval down and rebuilding
+     * it 60 times, which resets the 5s clock each time so the cap never lands.
+     */
+    const attemptsRef = useRef(0);
+
+    /**
+     * Follows Broadcasting/Campaigns/Show.jsx exactly — guard clause, interval,
+     * partial reload, clearInterval on unmount, keyed on the liveness value.
+     * That screen polls a queued campaign this way; this is a new caller of an
+     * existing pattern, not a new pattern.
+     *
+     * ⚠️ 5s WHERE CAMPAIGNS USES 8-10s, DELIBERATELY. Those screens watch sends
+     * running for minutes, so 10s of staleness is invisible. Export parts are
+     * measured at ~130ms each — at 8s a finished part reads as pending for most
+     * of its real wait, which is the entire thing this poll exists to show.
+     *
+     * ⚠️ The three props are exactly what show() renders, and none is lazy — so
+     * `only` trims the PAYLOAD, not the server's work.
+     */
+    useEffect(() => {
+        if (!isLive || pollExhausted) return;
+
+        attemptsRef.current = 0;
+
+        const id = setInterval(() => {
+            attemptsRef.current += 1;
+
+            if (attemptsRef.current > MAX_POLL_ATTEMPTS) {
+                setExhaustedFor(livenessKey);
+
+                return;
+            }
+
+            router.reload({
+                only: ['batch', 'codes', 'exports'],
+                preserveScroll: true,
+                preserveState: true,
+            });
+        }, POLL_INTERVAL_MS);
+
+        return () => clearInterval(id);
+    }, [isLive, pollExhausted, livenessKey]);
 
     /**
      * ⚠️ THREE PILLS, not the reference's five.
@@ -186,6 +290,21 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                 {flash.success && (
                     <div className="rounded-soft-lg bg-green-50 dark:bg-green-900/30 px-4 py-2 text-sm text-green-800 dark:text-green-200">
                         {flash.success}
+                    </div>
+                )}
+
+                {/* ⚠️ ONLY AFTER THE CAP — not whenever something is in flight.
+                    Shown while the page still believes work is live but has
+                    stopped asking, which is the one state the admin cannot infer
+                    from anything else on screen: the status pills still read
+                    "generating" and nothing moves. Says the page stopped, not
+                    that the job failed — the page does not know which. */}
+                {pollExhausted && isLive && (
+                    <div
+                        role="status"
+                        className="rounded-soft-lg bg-amber-50 dark:bg-amber-900/30 px-4 py-2 text-sm text-amber-800 dark:text-amber-200"
+                    >
+                        {t('smart_qr.poll_stalled')}
                     </div>
                 )}
 
@@ -368,19 +487,25 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                     <Pagination data={codes} />
                 </Card>
 
-                {/* ═══ ⚠️ EXPORT PARTS — AN INERTIA PROP, NOT A POLLER ══════════
+                {/* ═══ ⚠️ EXPORT PARTS — NOW AUTO-REFRESHED ═════════════════════
                     A batch over 500 codes exports as N parts, each built by its
-                    own queue job, so parts appear one at a time. This panel is
-                    populated at page load and refreshed by revisiting — the
-                    module's established "fire and forget, check back" pattern,
-                    identical to the Inventory page's Ready Exports panel.
+                    own queue job, so parts appear one at a time.
 
-                    ⚠️ NO AUTO-REFRESH, DELIBERATELY. Nothing in this module
-                    polls (the JSON exports endpoints have no callers in
-                    resources/js), and a timer here would make this the only
-                    screen that behaves differently — a divergence to maintain
-                    forever for a job that finishes in seconds. The success
-                    flash already tells the admin parts appear as jobs finish.
+                    ⚠️ THIS PANEL USED TO CARRY A "NO AUTO-REFRESH, DELIBERATELY"
+                    NOTE. Its argument was that nothing in the app polled, so a
+                    timer here would be a lone divergence — and that premise was
+                    simply wrong. Broadcasting/Campaigns/Show.jsx and
+                    Campaigns/Index.jsx have both polled queued work with
+                    setInterval + router.reload({ only }) since before this
+                    module existed. The poll above follows that precedent rather
+                    than inventing anything, so there is no divergence to
+                    maintain — and the old note is recorded here rather than
+                    deleted so the next reader does not re-derive it from the
+                    same wrong premise.
+
+                    ⚠️ It DOES diverge on interval — 5s against Campaigns' 8-10s
+                    — because export parts finish in ~130ms where a campaign send
+                    runs for minutes. See the effect for the measurement.
 
                     ⚠️ Rendered only when parts exist: an empty panel on every
                     batch that has never been exported is noise. */}
