@@ -57,7 +57,13 @@ const renderPage = (exports = []) =>
 
 beforeEach(() => { posts.length = 0; });
 
-describe('Export ZIP button', () => {
+describe('Export ZIP dropdown', () => {
+    // The trigger is the visible button; the three format items live in the
+    // Dropdown.Content that opens on click.
+    const openMenu = () => {
+        fireEvent.click(screen.getByRole('button', { name: /Export ZIP/ }));
+    };
+
     it('is enabled and no longer the coming-soon placeholder', () => {
         renderPage();
         const btn = screen.getByRole('button', { name: /Export ZIP/ });
@@ -66,11 +72,29 @@ describe('Export ZIP button', () => {
         expect(screen.queryByTitle('Coming soon')).not.toBeInTheDocument();
     });
 
-    it('posts to the BATCH export route with the batch uuid', () => {
+    it('offers exactly the three formats the backend accepts', () => {
+        // ⚠️ Must match GenerateQrExportJob::FORMATS. An option the server
+        // rejects would fail validation after the click, and a missing one is
+        // a format the admin cannot reach at all.
         renderPage();
-        fireEvent.click(screen.getByRole('button', { name: /Export ZIP/ }));
+        openMenu();
+
+        expect(screen.getByRole('button', { name: 'SVG' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'PNG' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'PDF (print)' })).toBeInTheDocument();
+    });
+
+    it.each([
+        ['SVG', 'svg'],
+        ['PNG', 'png'],
+        ['PDF (print)', 'pdf'],
+    ])('dispatches %s with format=%s to the BATCH route', (label, fmt) => {
+        renderPage();
+        openMenu();
+        fireEvent.click(screen.getByRole('button', { name: label }));
 
         expect(posts).toHaveLength(1);
+        expect(posts[0].data).toEqual({ format: fmt });
         // ⚠️ The UUID, not the id — batches use uuid as their route key, so
         // posting batch.id would 404 at route-model binding.
         expect(posts[0].url).toContain('batch-uuid-1');
@@ -82,22 +106,27 @@ describe('Export ZIP button', () => {
         // ⚠️ The old flow is a separate path and must stay untouched. Posting
         // there would send no code_ids and silently export nothing.
         renderPage();
-        fireEvent.click(screen.getByRole('button', { name: /Export ZIP/ }));
+        openMenu();
+        fireEvent.click(screen.getByRole('button', { name: 'SVG' }));
         expect(posts[0].url).not.toContain('inventory');
     });
 
-    it('disables itself during the round trip so a second click cannot double-dispatch', () => {
-        // A 1500-code batch queues 3 parts per request; an impatient second
-        // click would queue 3 more before the first response lands.
-        renderPage();
-        const btn = screen.getByRole('button', { name: /Export ZIP/ });
+    it.each(['SVG', 'PNG', 'PDF (print)'])(
+        'disables the trigger after choosing %s, so a second dispatch is impossible',
+        (label) => {
+            // ⚠️ ASSERTED FOR EVERY OPTION, not just the default. The guard sits
+            // on the trigger and each item sets `exporting` — a version that
+            // only set it on one path would still double-dispatch from the
+            // other two. A 10,000-code batch queues 20 jobs per request, so a
+            // double-click is 40 jobs and 40 tracking rows.
+            renderPage();
+            fireEvent.click(screen.getByRole('button', { name: /Export ZIP/ }));
+            fireEvent.click(screen.getByRole('button', { name: label }));
 
-        fireEvent.click(btn);
-        expect(btn).toBeDisabled();
-
-        fireEvent.click(btn);
-        expect(posts).toHaveLength(1);
-    });
+            expect(posts).toHaveLength(1);
+            expect(screen.getByRole('button', { name: /Export ZIP/ })).toBeDisabled();
+        },
+    );
 });
 
 describe('Export parts panel', () => {
@@ -150,5 +179,48 @@ describe('Export parts panel', () => {
         renderPage([part({ status: 'failed', path: null, error: 'render exploded' })]);
         expect(screen.getByText(/render exploded/)).toBeInTheDocument();
         expect(screen.queryByRole('link', { name: /Download/ })).not.toBeInTheDocument();
+    });
+});
+
+/**
+ * ⚠️ SECTION ORDER, ASSERTED ON DOM POSITION.
+ *
+ * The codes table is the reason an admin opens this page; the export parts
+ * panel is a side channel that only exists after someone clicks Export. The
+ * panel originally rendered between the stat pills and the table, pushing the
+ * table below a list that is empty on most batches.
+ *
+ * compareDocumentPosition is used rather than reading class names or indexes:
+ * it asserts the actual rendered order, which is the thing that regressed, and
+ * it survives markup changes that do not move the sections relative to each
+ * other.
+ */
+describe('Batch detail — section order', () => {
+    it('renders the codes table BEFORE the export parts panel', () => {
+        renderPage([{
+            id: 10, part_number: 1, total_parts: 1, format: 'svg',
+            status: 'ready', path: 'smartqr-exports/a.zip', error: null,
+        }]);
+
+        const table = document.querySelector('table');
+        const panelHeading = screen.getByText('Export parts');
+
+        expect(table).not.toBeNull();
+        expect(panelHeading).toBeInTheDocument();
+
+        // Node.DOCUMENT_POSITION_FOLLOWING (4) => panel comes AFTER the table.
+        const position = table.compareDocumentPosition(panelHeading);
+        expect(position & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('keeps the stat pills above the codes table', () => {
+        // Positive control: proves the assertion above is reading real order
+        // rather than passing on any two nodes.
+        renderPage();
+
+        const pills = screen.getByText('Ordered');
+        const table = document.querySelector('table');
+
+        expect(pills.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 });

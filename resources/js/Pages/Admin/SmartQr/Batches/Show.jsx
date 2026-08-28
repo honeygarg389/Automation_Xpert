@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, Input, Modal, Pagination } from '@/Components/ui';
+import { Button, Card, Dropdown, Input, Modal, Pagination } from '@/Components/ui';
 import { ArrowLeft, CircleCheck, Layers, Link2, Package, QrCode, Printer, Pencil, TriangleAlert, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge, BatchStatusBadge, ExportStatusBadge } from '../QrStatusBadge';
@@ -249,40 +249,56 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                                 <BatchStatusBadge status={batch.status} size="md" />
                             </div>
 
-                            {/* ⚠️ NOW WIRED — the placeholder's blocker is gone.
-                                It was disabled because no batch-scoped route
-                                existed and a control that silently does nothing
-                                is worse than an absent one. POST
-                                admin.qr.batches.export now exists, resolves the
-                                code ids server-side and chunks them at
-                                MAX_CODES, so the button does what it says.
+                            {/* ⚠️ A FORMAT DROPDOWN, REUSING THE SHARED Dropdown
+                                PRIMITIVE — not a new control.
 
-                                ⚠️ NO FORMAT PICKER, DELIBERATELY. The Inventory
-                                export opens a modal to choose one because that
-                                screen is where an admin assembles an arbitrary
-                                selection and is already deciding things. Here
-                                the entry point is a single button on one
-                                batch's page, and the server defaults to SVG —
-                                the format this module already defaults to
-                                everywhere, and the one that prints crisply at
-                                any size. Adding a modal for a single click
-                                would be a decision imposed where none is
-                                needed; a format picker belongs here only if an
-                                admin actually asks to export a batch as PNG. */}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={exporting}
-                                onClick={() => {
-                                    setExporting(true);
-                                    router.post(route('admin.qr.batches.export', batch.uuid), {}, {
-                                        preserveScroll: true,
-                                        onFinish: () => setExporting(false),
-                                    });
-                                }}
-                            >
-                                <Download className="mr-1.5 h-4 w-4" /> {t('smart_qr.export_zip')}
-                            </Button>
+                                The previous single-click version defaulted to
+                                SVG and deliberately offered no choice, on the
+                                argument that a modal for one click imposes a
+                                decision. A dropdown is the middle ground the
+                                owner asked for: the choice is one extra click
+                                and costs nothing when SVG is what you wanted.
+
+                                ⚠️ LABELS COME FROM THE EXISTING format_* KEYS,
+                                the same ones client/SmartQr/Codes.jsx uses for
+                                its per-code download — so "PDF (print)" reads
+                                identically on both screens. Inventory's
+                                export_format_* keys are the long descriptive
+                                variants ("SVG — vector, recommended for
+                                print"), which suit a modal with room but not a
+                                dropdown item.
+
+                                ⚠️ The in-flight guard is on the TRIGGER and
+                                applies to every option, not just the default:
+                                each item sets `exporting` before dispatching,
+                                and the trigger is disabled while it is set. A
+                                batch of 10,000 dispatches 20 jobs per request,
+                                so a double-click is 40 jobs and 40 rows. */}
+                            <Dropdown>
+                                <Dropdown.Trigger>
+                                    <Button variant="outline" size="sm" disabled={exporting}>
+                                        <Download className="mr-1.5 h-4 w-4" /> {t('smart_qr.export_zip')}
+                                    </Button>
+                                </Dropdown.Trigger>
+                                <Dropdown.Content width="56">
+                                    {['svg', 'png', 'pdf'].map((fmt) => (
+                                        <Dropdown.Item
+                                            key={fmt}
+                                            disabled={exporting}
+                                            onClick={() => {
+                                                setExporting(true);
+                                                router.post(
+                                                    route('admin.qr.batches.export', batch.uuid),
+                                                    { format: fmt },
+                                                    { preserveScroll: true, onFinish: () => setExporting(false) },
+                                                );
+                                            }}
+                                        >
+                                            {t(`smart_qr.format_${fmt}`)}
+                                        </Dropdown.Item>
+                                    ))}
+                                </Dropdown.Content>
+                            </Dropdown>
 
                             {canManage && (
                                 <Button variant="outline" size="sm" onClick={() => setRetiring(batch)}>
@@ -312,6 +328,45 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                         <StatCard key={s.label} icon={s.icon} label={s.label} value={s.value} />
                     ))}
                 </div>
+
+                <Card>
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                            <thead>
+                                <tr className="border-b border-neutral-200 dark:border-neutral-700 text-left text-neutral-500 dark:text-neutral-400">
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_serial')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_status')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_assignment')}</th>
+                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_qr_name')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((code) => (
+                                    <tr key={code.id} className="border-b border-neutral-100 dark:border-neutral-800">
+                                        <td className="py-3 pr-4 font-mono font-medium text-neutral-900 dark:text-neutral-100">
+                                            {code.serial_number}
+                                        </td>
+                                        <td className="py-3 pr-4"><CodeStatusBadge status={code.status} /></td>
+                                        <td className="py-3 pr-4">
+                                            <AssignmentStateBadge currentAssignment={code.current_assignment} />
+                                        </td>
+                                        <td className="py-3 pr-4 text-neutral-600 dark:text-neutral-300">
+                                            {code.current_assignment?.name ?? '—'}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {rows.length === 0 && (
+                        <div className="py-8 text-center text-neutral-500 dark:text-neutral-400">
+                            {t('smart_qr.no_codes_yet')}
+                        </div>
+                    )}
+
+                    <Pagination data={codes} />
+                </Card>
 
                 {/* ═══ ⚠️ EXPORT PARTS — AN INERTIA PROP, NOT A POLLER ══════════
                     A batch over 500 codes exports as N parts, each built by its
@@ -376,44 +431,6 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                     </Card>
                 )}
 
-                <Card>
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-neutral-200 dark:border-neutral-700 text-left text-neutral-500 dark:text-neutral-400">
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_serial')}</th>
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_status')}</th>
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_assignment')}</th>
-                                    <th className="pb-2 pr-4 font-medium uppercase">{t('smart_qr.col_qr_name')}</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((code) => (
-                                    <tr key={code.id} className="border-b border-neutral-100 dark:border-neutral-800">
-                                        <td className="py-3 pr-4 font-mono font-medium text-neutral-900 dark:text-neutral-100">
-                                            {code.serial_number}
-                                        </td>
-                                        <td className="py-3 pr-4"><CodeStatusBadge status={code.status} /></td>
-                                        <td className="py-3 pr-4">
-                                            <AssignmentStateBadge currentAssignment={code.current_assignment} />
-                                        </td>
-                                        <td className="py-3 pr-4 text-neutral-600 dark:text-neutral-300">
-                                            {code.current_assignment?.name ?? '—'}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    {rows.length === 0 && (
-                        <div className="py-8 text-center text-neutral-500 dark:text-neutral-400">
-                            {t('smart_qr.no_codes_yet')}
-                        </div>
-                    )}
-
-                    <Pagination data={codes} />
-                </Card>
             </div>
 
             {canManage && renaming && <RenameBatchModal batch={renaming} onClose={() => setRenaming(null)} />}

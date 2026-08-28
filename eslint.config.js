@@ -44,6 +44,9 @@ export default [
                 clearTimeout: 'readonly',
                 requestAnimationFrame: 'readonly',
                 Event:     'readonly',
+                // ⚠️ Beside Event — the DOM interface object, needed for
+                // Node.DOCUMENT_POSITION_* when asserting rendered order.
+                Node:      'readonly',
                 DOMParser: 'readonly',
                 fetch:     'readonly',
                 AbortController: 'readonly',
