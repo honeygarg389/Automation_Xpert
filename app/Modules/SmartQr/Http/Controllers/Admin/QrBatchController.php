@@ -302,9 +302,27 @@ class QrBatchController extends Controller
         // is not. A missing file is a 404, not a 500.
         abort_unless($disk->exists($export->path), 404);
 
+        // ⚠️ LITERAL .zip, AND $format IS A NAME SEGMENT — NOT THE EXTENSION.
+        //
+        // This shipped as `...-of%d.%s` with $format as the extension, which
+        // produced `AX-BK-001-part1-of1.svg` for a file whose bytes are
+        // `PK\x03\x04`. The archive would not open: an SVG viewer handed ZIP
+        // bytes reports "Start tag expected, '<' not found", which reads as a
+        // corrupt export rather than a misnamed one.
+        //
+        // The confusion was a category error. `format` describes the IMAGES
+        // INSIDE the archive — it is used correctly one line away in the job,
+        // naming members `T-000001.svg` — but the container is ALWAYS a ZIP,
+        // for every format. GenerateQrExportJob::FORMATS is svg|png|pdf and
+        // never contains "zip", so no value of $format was ever a correct
+        // extension here.
+        //
+        // Kept in the name rather than dropped: exporting one batch as SVG and
+        // again as PNG otherwise yields two files with identical names, and the
+        // second silently becomes "(1)" in the admin's downloads folder.
         return $disk->download(
             $export->path,
-            sprintf('%s-part%d-of%d.%s', $batch->batch_number, $export->part_number, $export->total_parts, $export->format)
+            sprintf('%s-part%d-of%d-%s.zip', $batch->batch_number, $export->part_number, $export->total_parts, $export->format)
         );
     }
 

@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
+use ZipArchive;
 
 /**
  * Batch-scoped, chunked export — the new path.
@@ -404,10 +405,68 @@ class SmartQrBatchExportTest extends TestCase
             'path' => 'smartqr-exports/mine.zip',
         ]);
 
-        $this->actingAs($this->adminWith(['view_qr_inventory']), 'admin')
+        $response = $this->actingAs($this->adminWith(['view_qr_inventory']), 'admin')
             ->get(route('admin.qr.batches.export-download', [$batch->uuid, $export->id]))
-            ->assertOk()
-            ->assertDownload('AX-BK-DL-part3-of20.svg');
+            ->assertOk();
+
+        // ⚠️ .zip, WITH the format as a NAME SEGMENT — not as the extension.
+        // The first version of this assertion expected `...-of20.svg`, which
+        // matched the formula the code used at the time and therefore CONFIRMED
+        // the bug instead of catching it: the served file is a ZIP, so a .svg
+        // name produced a download that would not open.
+        $response->assertDownload('AX-BK-DL-part3-of20-svg.zip');
+    }
+
+    /**
+     * ⚠️ THE EXTENSION MUST MATCH THE BYTES, NOT A FORMULA.
+     *
+     * The filename assertion above can only ever agree with whatever sprintf()
+     * the controller happens to use — if both change together it stays green
+     * while serving an unopenable file, which is exactly what happened. This
+     * asserts the two independently: the name ends in .zip AND the body starts
+     * with the ZIP local-file-header magic. A mismatch fails here even if the
+     * formula and the assertion are edited in lockstep.
+     */
+    #[Test]
+    public function the_served_filename_extension_matches_the_actual_bytes(): void
+    {
+        Storage::fake('local');
+        $batch = SmartQrBatch::factory()->create(['batch_number' => 'AX-BK-MAGIC']);
+
+        // A real ZIP, built the way the job builds one — not a stub, so the
+        // magic bytes are genuine rather than hand-written.
+        $tmp = tempnam(sys_get_temp_dir(), 'zt');
+        $zip = new ZipArchive;
+        $zip->open($tmp, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        $zip->addFromString('T-000001.svg', '<svg xmlns="http://www.w3.org/2000/svg"/>');
+        $zip->close();
+        Storage::disk('local')->put('smartqr-exports/real.zip', file_get_contents($tmp));
+        @unlink($tmp);
+
+        $export = SmartQrExport::create([
+            'batch_id' => $batch->id, 'part_number' => 1, 'total_parts' => 1,
+            'format' => 'png', 'status' => SmartQrExport::STATUS_READY,
+            'path' => 'smartqr-exports/real.zip',
+        ]);
+
+        $response = $this->actingAs($this->adminWith(['view_qr_inventory']), 'admin')
+            ->get(route('admin.qr.batches.export-download', [$batch->uuid, $export->id]))
+            ->assertOk();
+
+        $disposition = $response->headers->get('content-disposition');
+        $this->assertStringEndsWith('.zip', explode('filename=', $disposition)[1] ?? '',
+            'The download is named with something other than .zip while serving ZIP bytes.');
+
+        // ⚠️ png is the IMAGE format inside; it must never become the container
+        // extension. Pinned explicitly because svg was the value that shipped
+        // broken and a png-only regression would otherwise slip through.
+        $this->assertStringNotContainsString('.png', $disposition);
+
+        $body = $response->streamedContent();
+        $this->assertSame("PK\x03\x04", substr($body, 0, 4),
+            'The response body is not a ZIP, so the .zip name is a lie — this is the '
+            .'"bytes present is not pixels drawn" trap: asserting the name proves nothing '
+            .'about the content.');
     }
 
     /**
