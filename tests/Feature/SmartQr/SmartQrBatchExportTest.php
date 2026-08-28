@@ -372,6 +372,142 @@ class SmartQrBatchExportTest extends TestCase
         }
     }
 
+    // ══ DOWNLOADING A PART ═════════════════════════════════════════════════
+
+    /**
+     * ⚠️ ITS OWN ROUTE, NOT inventory.export-download — AND THIS IS THE TEST
+     * THAT PROVES WHY.
+     *
+     * That route validates the filename against readyExports(), which lists the
+     * export directory and takes the 20 MOST RECENT. Batch parts are written to
+     * that same directory, so a 20-part export plus any other archive pushes
+     * the earliest parts out of the window — 404 for a file that exists and
+     * that the admin was just told was ready. Keyed on the row instead, the
+     * listing (and its cap) is not consulted at all.
+     */
+    #[Test]
+    public function a_ready_part_downloads_by_its_row_regardless_of_the_directory_listing(): void
+    {
+        Storage::fake('local');
+        $batch = SmartQrBatch::factory()->create(['batch_number' => 'AX-BK-DL']);
+
+        // ⚠️ 25 OTHER archives, so this part is far outside readyExports()'s
+        // 20-item window. If the download consulted that listing, this 404s.
+        for ($i = 1; $i <= 25; $i++) {
+            Storage::disk('local')->put("smartqr-exports/other-{$i}.zip", 'x');
+        }
+
+        Storage::disk('local')->put('smartqr-exports/mine.zip', 'zip-bytes');
+        $export = SmartQrExport::create([
+            'batch_id' => $batch->id, 'part_number' => 3, 'total_parts' => 20,
+            'format' => 'svg', 'status' => SmartQrExport::STATUS_READY,
+            'path' => 'smartqr-exports/mine.zip',
+        ]);
+
+        $this->actingAs($this->adminWith(['view_qr_inventory']), 'admin')
+            ->get(route('admin.qr.batches.export-download', [$batch->uuid, $export->id]))
+            ->assertOk()
+            ->assertDownload('AX-BK-DL-part3-of20.svg');
+    }
+
+    /**
+     * Not-ready parts are refused. queued/processing have no archive yet and
+     * failed never wrote one — serving any of them would be a 500 from the disk
+     * read or an empty file presented as a result.
+     */
+    #[Test]
+    public function a_part_that_is_not_ready_cannot_be_downloaded(): void
+    {
+        Storage::fake('local');
+        $batch = SmartQrBatch::factory()->create();
+        $admin = $this->adminWith(['view_qr_inventory']);
+
+        foreach ([
+            SmartQrExport::STATUS_QUEUED,
+            SmartQrExport::STATUS_PROCESSING,
+            SmartQrExport::STATUS_FAILED,
+        ] as $i => $status) {
+            $export = SmartQrExport::create([
+                'batch_id' => $batch->id, 'part_number' => $i + 1, 'total_parts' => 3,
+                'format' => 'svg', 'status' => $status,
+            ]);
+
+            $this->actingAs($admin, 'admin')
+                ->get(route('admin.qr.batches.export-download', [$batch->uuid, $export->id]))
+                ->assertNotFound();
+        }
+    }
+
+    /**
+     * ⚠️ A part belonging to ANOTHER batch 404s under this batch's URL.
+     *
+     * Both ids are in the path, so without the ownership check the route would
+     * happily serve any part id under any batch — an admin-only surface, but
+     * still a URL that means something other than what it says.
+     */
+    #[Test]
+    public function a_part_from_another_batch_is_not_served_under_this_batch(): void
+    {
+        Storage::fake('local');
+        $mine = SmartQrBatch::factory()->create();
+        $theirs = SmartQrBatch::factory()->create();
+
+        Storage::disk('local')->put('smartqr-exports/theirs.zip', 'x');
+        $foreign = SmartQrExport::create([
+            'batch_id' => $theirs->id, 'part_number' => 1, 'total_parts' => 1,
+            'format' => 'svg', 'status' => SmartQrExport::STATUS_READY,
+            'path' => 'smartqr-exports/theirs.zip',
+        ]);
+
+        $this->actingAs($this->adminWith(['view_qr_inventory']), 'admin')
+            ->get(route('admin.qr.batches.export-download', [$mine->uuid, $foreign->id]))
+            ->assertNotFound();
+    }
+
+    /** A row whose archive has been cleaned up is a 404, not a 500. */
+    #[Test]
+    public function a_ready_part_whose_file_is_missing_is_a_not_found(): void
+    {
+        Storage::fake('local');
+        $batch = SmartQrBatch::factory()->create();
+
+        $export = SmartQrExport::create([
+            'batch_id' => $batch->id, 'part_number' => 1, 'total_parts' => 1,
+            'format' => 'svg', 'status' => SmartQrExport::STATUS_READY,
+            'path' => 'smartqr-exports/gone.zip',
+        ]);
+
+        $this->actingAs($this->adminWith(['view_qr_inventory']), 'admin')
+            ->get(route('admin.qr.batches.export-download', [$batch->uuid, $export->id]))
+            ->assertNotFound();
+    }
+
+    /** The show() page carries the parts as a prop — what the panel renders. */
+    #[Test]
+    public function the_batch_page_receives_its_export_parts_as_a_prop(): void
+    {
+        $batch = SmartQrBatch::factory()->create();
+        SmartQrExport::create([
+            'batch_id' => $batch->id, 'part_number' => 1, 'total_parts' => 2,
+            'format' => 'svg', 'status' => SmartQrExport::STATUS_READY,
+            'path' => 'smartqr-exports/a.zip',
+        ]);
+        SmartQrExport::create([
+            'batch_id' => $batch->id, 'part_number' => 2, 'total_parts' => 2,
+            'format' => 'svg', 'status' => SmartQrExport::STATUS_QUEUED,
+        ]);
+
+        $this->actingAs($this->adminWith(['view_qr_inventory']), 'admin')
+            ->get(route('admin.qr.batches.show', $batch->uuid))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('exports', 2)
+                ->where('exports.0.part_number', 1)
+                ->where('exports.0.status', SmartQrExport::STATUS_READY)
+                ->where('exports.1.status', SmartQrExport::STATUS_QUEUED)
+            );
+    }
+
     // ══ THE OLD PATH IS UNTOUCHED ══════════════════════════════════════════
 
     /**

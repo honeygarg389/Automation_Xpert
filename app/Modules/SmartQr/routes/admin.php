@@ -56,6 +56,13 @@ Route::middleware(['web', 'auth:admin', 'demo'])
             ->name('batches.export')->middleware('permission:view_qr_inventory');
         Route::get('/batches/{batch}/exports', [QrBatchController::class, 'exports'])
             ->name('batches.exports')->middleware('permission:view_qr_inventory');
+        // ⚠️ NOT inventory.export-download. That route validates the filename
+        // against readyExports()'s 20-most-recent listing, so parts of a
+        // 20-part batch export fall out of the window and 404 — the exact cap
+        // this feature exists to escape. This one is keyed on the
+        // smart_qr_exports row and scoped to the batch. See the controller.
+        Route::get('/batches/{batch}/exports/{export}', [QrBatchController::class, 'downloadExport'])
+            ->name('batches.export-download')->middleware('permission:view_qr_inventory');
 
         // ── Inventory (§5) ─────────────────────────────────────────────────
         Route::get('/inventory', [QrInventoryController::class, 'index'])

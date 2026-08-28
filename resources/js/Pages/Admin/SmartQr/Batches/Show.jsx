@@ -4,7 +4,7 @@ import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, Input, Modal, Pagination } from '@/Components/ui';
 import { ArrowLeft, CircleCheck, Layers, Link2, Package, QrCode, Printer, Pencil, TriangleAlert, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CodeStatusBadge, AssignmentStateBadge, BatchStatusBadge } from '../QrStatusBadge';
+import { CodeStatusBadge, AssignmentStateBadge, BatchStatusBadge, ExportStatusBadge } from '../QrStatusBadge';
 import { formatDateTz } from '@/Utils/datetime';
 
 /**
@@ -130,7 +130,7 @@ function StatCard({ icon: Icon, label, value }) {
  * the selection model and the bulk actions — duplicating them here would be two
  * places to change when a bulk action gains an option.
  */
-export default function SmartQrBatchShow({ batch, codes }) {
+export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
     const { t } = useTranslation();
     const flash = usePage().props.flash || {};
 
@@ -149,6 +149,11 @@ export default function SmartQrBatchShow({ batch, codes }) {
 
     const [renaming, setRenaming] = useState(null);
     const [retiring, setRetiring] = useState(null);
+
+    // ⚠️ Disables the button for the round trip only. A 20-part batch dispatches
+    // 20 jobs in one request; without this, an impatient second click queues a
+    // whole duplicate set of parts before the first response lands.
+    const [exporting, setExporting] = useState(false);
 
     /**
      * ⚠️ THREE PILLS, not the reference's five.
@@ -244,34 +249,40 @@ export default function SmartQrBatchShow({ batch, codes }) {
                                 <BatchStatusBadge status={batch.status} size="md" />
                             </div>
 
-                            {/* ⚠️ DELIBERATE PLACEHOLDER — DISABLED, WIRED TO NOTHING.
-                                There is no batch-scoped export route: the only export
-                                is POST admin.qr.inventory.export, which takes
-                                code_ids[] and is capped at GenerateQrExportJob::
-                                MAX_CODES (500). A batch can hold up to 10,000 codes,
-                                so this needs its own route AND a decision about
-                                batches over the cap. Both are a separate slice.
+                            {/* ⚠️ NOW WIRED — the placeholder's blocker is gone.
+                                It was disabled because no batch-scoped route
+                                existed and a control that silently does nothing
+                                is worse than an absent one. POST
+                                admin.qr.batches.export now exists, resolves the
+                                code ids server-side and chunks them at
+                                MAX_CODES, so the button does what it says.
 
-                                It is rendered disabled with a "coming soon" title
-                                rather than omitted, by owner decision. Do NOT wire an
-                                onClick here without that route existing — a control
-                                that silently does nothing is worse than an absent
-                                one, which is why this one is visibly inert. */}
-                            {/* ⚠️ The title sits on a WRAPPER, not on the button.
-                                Button applies `disabled:pointer-events-none`, so a
-                                disabled button cannot be hovered — a title attribute
-                                on it would be in the DOM and never render a tooltip.
-                                The span still receives pointer events, so the
-                                "coming soon" hint actually appears, and it is where
-                                cursor-not-allowed can show. */}
-                            <span
-                                title={t('smart_qr.export_zip_coming_soon')}
-                                className="inline-flex cursor-not-allowed"
+                                ⚠️ NO FORMAT PICKER, DELIBERATELY. The Inventory
+                                export opens a modal to choose one because that
+                                screen is where an admin assembles an arbitrary
+                                selection and is already deciding things. Here
+                                the entry point is a single button on one
+                                batch's page, and the server defaults to SVG —
+                                the format this module already defaults to
+                                everywhere, and the one that prints crisply at
+                                any size. Adding a modal for a single click
+                                would be a decision imposed where none is
+                                needed; a format picker belongs here only if an
+                                admin actually asks to export a batch as PNG. */}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={exporting}
+                                onClick={() => {
+                                    setExporting(true);
+                                    router.post(route('admin.qr.batches.export', batch.uuid), {}, {
+                                        preserveScroll: true,
+                                        onFinish: () => setExporting(false),
+                                    });
+                                }}
                             >
-                                <Button variant="outline" size="sm" disabled>
-                                    <Download className="mr-1.5 h-4 w-4" /> {t('smart_qr.export_zip')}
-                                </Button>
-                            </span>
+                                <Download className="mr-1.5 h-4 w-4" /> {t('smart_qr.export_zip')}
+                            </Button>
 
                             {canManage && (
                                 <Button variant="outline" size="sm" onClick={() => setRetiring(batch)}>
@@ -301,6 +312,69 @@ export default function SmartQrBatchShow({ batch, codes }) {
                         <StatCard key={s.label} icon={s.icon} label={s.label} value={s.value} />
                     ))}
                 </div>
+
+                {/* ═══ ⚠️ EXPORT PARTS — AN INERTIA PROP, NOT A POLLER ══════════
+                    A batch over 500 codes exports as N parts, each built by its
+                    own queue job, so parts appear one at a time. This panel is
+                    populated at page load and refreshed by revisiting — the
+                    module's established "fire and forget, check back" pattern,
+                    identical to the Inventory page's Ready Exports panel.
+
+                    ⚠️ NO AUTO-REFRESH, DELIBERATELY. Nothing in this module
+                    polls (the JSON exports endpoints have no callers in
+                    resources/js), and a timer here would make this the only
+                    screen that behaves differently — a divergence to maintain
+                    forever for a job that finishes in seconds. The success
+                    flash already tells the admin parts appear as jobs finish.
+
+                    ⚠️ Rendered only when parts exist: an empty panel on every
+                    batch that has never been exported is noise. */}
+                {exports.length > 0 && (
+                    <Card>
+                        <h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                            {t('smart_qr.exports_panel')}
+                        </h3>
+                        <ul className="divide-y divide-neutral-100 dark:divide-neutral-700">
+                            {exports.map((x) => (
+                                <li key={x.id} className="flex items-center justify-between gap-4 py-2 text-sm">
+                                    <span className="flex items-center gap-3">
+                                        <span className="font-mono text-neutral-700 dark:text-neutral-200">
+                                            {t('smart_qr.export_part', { part: x.part_number, total: x.total_parts })}
+                                        </span>
+                                        <span className="uppercase text-neutral-400 dark:text-neutral-500">{x.format}</span>
+                                        <ExportStatusBadge status={x.status} />
+                                    </span>
+
+                                    <span className="flex items-center gap-4">
+                                        {/* ⚠️ The reason, surfaced where the admin
+                                            is — not only in the log. A part that
+                                            failed silently is the stuck-job-with-
+                                            no-explanation shape this table's
+                                            `error` column exists to prevent. */}
+                                        {x.status === 'failed' && x.error && (
+                                            <span className="text-red-600 dark:text-red-400">
+                                                {t('smart_qr.export_failed_reason', { reason: x.error })}
+                                            </span>
+                                        )}
+
+                                        {/* ⚠️ ONLY a ready part is downloadable, and
+                                            the server enforces the same rule — this
+                                            hides a link that would 404, it does not
+                                            replace the check. */}
+                                        {x.status === 'ready' && x.path && (
+                                            <a
+                                                href={route('admin.qr.batches.export-download', [batch.uuid, x.id])}
+                                                className="inline-flex items-center gap-1.5 font-medium text-brand-600 hover:text-brand-700"
+                                            >
+                                                <Download className="h-4 w-4" /> {t('smart_qr.download_label')}
+                                            </a>
+                                        )}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                    </Card>
+                )}
 
                 <Card>
                     <div className="overflow-x-auto">

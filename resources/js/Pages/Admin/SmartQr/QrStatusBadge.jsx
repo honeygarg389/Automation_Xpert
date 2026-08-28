@@ -40,6 +40,25 @@ const BATCH_VARIANTS = {
     failed: 'danger',
 };
 
+/**
+ * ⚠️ A FOURTH VOCABULARY — smart_qr_exports.status, the liveness of one ZIP
+ * PART. Kept beside the others rather than folded into them: it describes an
+ * archive's build, not a code's physical life (CODE_*) nor a tenant mapping
+ * (ASSIGNMENT_*) nor a print run (BATCH_*). R-10's whole point is that
+ * separate questions get separate columns; sharing a variant map would be the
+ * same conflation at the presentation layer.
+ *
+ * Mapped to the SAME semantics the other three use, so a colour means one
+ * thing across this admin: `brand` for in-flight (matching batch `generating`),
+ * `success` for the terminal good state, `danger` for the terminal bad one.
+ */
+const EXPORT_VARIANTS = {
+    queued: 'default',
+    processing: 'brand',
+    ready: 'success',
+    failed: 'danger',
+};
+
 export function CodeStatusBadge({ status }) {
     const { t } = useTranslation();
 
@@ -72,6 +91,19 @@ export function BatchStatusBadge({ status, size = 'sm' }) {
     return (
         <Badge variant={BATCH_VARIANTS[status] ?? 'default'} size={size}>
             {t(`smart_qr.batch_status.${status}`, status)}
+        </Badge>
+    );
+}
+
+/**
+ * One export part's status. See EXPORT_VARIANTS.
+ */
+export function ExportStatusBadge({ status, size = 'sm' }) {
+    const { t } = useTranslation();
+
+    return (
+        <Badge variant={EXPORT_VARIANTS[status] ?? 'default'} size={size}>
+            {t(`smart_qr.export_status.${status}`, status)}
         </Badge>
     );
 }

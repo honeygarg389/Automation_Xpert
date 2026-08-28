@@ -25,6 +25,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * §4 — QR batches. Super Admin only; a batch never belongs to a tenant.
@@ -265,6 +266,49 @@ class QrBatchController extends Controller
     }
 
     /**
+     * Download one ready export part.
+     *
+     * ═══ ⚠️ WHY THIS EXISTS RATHER THAN REUSING inventory.export-download ══
+     *
+     * That route validates the requested filename against readyExports(),
+     * which lists the export directory and TAKES THE 20 MOST RECENT. Batch
+     * parts are written to that same directory, so a 20-part batch export plus
+     * any other recent archive pushes the earliest parts out of that window —
+     * and out of the window means 404, for a file that exists and that the
+     * admin was just told was ready. That is precisely the cap this feature was
+     * built to escape, so reusing the route would reintroduce it at the last
+     * step.
+     *
+     * Keyed on the smart_qr_exports ROW instead: the row is the authority on
+     * what belongs to this batch and whether it is downloadable. No listing, no
+     * cap, no filename parsing.
+     *
+     * ⚠️ THE PART IS SCOPED TO THE BATCH IN THE QUERY, not just read by id — so
+     * a part id belonging to another batch 404s rather than being served under
+     * this batch's URL.
+     */
+    public function downloadExport(SmartQrBatch $batch, SmartQrExport $export): StreamedResponse
+    {
+        abort_unless($export->batch_id === $batch->id, 404);
+
+        // ⚠️ Only a READY row has an archive. queued/processing would 404 on
+        // the disk read anyway; failed never wrote one. Refusing here makes the
+        // reason explicit instead of surfacing a storage error.
+        abort_unless($export->status === SmartQrExport::STATUS_READY && $export->path !== null, 404);
+
+        $disk = Storage::disk('local');
+
+        // The row can outlive its file — the archive is disposable, the record
+        // is not. A missing file is a 404, not a 500.
+        abort_unless($disk->exists($export->path), 404);
+
+        return $disk->download(
+            $export->path,
+            sprintf('%s-part%d-of%d.%s', $batch->batch_number, $export->part_number, $export->total_parts, $export->format)
+        );
+    }
+
+    /**
      * ═══ ⚠️ THE BATCH LOGO — WRITTEN TO THE PRIVATE DISK, ON PURPOSE ══════
      *
      * The platform logo lives on `public` because a browser fetches it. This
@@ -353,6 +397,16 @@ class QrBatchController extends Controller
                 ->with(['currentAssignment' => fn ($q) => $q->withoutGlobalScope(WorkspaceScope::class)])
                 ->orderBy('serial_number')
                 ->paginate(50),
+
+            // ⚠️ AN INERTIA PROP, NOT A POLLED FETCH — matching this module's
+            // established "fire and forget, check back" pattern. The Inventory
+            // page's Ready Exports panel works identically (a prop at page
+            // load; its JSON endpoint has no caller anywhere in resources/js),
+            // and introducing a poller here would make this the only screen in
+            // the module that behaves differently. The JSON exports() route
+            // stays available for a future slice that wants live refresh.
+            'exports' => SmartQrExport::forBatch($batch->id)
+                ->get(['id', 'part_number', 'total_parts', 'format', 'status', 'path', 'error', 'updated_at']),
         ]);
     }
 }

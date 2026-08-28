@@ -4218,6 +4218,16 @@
         "logo_remove": "Remove",
         "logo_preview_empty": "Preview",
         "stat_assigned": "Assigned",
-        "stat_active": "Active"
+        "stat_active": "Active",
+        "exports_panel": "Export parts",
+        "exports_empty": "No exports yet. Use Export ZIP above to build one.",
+        "export_part": "Part {{part}} of {{total}}",
+        "export_failed_reason": "Failed: {{reason}}",
+        "export_status": {
+            "queued": "Queued",
+            "processing": "Building",
+            "ready": "Ready",
+            "failed": "Failed"
+        }
     }
 }
