@@ -4,6 +4,7 @@ namespace App\Modules\SmartQr\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Scopes\WorkspaceScope;
+use App\Modules\SmartQr\Http\Requests\AddQrBatchCodesRequest;
 use App\Modules\SmartQr\Http\Requests\StoreQrBatchRequest;
 use App\Modules\SmartQr\Http\Requests\UpdateQrBatchRequest;
 use App\Modules\SmartQr\Jobs\GenerateQrBatchJob;
@@ -83,6 +84,82 @@ class QrBatchController extends Controller
         return redirect()
             ->route('admin.qr.batches.show', $batch)
             ->with('success', __('Batch created. Code generation has been queued.'));
+    }
+
+    /**
+     * "more QR's" — extend an existing batch's range. §4.
+     *
+     * ═══ ⚠️ NO NEW GENERATION PATH. THE ACTION ALREADY DOES THIS ════════════
+     *
+     * GenerateQrBatchAction resumes from the batch's highest existing serial and
+     * fills out to `quantity`, so extending is: raise quantity, dispatch the same
+     * job. A second "generate from X to Y" code path would be a second place for
+     * the serial formula to live, and the two would drift.
+     *
+     * ⚠️ THE STATUS GATE IS NOT COSMETIC — it is what stops two generators
+     * racing. `draft` and `generating` both mean a job is already in flight for
+     * this batch; raising `quantity` underneath it makes the running job pick up
+     * the extension mid-loop, and a concurrently dispatched second job then
+     * resumes from a high-water mark its sibling is still moving. Both write
+     * `generated_count`.
+     *
+     * ⚠️ THE GATE ONLY WORKS BECAUSE THIS ACTION MOVES THE STATUS ITSELF. It
+     * reads a column the job would otherwise not write until the worker starts,
+     * so a gate without the synchronous write below is a gate that lets the
+     * second click straight through. See the comment on that write.
+     *
+     * `printed` is refused for a different reason: it has no writer anywhere in
+     * the application today, so allowing it would ship an untestable branch. If
+     * it ever becomes reachable the decision is a product one — whether a print
+     * run can grow after it has been printed — not something to settle by
+     * leaving the door open now.
+     */
+    public function addCodes(AddQrBatchCodesRequest $request, SmartQrBatch $batch): RedirectResponse
+    {
+        if (! in_array($batch->status, ['generated', 'failed'], true)) {
+            return back()->withErrors(['additional_quantity' => __(
+                'Codes can only be added to a batch that has finished generating. '
+                .'This batch is :status.',
+                ['status' => $batch->status]
+            )]);
+        }
+
+        $additional = (int) $request->validated('additional_quantity');
+
+        // ⚠️ increment(), not `quantity + $n` read-modify-write. The read in a
+        // PHP-side sum is a snapshot; two admins extending the same batch in the
+        // same second would each add to the same stale total and one extension
+        // would vanish. increment() is a single atomic UPDATE.
+        $batch->increment('quantity', $additional);
+
+        // ⚠️ THE STATUS IS MOVED HERE, SYNCHRONOUSLY, AND NOT LEFT TO THE JOB.
+        //
+        // GenerateQrBatchAction::execute() also writes `generating`, but it does
+        // so on the WORKER — so between this response and the worker picking the
+        // job up, the batch still reads `generated`. Two things break in that
+        // window, and both were measured before this line was added:
+        //
+        //   1. The batch page's auto-refresh never starts. Its guard is
+        //      ['draft','generating'].includes(status), the redirect below
+        //      re-renders show() immediately, and the props still say
+        //      `generated` — so the admin watches a static page while codes
+        //      appear in the database behind it.
+        //
+        //   2. The status gate above does not actually gate. A second submit
+        //      arriving before the worker starts sees `generated` again and
+        //      passes: measured at quantity 20 and TWO GenerateQrBatchJobs from
+        //      two clicks. The docblock above claimed this gate prevented
+        //      exactly that race; it did not until this write existed.
+        //
+        // store() has the same shape for the same reason — it persists `draft`
+        // before dispatching rather than letting the job own the first status.
+        $batch->forceFill(['status' => 'generating'])->save();
+
+        GenerateQrBatchJob::dispatch($batch->id);
+
+        return back()->with('success', __('Preparing :count more code(s). They will appear as generation completes.', [
+            'count' => $additional,
+        ]));
     }
 
     /**
