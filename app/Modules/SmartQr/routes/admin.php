@@ -92,6 +92,25 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         Route::delete('/inventory', [QrInventoryController::class, 'destroy'])
             ->name('inventory.destroy')->middleware('permission:manage_qr_batches');
 
+        // ── Per-code detail (§5) ───────────────────────────────────────────
+        //
+        // ⚠️ DECLARED AFTER the literal /inventory/... routes above, and it has
+        // to be. {code} binds on serial_number, so /inventory/exports would
+        // otherwise match this pattern and look up a code with the serial
+        // "exports" — a 404 on a route that exists, which is the confusing kind.
+        //
+        // ⚠️ view_qr_inventory on all three, matching inventory.export: these
+        // READ inventory and render artwork from it. They create nothing, so
+        // manage_qr_batches would be the wrong gate. The page's own actions —
+        // Change Stage, Assign — post to the existing bulk endpoints and carry
+        // their own stricter gates.
+        Route::get('/inventory/{code}', [QrInventoryController::class, 'show'])
+            ->name('inventory.show')->middleware('permission:view_qr_inventory');
+        Route::get('/inventory/{code}/preview.svg', [QrInventoryController::class, 'preview'])
+            ->name('inventory.preview')->middleware('permission:view_qr_inventory');
+        Route::get('/inventory/{code}/download', [QrInventoryController::class, 'download'])
+            ->name('inventory.download')->middleware('permission:view_qr_inventory');
+
         // ── Assignment (§6) ────────────────────────────────────────────────
         Route::get('/assignments', [QrAssignmentController::class, 'index'])
             ->name('assignments.index')->middleware('permission:view_qr_inventory');

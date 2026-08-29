@@ -599,13 +599,12 @@ class SmartQrImageRenderer
             return $target;
         } catch (\Throwable) {
             return null;
-        } finally {
-            if (isset($canvas) && $canvas !== false) {
-                imagedestroy($canvas);
-            }
-
-            imagedestroy($source);
         }
+
+        // ⚠️ NO imagedestroy() HERE, DELIBERATELY. It was called on both handles
+        // in a finally block; PHP 8.0 made GdImage a normal refcounted object, so
+        // the calls have been no-ops since, and PHP 8.5 emits E_DEPRECATED for
+        // them. Both images are freed when they fall out of scope.
     }
 
     /**

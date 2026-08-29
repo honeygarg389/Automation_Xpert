@@ -17,6 +17,7 @@ use Illuminate\Support\Str;
  *
  * @property int $id
  * @property string $batch_number
+ * @property string|null $batch_name
  * @property string $prefix
  * @property string|null $uuid
  * @property int $quantity

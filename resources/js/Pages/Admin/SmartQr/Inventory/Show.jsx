@@ -1,0 +1,332 @@
+import { useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import AdminLayout from '@/Layouts/AdminLayout';
+import { Button, Card, Dropdown } from '@/Components/ui';
+import { ArrowLeft, Check, Copy, Download, Layers, Link2, Tag } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { CodeStatusBadge, AssignmentStateBadge } from '../QrStatusBadge';
+import AssignQrModal from '../AssignQrModal';
+import { formatDateTz } from '@/Utils/datetime';
+
+/**
+ * One QR code's detail page. §5.
+ *
+ * ═══ ⚠️ WHY THE NAME / TYPE / MESSAGE FIELDS ARE CONDITIONAL ════════════════
+ *
+ * The reference design shows an editable name under the serial and a QR Type in
+ * the Overview panel, as though both belonged to the code. They do not.
+ * `smart_qr_codes` has exactly: serial_number, public_token, batch_id, status,
+ * printed_at. Name, qr_type and default_message live on the ASSIGNMENT.
+ *
+ * That is deliberate, not an oversight to work around: a code is physical
+ * inventory that outlives any one tenancy, and a sticker recycled to a new
+ * customer must not carry the previous customer's label. The same reasoning
+ * removed qr_type from batch creation in an earlier slice.
+ *
+ * So an unassigned code shows a one-line hint where those fields would be,
+ * rather than empty inputs. Empty inputs would imply the data has somewhere to
+ * be stored at inventory level, and the first admin to type into one would be
+ * owed an explanation the UI cannot give.
+ */
+
+/** Rows in the Overview / Assignment panels — one definition, so they align. */
+function Field({ label, children }) {
+    return (
+        <div className="flex items-start justify-between gap-4 py-2">
+            <span className="shrink-0 text-sm text-neutral-500 dark:text-neutral-400">{label}</span>
+            <span className="min-w-0 break-words text-right text-sm font-medium text-neutral-900 dark:text-neutral-100">
+                {children ?? '—'}
+            </span>
+        </div>
+    );
+}
+
+/**
+ * ⚠️ Falls back to a manual selection rather than failing silently.
+ * navigator.clipboard is undefined on insecure origins — which includes the
+ * http://127.0.0.1:8000 an admin runs locally — so a bare call there throws and
+ * the button appears to do nothing.
+ */
+function CopyButton({ value }) {
+    const { t } = useTranslation();
+    const [copied, setCopied] = useState(false);
+
+    const copy = async () => {
+        try {
+            await navigator.clipboard.writeText(value);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            window.prompt(t('smart_qr.field_public_url'), value);
+        }
+    };
+
+    return (
+        <button
+            type="button"
+            onClick={copy}
+            title={copied ? t('smart_qr.copied') : t('smart_qr.copy')}
+            aria-label={copied ? t('smart_qr.copied') : t('smart_qr.copy')}
+            className="shrink-0 rounded p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+        >
+            {copied ? <Check className="h-4 w-4 text-emerald-600" /> : <Copy className="h-4 w-4" />}
+        </button>
+    );
+}
+
+export default function SmartQrCodeShow({
+    code,
+    batch = null,
+    currentAssignment = null,
+    statuses = [],
+    exportFormats = [],
+    workspaces = [],
+}) {
+    const { t } = useTranslation();
+    const page = usePage();
+    const adminTz = page.props.timezone || 'UTC';
+    const flash = page.props.flash || {};
+    const permissions = page.props.auth?.permissions ?? [];
+
+    const canManage = permissions.includes('manage_qr_batches');
+    const canAssign = permissions.includes('assign_qr_codes');
+
+    const [assigning, setAssigning] = useState(false);
+    const [staging, setStaging] = useState(false);
+
+    /**
+     * ⚠️ REUSES THE BULK ENDPOINT with a one-element array. changeStatus()
+     * validates `code_ids` as array|min:1, so a single code needs no new route —
+     * and a second endpoint would be a second place for the status vocabulary to
+     * drift from SmartQrStatus::CODE_STATUSES.
+     */
+    const changeStage = (status) => {
+        setStaging(true);
+        router.post(
+            route('admin.qr.inventory.change-status'),
+            { code_ids: [code.id], status },
+            { preserveScroll: true, onFinish: () => setStaging(false) },
+        );
+    };
+
+    return (
+        <AdminLayout title={code.serial_number}>
+            <Head title={`${code.serial_number} · ${t('head.admin')}`} />
+
+            <div className="space-y-6">
+                {flash.success && (
+                    <div className="rounded-soft-lg bg-green-50 dark:bg-green-900/30 px-4 py-2 text-sm text-green-800 dark:text-green-200">
+                        {flash.success}
+                    </div>
+                )}
+
+                <div>
+                    <Link
+                        href={route('admin.qr.inventory.index')}
+                        className="mb-3 inline-flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
+                    >
+                        <ArrowLeft className="h-4 w-4" /> {t('smart_qr.back_to_inventory')}
+                    </Link>
+
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div>
+                                <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">
+                                    {t('smart_qr.qr_detail_title', { serial: code.serial_number })}
+                                </h2>
+                                {/* ⚠️ The assignment's name, and only when there IS
+                                    an assignment — see the file docblock. */}
+                                {currentAssignment?.name && (
+                                    <p className="mt-0.5 text-sm leading-tight text-neutral-500 dark:text-neutral-400">
+                                        {currentAssignment.name}
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Action group, matching Batches/Show.jsx's right-hand
+                            cluster: one flex container so the controls stay
+                            adjacent and wrap together. */}
+                        <div className="flex flex-wrap items-center gap-3">
+                            {canAssign && ! currentAssignment && (
+                                <Button variant="outline" size="sm" onClick={() => setAssigning(true)}>
+                                    <Link2 className="mr-1.5 h-4 w-4" /> {t('smart_qr.bulk_assign')}
+                                </Button>
+                            )}
+
+                            {canManage && (
+                                <Dropdown>
+                                    <Dropdown.Trigger>
+                                        <Button variant="outline" size="sm" disabled={staging}>
+                                            <Tag className="mr-1.5 h-4 w-4" /> {t('smart_qr.change_stage')}
+                                        </Button>
+                                    </Dropdown.Trigger>
+                                    <Dropdown.Content width="56">
+                                        {statuses.map((s) => (
+                                            <Dropdown.Item key={s} as="button" onClick={() => changeStage(s)}>
+                                                {t(`smart_qr.code_status.${s}`, s)}
+                                            </Dropdown.Item>
+                                        ))}
+                                    </Dropdown.Content>
+                                </Dropdown>
+                            )}
+
+                            <Dropdown>
+                                <Dropdown.Trigger>
+                                    <Button variant="outline" size="sm">
+                                        <Download className="mr-1.5 h-4 w-4" /> {t('smart_qr.export_qr')}
+                                    </Button>
+                                </Dropdown.Trigger>
+                                <Dropdown.Content width="56">
+                                    {/* ⚠️ A PLAIN <a>, not Dropdown.Item and not an
+                                        Inertia Link. Dropdown.Item defaults to
+                                        `as="button"`, so an href on it renders a
+                                        <button href> that does nothing; and
+                                        `as="link"` gives an Inertia <Link>, which
+                                        intercepts the navigation and waits for an
+                                        Inertia response that a file download never
+                                        sends. The batch export-download link is a
+                                        bare anchor for the same reason. */}
+                                    {exportFormats.map((fmt) => (
+                                        <a
+                                            key={fmt}
+                                            href={route('admin.qr.inventory.download', { code: code.serial_number, format: fmt })}
+                                            className="block w-full px-4 py-2.5 text-left rtl:text-right text-sm text-neutral-700 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-800 transition duration-150 first:rounded-t-soft last:rounded-b-soft"
+                                        >
+                                            {t(`smart_qr.format_${fmt}`)}
+                                        </a>
+                                    ))}
+                                </Dropdown.Content>
+                            </Dropdown>
+
+                            <Link href={route('admin.qr.batches.index')}>
+                                <Button variant="outline" size="sm">
+                                    <Layers className="mr-1.5 h-4 w-4" /> {t('smart_qr.view_batches')}
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <div className="space-y-6 lg:col-span-2">
+                        <Card>
+                            <h3 className="mb-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                                {t('smart_qr.section_overview')}
+                            </h3>
+                            <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
+                                <Field label={t('smart_qr.field_status')}>
+                                    <CodeStatusBadge status={code.status} />
+                                </Field>
+                                <Field label={t('smart_qr.col_assignment')}>
+                                    <AssignmentStateBadge currentAssignment={currentAssignment} />
+                                </Field>
+                                <Field label={t('smart_qr.field_batch')}>
+                                    {/* ⚠️ The batch route key is `uuid`, not id —
+                                        passing id 404s at route binding. */}
+                                    {batch ? (
+                                        <Link
+                                            href={route('admin.qr.batches.show', batch.uuid)}
+                                            className="text-brand-600 hover:underline dark:text-brand-400"
+                                        >
+                                            {batch.batch_number}
+                                        </Link>
+                                    ) : null}
+                                </Field>
+                                <Field label={t('smart_qr.field_printed')}>
+                                    {code.printed_at
+                                        ? `${t('smart_qr.printed_yes')} · ${formatDateTz(code.printed_at, adminTz)}`
+                                        : t('smart_qr.printed_no')}
+                                </Field>
+                                <Field label={t('smart_qr.field_public_url')}>
+                                    <span className="inline-flex items-center gap-1.5">
+                                        <span className="break-all font-mono text-xs">{code.public_url}</span>
+                                        <CopyButton value={code.public_url} />
+                                    </span>
+                                </Field>
+                                <Field label={t('smart_qr.field_created')}>
+                                    {formatDateTz(code.created_at, adminTz)}
+                                </Field>
+                            </div>
+                        </Card>
+
+                        <Card>
+                            <h3 className="mb-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                                {t('smart_qr.section_assignment')}
+                            </h3>
+
+                            {currentAssignment ? (
+                                <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
+                                    <Field label={t('smart_qr.field_destination_phone')}>
+                                        {currentAssignment.destination_phone}
+                                    </Field>
+                                    <Field label={t('smart_qr.field_workspace')}>
+                                        {currentAssignment.workspace_name}
+                                    </Field>
+                                    <Field label={t('smart_qr.field_name')}>{currentAssignment.name}</Field>
+                                    <Field label={t('smart_qr.field_qr_type')}>{currentAssignment.qr_type}</Field>
+                                    <Field label={t('smart_qr.field_assigned_user')}>
+                                        {currentAssignment.assigned_user_name ?? t('smart_qr.no_assigned_user')}
+                                    </Field>
+                                    <Field label={t('smart_qr.field_message_override')}>
+                                        {currentAssignment.default_message}
+                                    </Field>
+                                    <Field label={t('smart_qr.field_start_date')}>
+                                        {currentAssignment.starts_at ? formatDateTz(currentAssignment.starts_at, adminTz) : null}
+                                    </Field>
+                                    <Field label={t('smart_qr.field_expiry_date')}>
+                                        {currentAssignment.expires_at ? formatDateTz(currentAssignment.expires_at, adminTz) : null}
+                                    </Field>
+                                </div>
+                            ) : (
+                                /* ⚠️ A HINT, NOT EMPTY FIELDS. Name/type/message have
+                                   nowhere to live until an assignment exists — see
+                                   the file docblock. */
+                                <div className="py-2">
+                                    <p className="text-sm text-neutral-500 dark:text-neutral-400">
+                                        {t('smart_qr.assignment_empty_hint')}
+                                    </p>
+                                    {canAssign && (
+                                        <Button variant="outline" size="sm" className="mt-3" onClick={() => setAssigning(true)}>
+                                            <Link2 className="mr-1.5 h-4 w-4" /> {t('smart_qr.bulk_assign')}
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
+                        </Card>
+                    </div>
+
+                    <Card>
+                        <h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                            {t('smart_qr.qr_preview')}
+                        </h3>
+                        {/* ⚠️ The ADMIN preview route. The customer one
+                            (client.smartqr.codes.preview) resolves through
+                            findForWorkspace() and 404s for an admin on any code
+                            outside their own workspace — which is most of them. */}
+                        <img
+                            src={route('admin.qr.inventory.preview', code.serial_number)}
+                            alt={code.serial_number}
+                            className="mx-auto w-full max-w-[260px] rounded-soft border border-neutral-200 dark:border-neutral-700"
+                        />
+                        <p className="mt-3 text-center text-xs text-neutral-500 dark:text-neutral-400">
+                            {t('smart_qr.scan_to_test')}
+                        </p>
+                    </Card>
+                </div>
+            </div>
+
+            {/* ⚠️ codeIds is an ARRAY — the modal was built for bulk selection and
+                needs no variant for one code. */}
+            {canAssign && assigning && (
+                <AssignQrModal
+                    show
+                    onClose={() => setAssigning(false)}
+                    onAssigned={() => setAssigning(false)}
+                    codeIds={[code.id]}
+                    workspaces={workspaces}
+                />
+            )}
+        </AdminLayout>
+    );
+}
