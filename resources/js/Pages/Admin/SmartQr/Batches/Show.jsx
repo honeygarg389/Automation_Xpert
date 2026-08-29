@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, Dropdown, Input, Modal, Pagination } from '@/Components/ui';
-import { ArrowLeft, CircleCheck, Layers, Link2, Package, QrCode, Printer, Pencil, TriangleAlert, Download } from 'lucide-react';
+import { ArrowLeft, CircleCheck, Layers, Link2, Package, QrCode, Printer, Pencil, Plus, TriangleAlert, Download } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge, BatchStatusBadge, ExportStatusBadge } from '../QrStatusBadge';
 import { formatDateTz } from '@/Utils/datetime';
@@ -131,6 +131,89 @@ function StatCard({ icon: Icon, label, value }) {
  * places to change when a bulk action gains an option.
  */
 /**
+ * "more QR's" — extend an existing batch.
+ *
+ * ⚠️ MIRRORS RenameBatchModal ABOVE: same Modal/Modal.Header/useForm shape, same
+ * processing-disabled submit. Two modals on one screen that handle a form
+ * differently is how they drift.
+ *
+ * ⚠️ THE RANGE PREVIEW IS THE POINT OF THIS MODAL. "How many more?" is
+ * answerable without help; "which serials am I about to commit to?" is not, and
+ * it is the thing that gets printed. Computed client-side from the same formula
+ * the server uses (serial_start + offset, zero-padded to 6) — see
+ * GenerateQrBatchAction::serialFor.
+ *
+ * ⚠️ Padding is `padStart(6, '0')` and NOT a fixed-width assumption: %06d does
+ * not truncate, so a batch crossing 999999 renders 7 digits on both sides. A
+ * preview that silently disagreed with the printed serial would be worse than
+ * none.
+ */
+function AddCodesModal({ batch, onClose }) {
+    const { t } = useTranslation();
+    const { data, setData, post, processing, errors } = useForm({ additional_quantity: '' });
+
+    const serial = (offset) =>
+        `${batch.prefix}-${String(batch.serial_start + offset).padStart(6, '0')}`;
+
+    const parsed = Number.parseInt(data.additional_quantity, 10);
+    const valid = Number.isInteger(parsed) && parsed > 0;
+
+    // The new codes continue past the batch's current end, which is
+    // serial_start + quantity - 1 — so the first new offset is `quantity`.
+    const firstNew = serial(batch.quantity);
+    const lastNew = valid ? serial(batch.quantity + parsed - 1) : null;
+
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('admin.qr.batches.add-codes', batch.uuid), {
+            preserveScroll: true,
+            onSuccess: onClose,
+        });
+    };
+
+    return (
+        <Modal show onClose={onClose} maxWidth="md">
+            <Modal.Header title={t('smart_qr.add_codes')} subtitle={batch.batch_number} onClose={onClose} />
+            <form onSubmit={submit}>
+                <Modal.Body className="space-y-4">
+                    <Input
+                        type="number"
+                        min="1"
+                        name="additional_quantity"
+                        label={t('smart_qr.add_codes_quantity')}
+                        value={data.additional_quantity}
+                        onChange={(e) => setData('additional_quantity', e.target.value)}
+                        error={errors.additional_quantity}
+                        autoFocus
+                    />
+
+                    {/* ⚠️ Rendered only for a valid number. An "AX-000011 – NaN"
+                        preview while the field is empty or mid-edit reads as a
+                        bug in the batch, not as an incomplete form. */}
+                    {valid && (
+                        <p className="mt-3 text-sm text-neutral-600 dark:text-neutral-400">
+                            {t('smart_qr.add_codes_preview', { first: firstNew, last: lastNew })}
+                        </p>
+                    )}
+
+                    {errors.serial_start && (
+                        <p className="mt-3 text-sm text-red-500 dark:text-red-400">{errors.serial_start}</p>
+                    )}
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button type="button" variant="outline" onClick={onClose}>
+                        {t('common.cancel')}
+                    </Button>
+                    <Button type="submit" disabled={processing || ! valid}>
+                        {t('smart_qr.add_codes')}
+                    </Button>
+                </Modal.Footer>
+            </form>
+        </Modal>
+    );
+}
+
+/**
  * ═══ AUTO-REFRESH WHILE WORK IS IN FLIGHT ═══════════════════════════════════
  *
  * Batch generation and each export part run as queue jobs, so the interesting
@@ -146,6 +229,14 @@ function StatCard({ icon: Icon, label, value }) {
  * yet?" silently can.
  */
 const LIVE_BATCH_STATUSES = ['draft', 'generating'];
+
+/**
+ * ⚠️ MUST TRACK QrBatchController::addCodes's gate. `draft`/`generating` mean a
+ * job is already in flight — raising quantity underneath it races the running
+ * generator. `printed` has no writer in the application today, so allowing it
+ * would ship a branch nothing can reach.
+ */
+const EXTENDABLE_BATCH_STATUSES = ['generated', 'failed'];
 
 /** SmartQrExport::STATUS_QUEUED / STATUS_PROCESSING. */
 const LIVE_EXPORT_STATUSES = ['queued', 'processing'];
@@ -185,6 +276,7 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
 
     const [renaming, setRenaming] = useState(null);
     const [retiring, setRetiring] = useState(null);
+    const [addingCodes, setAddingCodes] = useState(false);
 
     // ⚠️ Disables the button for the round trip only. A 20-part batch dispatches
     // 20 jobs in one request; without this, an impatient second click queues a
@@ -353,10 +445,40 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                             One flex container so the three stay adjacent and move
                             together when the header wraps. */}
                         <div className="flex flex-wrap items-center gap-3">
-                            {/* "Status : <badge>" — Card's border tokens, not a Card,
-                                because a Card carries padding/shadow meant for a
-                                block, not an inline pill. */}
-                            <div className="flex items-center gap-2 rounded-soft-lg border border-soft border-neutral-200 px-3 py-1.5 dark:border-neutral-700">
+                            {/* ⚠️ HIDDEN when not applicable, not disabled — matching
+                                the Retire button below, which is also `canManage &&`.
+                                A disabled control invites "why can't I?"; on a
+                                generating batch the answer is "wait a moment", which
+                                the Status pill beside it already says. */}
+                            {canManage && EXTENDABLE_BATCH_STATUSES.includes(batch.status) && (
+                                <Button variant="outline" size="sm" onClick={() => setAddingCodes(true)}>
+                                    <Plus className="mr-1.5 h-4 w-4" /> {t('smart_qr.add_codes')}
+                                </Button>
+                            )}
+
+                            {/* "Status : <badge>" — sized to sit flush with the
+                                Button size="sm" controls on either side.
+
+                                ⚠️ EVERY VALUE HERE WAS MEASURED, NOT GUESSED, and
+                                three of the four differed from the buttons:
+
+                                  py-1.5   -> py-px            44px tall -> 34px
+                                  rounded-soft-lg -> rounded-soft   12px -> 8px
+                                  border-neutral-200 + border-soft -> neutral-300
+                                              rgba(228,228,231,.6) -> rgb(212,212,216)
+
+                                py-px looks like a typo and is not: this div wraps a
+                                Badge that brings its OWN border and py-1, so the
+                                outer padding that makes a button 34px tall makes
+                                this 44px. 1px is what is left once the Badge's box
+                                is accounted for, and it lands the height and the top
+                                edge exactly on the buttons'.
+
+                                ⚠️ border-soft is DROPPED, not replaced. It applies
+                                0.6 alpha, which is why the pill read as a lighter
+                                outline than the buttons beside it even when the
+                                colour token matched. */}
+                            <div className="flex items-center gap-2 rounded-soft border border-neutral-300 px-3 py-px dark:border-neutral-600">
                                 {/* text-sm to match Button size="sm" (px-3 py-1.5
                                     text-sm) — what Export ZIP and Retire render at.
                                     Reuses that class, no new size introduced. */}
@@ -559,6 +681,7 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
             </div>
 
             {canManage && renaming && <RenameBatchModal batch={renaming} onClose={() => setRenaming(null)} />}
+            {canManage && addingCodes && <AddCodesModal batch={batch} onClose={() => setAddingCodes(false)} />}
 
             {canManage && (
                 <RetireConfirmModal

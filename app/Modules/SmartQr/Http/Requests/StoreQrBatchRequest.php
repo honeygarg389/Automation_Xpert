@@ -2,6 +2,7 @@
 
 namespace App\Modules\SmartQr\Http\Requests;
 
+use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Rules\SerialRangeAvailable;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -36,7 +37,7 @@ class StoreQrBatchRequest extends FormRequest
             // 500 is the spec's example batch size (§4). The ceiling is here
             // rather than in the generator because the generator is chunked and
             // has no opinion about it.
-            'quantity' => ['required', 'integer', 'min:1', 'max:10000'],
+            'quantity' => ['required', 'integer', 'min:1', 'max:'.SmartQrBatch::MAX_QUANTITY],
 
             // ⚠️ The gap slice 2 deferred here. See SerialRangeAvailable — it is
             // a TOCTOU check, and the unique index remains the guarantee.

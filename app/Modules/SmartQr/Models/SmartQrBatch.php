@@ -6,6 +6,7 @@ use Database\Factories\SmartQrBatchFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -21,6 +22,11 @@ use Illuminate\Support\Str;
  * @property int $quantity
  * @property int $serial_start
  * @property string $status
+ * @property int $generated_count
+ * @property int $printed_count
+ * @property Carbon|null $generated_at
+ * @property Carbon|null $printed_at
+ * @property Carbon|null $failed_at
  * @property string|null $failure_reason
  * @property string|null $default_message
  * @property string|null $logo_path
@@ -30,6 +36,17 @@ class SmartQrBatch extends Model
 {
     /** @use HasFactory<SmartQrBatchFactory> */
     use HasFactory;
+
+    /**
+     * The largest number of codes one batch may ever hold. §4.
+     *
+     * ⚠️ ONE SOURCE, because two places now enforce it. It began as an inline
+     * `max:10000` in StoreQrBatchRequest, which was fine while creation was the
+     * only way to add codes. Extending a batch has to check the SAME ceiling
+     * against existing + additional, and a second literal is how the two drift
+     * until one path admits a batch the other would refuse.
+     */
+    public const MAX_QUANTITY = 10_000;
 
     /**
      * ⚠️ Module models live outside app/Models, so Laravel's convention

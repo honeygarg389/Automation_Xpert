@@ -42,6 +42,13 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         Route::post('/batches/{batch}/retire', [QrBatchController::class, 'retire'])
             ->name('batches.retire')->middleware('permission:manage_qr_batches');
 
+        // ⚠️ manage_qr_batches, NOT view_qr_inventory. This CREATES inventory —
+        // it is the only route besides store() that causes codes to exist — so it
+        // belongs with the mutating actions above, not with the export routes
+        // below that merely read what is already there.
+        Route::post('/batches/{batch}/add-codes', [QrBatchController::class, 'addCodes'])
+            ->name('batches.add-codes')->middleware('permission:manage_qr_batches');
+
         // ⚠️ Batch-scoped export — SEPARATE from /inventory/export, not a
         // variant of it. That route takes a client-supplied code_ids[] because
         // the inventory screen selects arbitrary codes across batches; this one

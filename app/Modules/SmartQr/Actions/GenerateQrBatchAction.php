@@ -59,6 +59,57 @@ class GenerateQrBatchAction
     }
 
     /**
+     * The offset generation must RESUME FROM — one past the highest serial the
+     * batch already holds, expressed as an offset from `serial_start`.
+     *
+     * ═══ ⚠️ WHY THIS IS NOT `codes()->count()` ══════════════════════════════
+     *
+     * It was, and that was a latent duplicate-key bug. Count and high-water mark
+     * agree only while the serials form an unbroken run from `serial_start`, and
+     * `QrInventoryController::destroy` hard-deletes selected codes —
+     * `SmartQrCode` has no SoftDeletes, so a delete permanently removes a row
+     * from the middle of the run:
+     *
+     *   serial_start=1 quantity=10, serials 1..10 exist, serial 5 is deleted
+     *     count()            -> 9   -> resume at offset 9  -> serial 10  ✗ EXISTS
+     *     highest serial     -> 10  -> resume at offset 10 -> serial 11  ✓
+     *
+     * `serial_number` is GLOBALLY unique, so the count-based answer does not
+     * merely repeat a row — it violates the index, rolls the chunk back and
+     * flips the whole batch to `failed` with a duplicate-key message.
+     *
+     * The bug was unreachable while nothing re-ran generation after creation.
+     * Adding codes to an existing batch re-runs it deliberately, which is
+     * exactly what would have woken it.
+     *
+     * ⚠️ A DELETED SERIAL IS NEVER REFILLED, and that is deliberate. The gap is
+     * an administrator's explicit deletion; re-issuing that serial would print a
+     * second sticker carrying a number a previous sticker already used.
+     *
+     * ⚠️ NUMERIC EXTRACTION, NOT `MAX(serial_number)`. The string maximum is only
+     * the numeric maximum while every serial has the same digit count, and
+     * `serial_start` has no upper bound in StoreQrBatchRequest — a batch starting
+     * near 999999 crosses into 7 digits, where 'AX-1000000' sorts BELOW
+     * 'AX-999999' and the resume point silently moves backwards.
+     */
+    public static function nextOffset(SmartQrBatch $batch): int
+    {
+        // +2 skips the prefix and the '-' separator (SUBSTRING is 1-indexed).
+        $highest = $batch->codes()
+            ->selectRaw(
+                'MAX(CAST(SUBSTRING(serial_number, ?) AS UNSIGNED)) AS highest',
+                [strlen((string) $batch->prefix) + 2]
+            )
+            ->value('highest');
+
+        if ($highest === null) {
+            return 0;
+        }
+
+        return max(0, (int) $highest - (int) $batch->serial_start + 1);
+    }
+
+    /**
      * @return int the number of codes actually committed
      *
      * @throws \Throwable rethrown after the failure is recorded
@@ -67,13 +118,19 @@ class GenerateQrBatchAction
     {
         $batch->forceFill(['status' => 'generating'])->save();
 
-        $already = (int) $batch->codes()->count();
-        $remaining = max(0, (int) $batch->quantity - $already);
+        // ⚠️ BOUNDED BY THE DECLARED RANGE, not by row count. The batch claims
+        // serial_start .. serial_start + quantity - 1 and SerialRangeAvailable
+        // polices that window against other batches — so generation must never
+        // emit a serial past it. Topping up to restore a COUNT would do exactly
+        // that after a deletion, spilling one serial into whatever batch owns
+        // the next range.
+        $nextOffset = self::nextOffset($batch);
+        $remaining = max(0, (int) $batch->quantity - $nextOffset);
         $committed = 0;
 
         try {
-            for ($start = $already; $start < $already + $remaining; $start += self::CHUNK) {
-                $size = min(self::CHUNK, ($already + $remaining) - $start);
+            for ($start = $nextOffset; $start < $nextOffset + $remaining; $start += self::CHUNK) {
+                $size = min(self::CHUNK, ($nextOffset + $remaining) - $start);
 
                 // One transaction per chunk. generated_count is advanced INSIDE
                 // it, so it commits or rolls back with the rows it counts —
@@ -108,7 +165,21 @@ class GenerateQrBatchAction
             throw $e;
         }
 
-        $batch->forceFill(['status' => 'generated', 'generated_at' => now()])->save();
+        $batch->forceFill([
+            'status' => 'generated',
+
+            // ⚠️ FIRST generation only. Re-running for an extension must not
+            // restamp this — generated_at answers "when was this batch made",
+            // and overwriting it on every top-up loses that permanently.
+            'generated_at' => $batch->generated_at ?? now(),
+
+            // ⚠️ CLEARED ON SUCCESS, because extension is allowed FROM `failed`.
+            // Show.jsx renders failure_reason on its own truthiness, not gated
+            // on status — so a stale reason paints a red error panel across a
+            // batch that has just generated successfully.
+            'failure_reason' => null,
+            'failed_at' => null,
+        ])->save();
 
         return $committed;
     }
