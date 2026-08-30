@@ -56,7 +56,13 @@ const EXPORT_VARIANTS = {
     queued: 'default',
     processing: 'brand',
     ready: 'success',
+
+    // ⚠️ `danger` for a genuine failure; `default` for expiry. An archive
+    // reclaimed by retention did not fail — the export worked and its file was
+    // later cleaned up. Colouring routine housekeeping red would train an admin
+    // to ignore the colour that means something actually broke.
     failed: 'danger',
+    expired: 'default',
 };
 
 export function CodeStatusBadge({ status }) {

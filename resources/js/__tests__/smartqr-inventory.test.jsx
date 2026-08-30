@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 
 /**
@@ -15,6 +15,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
  */
 
 const posts = [];
+const reloads = [];
 const gets = [];
 const formPosts = [];
 
@@ -28,6 +29,7 @@ vi.mock('@inertiajs/react', () => ({
         url: '/admin/qr/inventory',
     }),
     router: {
+        reload: (opts) => reloads.push(opts),
         post: (url, data, opts) => posts.push({ url, data, opts }),
         get: (url, data, opts) => gets.push({ url, data, opts }),
         delete: vi.fn(),
@@ -198,6 +200,160 @@ describe('DEFECT 2 — the checkbox focus ring must not be clipped', () => {
         const box = screen.getByLabelText('AX-000001');
         expect(box.tagName).toBe('INPUT');
         expect(box.type).toBe('checkbox');
+    });
+});
+
+describe('Ready Exports panel', () => {
+    const paginated = (n, page = 1) => ({
+        data: Array.from({ length: n }, (_, i) => ({
+            name: `Export_30-Aug-2026_0${i + 1}.zip`, size: 1024, built_at: '2026-08-30 12:00',
+        })),
+        links: [
+            { url: page > 1 ? '?export_page=1' : null, label: '&laquo; Previous', active: false },
+            { url: '?export_page=1', label: '1', active: page === 1 },
+            { url: '?export_page=2', label: '2', active: page === 2 },
+            { url: page < 2 ? '?export_page=2' : null, label: 'Next &raquo;', active: false },
+        ],
+        current_page: page, last_page: 2, per_page: 5, total: 7,
+    });
+
+    const renderWith = (readyExports, extra = {}) =>
+        render(<SmartQrInventoryIndex
+            codes={{ data: [], links: [], current_page: 1, last_page: 1, total: 0 }}
+            filters={{}} batches={[]} statuses={[]} workspaces={[]}
+            exportFormats={['svg']} exportBytesPerCode={{ svg: 1 }} exportMaxCodes={500}
+            readyExports={readyExports}
+            {...extra}
+        />);
+
+    it('renders only the page it was given, not every archive', () => {
+        renderWith(paginated(5));
+        expect(document.body.textContent).toContain('Export_30-Aug-2026_01.zip');
+        expect(document.body.textContent).toContain('Export_30-Aug-2026_05.zip');
+        expect(document.body.textContent).not.toContain('Export_30-Aug-2026_06.zip');
+    });
+
+    /**
+     * ⚠️ The shared <Pagination> returns NULL when `links` is empty, so a panel
+     * that rendered its own controls — or none — would pass a looser check.
+     */
+    it('renders pagination controls under the list', () => {
+        renderWith(paginated(5));
+        const hrefs = Array.from(document.body.querySelectorAll('a'))
+            .map((a) => a.getAttribute('href') || '');
+        expect(hrefs.some((h) => h.includes('export_page=2'))).toBe(true);
+    });
+
+    it('hides the whole panel when there are no archives', () => {
+        renderWith({ data: [], links: [], current_page: 1, last_page: 1, per_page: 5, total: 0 });
+        expect(document.body.textContent).not.toContain('smart_qr.ready_exports');
+    });
+
+    /**
+     * ⚠️ Download links point at the file NAME, not at a list index — the
+     * endpoint resolves against the disk, so an archive off the end of the
+     * listing is still reachable by URL.
+     */
+    it('links each archive by name to the download route', () => {
+        renderWith(paginated(2));
+        const hrefs = Array.from(document.body.querySelectorAll('a'))
+            .map((a) => a.getAttribute('href') || '')
+            .filter((h) => h.includes('export-download'));
+        expect(hrefs.length).toBe(2);
+        expect(hrefs[0]).toContain('Export_30-Aug-2026_01.zip');
+    });
+});
+
+describe('Ready Exports auto-refresh', () => {
+    const empty = { data: [], links: [], current_page: 1, last_page: 1, per_page: 5, total: 0 };
+    const one = {
+        data: [{ name: 'Export_30-Aug-2026_01.zip', size: 1024, built_at: '2026-08-30 12:00' }],
+        links: [{ url: null, label: '&laquo; Previous', active: false }, { url: '?export_page=1', label: '1', active: true }, { url: null, label: 'Next &raquo;', active: false }],
+        current_page: 1, last_page: 1, per_page: 5, total: 1,
+    };
+
+    const renderPanel = (readyExports, exportInFlight) =>
+        render(<SmartQrInventoryIndex
+            codes={{ data: [], links: [], current_page: 1, last_page: 1, total: 0 }}
+            filters={{}} batches={[]} statuses={[]} workspaces={[]}
+            exportFormats={['svg']} exportBytesPerCode={{ svg: 1 }} exportMaxCodes={500}
+            readyExports={readyExports} exportInFlight={exportInFlight}
+        />);
+
+    const tick = (n = 1) => {
+        for (let i = 0; i < n; i++) act(() => { vi.advanceTimersByTime(5000); });
+    };
+
+    beforeEach(() => { reloads.length = 0; vi.useFakeTimers(); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('polls while an export is in flight', () => {
+        renderPanel(one, true);
+        tick(1);
+        expect(reloads).toHaveLength(1);
+    });
+
+    /**
+     * ⚠️ BOTH PROPS. Reloading only readyExports would poll forever —
+     * exportInFlight would never change, so the guard could never turn false.
+     */
+    it('reloads the panel AND the liveness flag', () => {
+        renderPanel(one, true);
+        tick(1);
+        expect(reloads[0].only).toEqual(['readyExports', 'exportInFlight']);
+    });
+
+    it('does not poll when nothing is in flight', () => {
+        renderPanel(one, false);
+        tick(3);
+        expect(reloads).toHaveLength(0);
+    });
+
+    it('stops once the queue drains', () => {
+        const { rerender } = renderPanel(one, true);
+        tick(2);
+        expect(reloads).toHaveLength(2);
+
+        rerender(<SmartQrInventoryIndex
+            codes={{ data: [], links: [], current_page: 1, last_page: 1, total: 0 }}
+            filters={{}} batches={[]} statuses={[]} workspaces={[]}
+            exportFormats={['svg']} exportBytesPerCode={{ svg: 1 }} exportMaxCodes={500}
+            readyExports={one} exportInFlight={false}
+        />);
+
+        tick(5);
+        expect(reloads).toHaveLength(2);
+    });
+
+    /** ⚠️ A missing clearInterval polls a page the admin has left, forever. */
+    it('clears the interval on unmount', () => {
+        const { unmount } = renderPanel(one, true);
+        tick(2);
+        unmount();
+        tick(5);
+        expect(reloads).toHaveLength(2);
+    });
+
+    it('gives up after the attempt cap', () => {
+        renderPanel(one, true);
+        tick(70);
+        expect(reloads).toHaveLength(60);
+    });
+
+    /**
+     * ⚠️ THE FIRST-EXPORT CASE. Gated on data.length alone the panel is hidden,
+     * so the very first export on an installation shows nothing at all while it
+     * builds — the poll runs against an invisible panel.
+     */
+    it('shows the panel while building even with no archives yet', () => {
+        renderPanel(empty, true);
+        expect(document.body.textContent).toContain('smart_qr.export_building');
+    });
+
+    it('hides the panel entirely when idle and empty', () => {
+        renderPanel(empty, false);
+        expect(document.body.textContent).not.toContain('smart_qr.export_building');
+        expect(document.body.textContent).not.toContain('smart_qr.ready_exports');
     });
 });
 

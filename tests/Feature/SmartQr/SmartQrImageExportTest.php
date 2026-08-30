@@ -176,8 +176,13 @@ class SmartQrImageExportTest extends TestCase
             ->get(route('admin.qr.inventory.index'))
             ->assertOk()
             ->assertInertia(fn ($p) => $p
-                ->has('readyExports', 1)
-                ->where('readyExports.0.name', '20260819-101010-abcdef01.zip'));
+                // ⚠️ SHAPE CHANGED: readyExports is now a paginator (5 per page,
+                // 20 listed) rather than a flat array, so the archives live under
+                // `.data`. The download assertion below is unchanged and still
+                // passes — which is the point of the decoupling: what is listed
+                // and what is downloadable are now separate questions.
+                ->has('readyExports.data', 1)
+                ->where('readyExports.data.0.name', '20260819-101010-abcdef01.zip'));
 
         $this->actingAs($admin, 'admin')
             ->get(route('admin.qr.inventory.export-download', '20260819-101010-abcdef01.zip'))

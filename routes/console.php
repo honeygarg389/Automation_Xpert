@@ -138,3 +138,22 @@ Schedule::command('smartqr:prune-scans')
     ->name('smartqr-prune-scans')
     ->withoutOverlapping()
     ->onOneServer();
+
+// ── Smart QR export archive retention ───────────────────────────────────────
+//
+// ⚠️ Deletes FILES, not customer data — an export is a rebuildable convenience
+// archive, which is why its window is 7 days against the scans' 90. Nothing had
+// ever deleted these: 58 archives totalling 170 MB had accumulated in
+// development, and the only thing bounding the list was a display cap that hid
+// them rather than reclaiming them.
+//
+// ⚠️ Archives with a smart_qr_exports row are EXPIRED rather than deleted
+// outright — the file goes, the row stays. See the command.
+//
+// Weekly, on the same day as the scan prune but an hour later, so two
+// destructive jobs never overlap and a log reader sees them in a fixed order.
+Schedule::command('smartqr:prune-exports')
+    ->weeklyOn(0, '04:00')
+    ->name('smartqr-prune-exports')
+    ->withoutOverlapping()
+    ->onOneServer();

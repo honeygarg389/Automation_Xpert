@@ -4104,6 +4104,7 @@
             "generating": "Generating",
             "generated": "Generated",
             "failed": "Failed",
+            "expired": "Expired",
             "printed": "Printed"
         },
         "delete_codes": "Delete",
@@ -4207,7 +4208,7 @@
         "format_png": "PNG",
         "format_pdf": "PDF (print)",
         "export_queued_note": "The archive is built in the background and appears in storage when ready.",
-        "bulk_export": "Export artwork",
+        "bulk_export": "Export QR's",
         "export_title": "Export QR artwork",
         "export_body": "Build a ZIP archive of artwork for {{count}} selected code(s).",
         "export_format": "Format",
@@ -4221,6 +4222,7 @@
         "export_format_pdf": "PDF — print-ready, one page per code",
         "export_size_compare_multi": "The same selection as {{others}}.",
         "export_note_pdf": "One page per code with the serial beneath it — the format to hand to a print shop.",
+        "export_building": "Building your export\u2026 this list refreshes on its own.",
         "ready_exports": "Ready exports",
         "section_batch_information": "Batch Information",
         "quantity_hint": "Max 10,000 per batch",
@@ -4250,7 +4252,8 @@
             "queued": "Queued",
             "processing": "Building",
             "ready": "Ready",
-            "failed": "Failed"
+            "failed": "Failed",
+            "expired": "Expired"
         }
     }
 }

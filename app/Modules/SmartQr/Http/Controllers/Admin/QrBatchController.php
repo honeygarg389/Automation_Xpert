@@ -347,13 +347,16 @@ class QrBatchController extends Controller
      *
      * ═══ ⚠️ WHY THIS EXISTS RATHER THAN REUSING inventory.export-download ══
      *
-     * That route validates the requested filename against readyExports(),
-     * which lists the export directory and TAKES THE 20 MOST RECENT. Batch
-     * parts are written to that same directory, so a 20-part batch export plus
-     * any other recent archive pushes the earliest parts out of that window —
-     * and out of the window means 404, for a file that exists and that the
-     * admin was just told was ready. That is precisely the cap this feature was
-     * built to escape, so reusing the route would reintroduce it at the last
+     * ⚠️ THE ORIGINAL REASON IS NOW FIXED, AND THIS ROUTE STILL STANDS. It used
+     * to be that inventory.export-download validated the filename against
+     * readyExports(), which truncates — so parts of a 20-part export fell out of
+     * the window and 404'd for files that existed. That route now checks the
+     * disk instead, and the truncation is presentation only.
+     *
+     * What remains is a different distinction: this route resolves a
+     * smart_qr_exports ROW, so it can refuse a part that is queued, failed or
+     * expired and can scope it to its batch. A filename check cannot know any of
+     * that. Reusing the inventory route would offer a download link for a row
      * step.
      *
      * Keyed on the smart_qr_exports ROW instead: the row is the authority on
