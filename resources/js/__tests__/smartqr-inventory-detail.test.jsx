@@ -348,6 +348,44 @@ describe('change stage', () => {
     });
 });
 
+describe('edit pencil on the assignment panel', () => {
+    /** ⚠️ Nothing to edit without an assignment — every field it opens lives there. */
+    it('is absent when the code is unassigned', () => {
+        renderPage();
+        expect(screen.queryByLabelText('Edit QR details')).toBeNull();
+    });
+
+    it('is present when the code is assigned', () => {
+        renderPage({ currentAssignment: assignment });
+        expect(screen.queryByLabelText('Edit QR details')).not.toBeNull();
+    });
+
+    /**
+     * ⚠️ REUSES the Assignments page's modal rather than a second copy — asserted
+     * by its title and by fields only that modal renders. A rebuilt form would
+     * pass "a dialog opened" while drifting from the one it duplicates.
+     */
+    it('opens the shared Edit QR details modal, pre-filled from this assignment', () => {
+        renderPage({ currentAssignment: assignment });
+        fireEvent.click(screen.getByLabelText('Edit QR details'));
+
+        expect(screen.getAllByText('Edit QR details').length).toBeGreaterThan(0);
+
+        // The modal's read-only context line identifies WHICH sticker is edited.
+        expect(screen.getByText(/AX-000001 · Acme Cafe/)).toBeTruthy();
+
+        // Pre-filled from currentAssignment, not blank.
+        expect(screen.getByDisplayValue('Front counter')).toBeTruthy();
+        expect(screen.getByDisplayValue('Hi from table 4')).toBeTruthy();
+    });
+
+    it('offers the QR type placeholder from the shared key', () => {
+        renderPage({ currentAssignment: assignment });
+        fireEvent.click(screen.getByLabelText('Edit QR details'));
+        expect(screen.getByText('Choose QR Type')).toBeTruthy();
+    });
+});
+
 describe('preview', () => {
     it('uses the ADMIN preview route, not the workspace-scoped client one', () => {
         renderPage();

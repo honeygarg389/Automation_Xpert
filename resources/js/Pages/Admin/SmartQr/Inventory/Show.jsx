@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, Dropdown } from '@/Components/ui';
-import { ArrowLeft, Check, Copy, Download, Layers, Link2, Tag, Unlink } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, Layers, Link2, Pencil, Tag, Unlink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge, AssignmentStatusBadge } from '../QrStatusBadge';
 import AssignQrModal from '../AssignQrModal';
+import EditAssignmentModal from '../EditAssignmentModal';
 import { formatDateTz } from '@/Utils/datetime';
 
 /**
@@ -94,6 +95,7 @@ export default function SmartQrCodeShow({
     const [assigning, setAssigning] = useState(false);
     const [staging, setStaging] = useState(false);
     const [unassigning, setUnassigning] = useState(false);
+    const [editing, setEditing] = useState(false);
 
     /**
      * ⚠️ REUSES THE BULK ENDPOINT with a one-element array. changeStatus()
@@ -284,9 +286,30 @@ export default function SmartQrCodeShow({
                         </Card>
 
                         <Card>
-                            <h3 className="mb-2 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
-                                {t('smart_qr.section_assignment')}
-                            </h3>
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                                <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-100">
+                                    {t('smart_qr.section_assignment')}
+                                </h3>
+
+                                {/* ⚠️ ONLY WHEN ASSIGNED — there is nothing to edit
+                                    otherwise, since every field this opens lives on
+                                    the assignment row.
+
+                                    ⚠️ assign_qr_codes, matching Assign/Unassign: it
+                                    edits assignment data, so it belongs on the
+                                    assignment gate, not manage_qr_batches. */}
+                                {canAssign && currentAssignment && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditing(true)}
+                                        title={t('smart_qr.edit_qr')}
+                                        aria-label={t('smart_qr.edit_qr')}
+                                        className="shrink-0 rounded p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-200"
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </button>
+                                )}
+                            </div>
 
                             {currentAssignment ? (
                                 <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
@@ -372,6 +395,24 @@ export default function SmartQrCodeShow({
 
             {/* ⚠️ codeIds is an ARRAY — the modal was built for bulk selection and
                 needs no variant for one code. */}
+            {/* ⚠️ ADAPTED AT THE CALL SITE, not by widening the modal's contract.
+                EditAssignmentModal reads `assignment.code?.serial_number` and
+                `assignment.workspace?.name` — the Assignments page's row shape.
+                This page's currentAssignment prop is flat (workspace_name), so the
+                nesting is rebuilt here. Changing the modal to accept both shapes
+                would put a second contract inside a component that exists to have
+                exactly one. */}
+            {canAssign && editing && currentAssignment && (
+                <EditAssignmentModal
+                    assignment={{
+                        ...currentAssignment,
+                        code: { serial_number: code.serial_number },
+                        workspace: { name: currentAssignment.workspace_name },
+                    }}
+                    onClose={() => setEditing(false)}
+                />
+            )}
+
             {canAssign && assigning && (
                 <AssignQrModal
                     show
