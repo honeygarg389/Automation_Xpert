@@ -146,6 +146,52 @@ php artisan tinker --execute='foreach (DB::table("jobs")->get() as $j) {
 queue is healthy — it drained four exports at ~130 ms each with zero failures, which is how the
 listener was proved to be the broken part rather than the jobs.
 
+⚠️ **A worker can be running, consuming jobs, and STILL be executing code you deleted.** A
+long-running `php artisan queue:work` boots the framework ONCE and holds every job class
+definition in memory for the life of the process. Editing a job class — or anything it calls —
+on disk has no effect on it. It keeps running the old code, silently, with no error and no
+warning, until the process is restarted.
+
+**Twice in one session, with the same symptom both times: "the code change didn't take
+effect."**
+
+| # | What was changed | What the stale worker did |
+|---|---|---|
+| 1 | `track()` added to `GenerateQrExportJob` | built correct archives, never called `track()` — the method did not exist in its memory, so rows stayed `queued` while the files appeared |
+| 2 | export filename scheme | kept emitting the old `Ymd-His-<hex>` names for **51 minutes** after the change; the worker had started **two days earlier** |
+
+A third worker incident in the same session was a DIFFERENT failure — a worker reported as
+running that had already exited, consuming nothing. That one is the `reserved=NEVER` case above.
+The two hazards are easy to confuse because both present as "I started a worker and my thing
+didn't happen", and they have opposite fixes: one needs a restart, the other needs a worker at
+all. Check both.
+
+`queue:work --once` and `queue:listen` do NOT have this problem: both re-boot per job, so they
+always pick up current code. A persistent `queue:work` does. **The fix is always the same —
+restart the worker after any change to a job class.** Add it to the deploy step; a rule that
+depends on remembering is not a rule.
+
+⚠️ **Diagnosing it means comparing the process START TIME against the code-change timestamp**, not
+confirming that a worker exists:
+
+```bash
+ps -eo pid,lstart,command | grep '[q]ueue:work'      # when did it start?
+stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' path/to/Job.php  # when did the code change?
+```
+
+Any worker started before the file changed is running the previous version. **"A worker is
+running" and "a worker is running your code" are different claims**, and only the second one
+matters. Note this is the mirror of the `reserved=NEVER` check above: that one catches a worker
+that is up but consuming nothing, this one catches a worker that is up, consuming happily, and
+wrong. Both look healthy in `ps`.
+
+⚠️ **Rule out the cheap explanations first, and record that you did.** In incident 2 the causes
+that get blamed reflexively were all measured and excluded before the worker was suspected: the
+code on disk was already correct, `bootstrap/cache/config.php` and `routes-v7.php` were absent,
+CLI opcache was off, and the `jobs` table was empty (so no pre-change job was waiting to run).
+That left exactly one explanation, and re-running the export after a restart confirmed it. Do not
+re-apply a change that is already on disk — diagnose why the disk is being ignored.
+
 **Tests run against `whatsmine_test`, never the working database.** `phpunit.xml` pins
 `DB_CONNECTION=mysql` and `DB_DATABASE=whatsmine_test`; `tests/bootstrap.php` aborts the run
 if the resolved schema name does not end in `_test`, and `Tests\TestCase::setUp()` re-checks
