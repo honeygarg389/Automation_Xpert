@@ -354,6 +354,34 @@ class QrInventoryController extends Controller
 
         SmartQrCode::whereIn('id', $data['code_ids'])->update(['status' => $data['status']]);
 
+        // ═══ ⚠️ `printed` IS AN EVENT, NOT ONLY A STATE ════════════════════════
+        //
+        // Setting status='printed' without a timestamp produced a code that said
+        // "Printed" on its badge and "Not printed" in the same panel, because the
+        // display reads printed_at. Three such rows existed in development before
+        // this line — all from this action, which was the only way to reach that
+        // combination through the UI.
+        //
+        // markPrinted() has always written both and is deliberately untouched.
+        //
+        // ⚠️ whereNull() IS THE WHOLE GUARD, and it is doing two jobs:
+        //
+        //   - it never OVERWRITES an existing timestamp, so re-selecting Printed
+        //     on an already-printed code cannot rewrite when the print happened;
+        //   - it makes the action idempotent, so a double-submit is harmless.
+        //
+        // ⚠️ AND NOTHING CLEARS printed_at WHEN MOVING AWAY FROM `printed`. A
+        // code printed and later marked damaged keeps its timestamp, because that
+        // is a historical fact and SmartQrDeletability::everPrinted() reads it to
+        // refuse deletion. Clearing it would report a genuinely printed sticker as
+        // never-printed and let destroy() take it — turning a cosmetic bug into a
+        // destructive one.
+        if ($data['status'] === SmartQrStatus::CODE_PRINTED) {
+            SmartQrCode::whereIn('id', $data['code_ids'])
+                ->whereNull('printed_at')
+                ->update(['printed_at' => now()]);
+        }
+
         return back()->with('success', __('Status updated.'));
     }
 

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, Dropdown } from '@/Components/ui';
-import { ArrowLeft, Check, Copy, Download, Layers, Link2, Tag } from 'lucide-react';
+import { ArrowLeft, Check, Copy, Download, Layers, Link2, Tag, Unlink } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { CodeStatusBadge, AssignmentStateBadge } from '../QrStatusBadge';
+import { CodeStatusBadge, AssignmentStateBadge, AssignmentStatusBadge } from '../QrStatusBadge';
 import AssignQrModal from '../AssignQrModal';
 import { formatDateTz } from '@/Utils/datetime';
 
@@ -93,6 +93,7 @@ export default function SmartQrCodeShow({
 
     const [assigning, setAssigning] = useState(false);
     const [staging, setStaging] = useState(false);
+    const [unassigning, setUnassigning] = useState(false);
 
     /**
      * ⚠️ REUSES THE BULK ENDPOINT with a one-element array. changeStatus()
@@ -107,6 +108,25 @@ export default function SmartQrCodeShow({
             { code_ids: [code.id], status },
             { preserveScroll: true, onFinish: () => setStaging(false) },
         );
+    };
+
+    /**
+     * ⚠️ REUSES admin.qr.assignments.destroy — the same endpoint the Assignments
+     * list calls, keyed on the ASSIGNMENT's uuid (its route key), not the code's
+     * serial. No new backend: unassigning from here and from there must not be
+     * two code paths that can disagree about what unassign means.
+     *
+     * ⚠️ Confirmed first. Unassigning ends a live mapping — a scan of a sticker
+     * already in a customer's hand stops resolving — and there is no undo button.
+     */
+    const unassign = () => {
+        if (! window.confirm(t('smart_qr.unassign_confirm', { serial: code.serial_number }))) return;
+
+        setUnassigning(true);
+        router.delete(route('admin.qr.assignments.destroy', currentAssignment.uuid), {
+            preserveScroll: true,
+            onFinish: () => setUnassigning(false),
+        });
     };
 
     return (
@@ -148,9 +168,20 @@ export default function SmartQrCodeShow({
                             cluster: one flex container so the controls stay
                             adjacent and wrap together. */}
                         <div className="flex flex-wrap items-center gap-3">
+                            {/* ⚠️ MUTUALLY EXCLUSIVE, keyed on the same value the
+                                Assignment panel below reads. Mirrors how the batch
+                                detail header hides Retire rather than disabling it:
+                                a disabled control invites "why can't I?", and the
+                                answer here is already visible one panel down. */}
                             {canAssign && ! currentAssignment && (
                                 <Button variant="outline" size="sm" onClick={() => setAssigning(true)}>
-                                    <Link2 className="mr-1.5 h-4 w-4" /> {t('smart_qr.bulk_assign')}
+                                    <Link2 className="mr-1.5 h-4 w-4" /> {t('smart_qr.assign_qr')}
+                                </Button>
+                            )}
+
+                            {canAssign && currentAssignment && (
+                                <Button variant="outline" size="sm" disabled={unassigning} onClick={unassign}>
+                                    <Unlink className="mr-1.5 h-4 w-4" /> {t('smart_qr.unassign_qr')}
                                 </Button>
                             )}
 
@@ -170,34 +201,6 @@ export default function SmartQrCodeShow({
                                     </Dropdown.Content>
                                 </Dropdown>
                             )}
-
-                            <Dropdown>
-                                <Dropdown.Trigger>
-                                    <Button variant="outline" size="sm">
-                                        <Download className="mr-1.5 h-4 w-4" /> {t('smart_qr.export_qr')}
-                                    </Button>
-                                </Dropdown.Trigger>
-                                <Dropdown.Content width="56">
-                                    {/* ⚠️ A PLAIN <a>, not Dropdown.Item and not an
-                                        Inertia Link. Dropdown.Item defaults to
-                                        `as="button"`, so an href on it renders a
-                                        <button href> that does nothing; and
-                                        `as="link"` gives an Inertia <Link>, which
-                                        intercepts the navigation and waits for an
-                                        Inertia response that a file download never
-                                        sends. The batch export-download link is a
-                                        bare anchor for the same reason. */}
-                                    {exportFormats.map((fmt) => (
-                                        <a
-                                            key={fmt}
-                                            href={route('admin.qr.inventory.download', { code: code.serial_number, format: fmt })}
-                                            className="block w-full px-4 py-2.5 text-left rtl:text-right text-sm text-neutral-700 hover:bg-neutral-50 dark:text-neutral-300 dark:hover:bg-neutral-800 transition duration-150 first:rounded-t-soft last:rounded-b-soft"
-                                        >
-                                            {t(`smart_qr.format_${fmt}`)}
-                                        </a>
-                                    ))}
-                                </Dropdown.Content>
-                            </Dropdown>
 
                             <Link href={route('admin.qr.batches.index')}>
                                 <Button variant="outline" size="sm">
@@ -233,9 +236,39 @@ export default function SmartQrCodeShow({
                                         </Link>
                                     ) : null}
                                 </Field>
+                                {/* ⚠️ ASSIGNMENT-SCOPED, so it appears only when
+                                    assigned — like name / type / message below.
+                                    Position is deliberate: it sits between Batch and
+                                    Printed status, matching the reference.
+
+                                    ⚠️ This is the ASSIGNMENT's active/inactive state
+                                    (R-10's second vocabulary), NOT the code's
+                                    physical status in the row above. Two different
+                                    questions that both use the word "status", which
+                                    is exactly why they get different labels and
+                                    different badges. */}
+                                {currentAssignment && (
+                                    <Field label={t('smart_qr.field_active_status')}>
+                                        <AssignmentStatusBadge status={currentAssignment.status} />
+                                    </Field>
+                                )}
                                 <Field label={t('smart_qr.field_printed')}>
-                                    {code.printed_at
-                                        ? `${t('smart_qr.printed_yes')} · ${formatDateTz(code.printed_at, adminTz)}`
+                                    {/* ⚠️ THE SAME `OR` SmartQrDeletability::everPrinted()
+                                        USES, and for the same reason: two columns
+                                        answer "was this printed" and a display
+                                        trusting one can contradict the badge beside
+                                        it. printed_at may be null on a code whose
+                                        status is `printed` (historic rows written
+                                        before changeStatus() recorded the event), and
+                                        status may have moved on from `printed` while
+                                        printed_at legitimately remains.
+
+                                        The date is shown only when there IS one — a
+                                        code known printed without a timestamp says so
+                                        without inventing a date. */}
+                                    {(code.printed_at || code.status === 'printed')
+                                        ? [t('smart_qr.printed_yes'), code.printed_at && formatDateTz(code.printed_at, adminTz)]
+                                            .filter(Boolean).join(' · ')
                                         : t('smart_qr.printed_no')}
                                 </Field>
                                 <Field label={t('smart_qr.field_public_url')}>
@@ -312,6 +345,27 @@ export default function SmartQrCodeShow({
                         <p className="mt-3 text-center text-xs text-neutral-500 dark:text-neutral-400">
                             {t('smart_qr.scan_to_test')}
                         </p>
+
+                        {/* ⚠️ MOVED OUT OF THE HEADER. These three sit under the
+                            image they produce, so the thing being downloaded is
+                            visible while choosing a format — the header dropdown
+                            put the choice three panels away from its subject.
+
+                            ⚠️ Plain anchors, not Buttons-in-Links: a file download
+                            must not be intercepted by Inertia, which waits for an
+                            Inertia response the browser will never receive. Styled
+                            to match Button variant="outline" size="sm". */}
+                        <div className="mt-4 flex items-center justify-center gap-2">
+                            {exportFormats.map((fmt) => (
+                                <a
+                                    key={fmt}
+                                    href={route('admin.qr.inventory.download', { code: code.serial_number, format: fmt })}
+                                    className="inline-flex items-center justify-center rounded-soft border border-neutral-300 bg-transparent px-3 py-1.5 text-sm font-medium text-neutral-700 transition-all duration-150 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                                >
+                                    <Download className="mr-1.5 h-4 w-4" /> {t(`smart_qr.format_${fmt}`)}
+                                </a>
+                            ))}
+                        </div>
                     </Card>
                 </div>
             </div>

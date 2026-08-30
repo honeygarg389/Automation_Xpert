@@ -20,6 +20,7 @@ import fs from 'fs';
  */
 
 const posts = [];
+const deletes = [];
 
 vi.mock('@inertiajs/react', () => ({
     usePage: () => ({
@@ -29,7 +30,11 @@ vi.mock('@inertiajs/react', () => ({
         },
         url: '/admin/qr/inventory/AX-000001',
     }),
-    router: { post: (url, data, opts) => posts.push({ url, data, opts }), reload: vi.fn(), get: vi.fn(), delete: vi.fn() },
+    router: {
+        post: (url, data, opts) => posts.push({ url, data, opts }),
+        delete: (url, opts) => deletes.push({ url, opts }),
+        reload: vi.fn(), get: vi.fn(),
+    },
     useForm: (initial) => ({ data: initial, setData: vi.fn(), post: vi.fn(), patch: vi.fn(), processing: false, errors: {}, reset: vi.fn(), clearErrors: vi.fn(), transform: vi.fn() }),
     Head: () => null,
     Link: ({ href, children, ...p }) => <a href={href} {...p}>{children}</a>,
@@ -65,10 +70,24 @@ const assignment = {
     destination_phone: 'Front Desk Line',
 };
 
-const renderPage = (over = {}) =>
+/**
+ * The VALUE cell of one Overview row, found by its label.
+ *
+ * ⚠️ Needed because "Printed" legitimately appears twice once the fix lands —
+ * once in the status badge and once in this field. That agreement is the point,
+ * so a bare getByText('Printed') matches both and throws. Scoping to the row
+ * asserts the field itself rather than whichever element happens to be first.
+ */
+const fieldValue = (label) => {
+    const labelEl = Array.from(document.querySelectorAll('span'))
+        .find((el) => el.textContent === label);
+    return labelEl?.nextElementSibling?.textContent ?? null;
+};
+
+const renderPage = ({ code: codeOver, ...over } = {}) =>
     render(
         <SmartQrCodeShow
-            code={code}
+            code={codeOver ?? code}
             batch={batch}
             currentAssignment={null}
             statuses={['generated', 'printed', 'damaged', 'lost', 'retired']}
@@ -78,7 +97,11 @@ const renderPage = (over = {}) =>
         />,
     );
 
-beforeEach(() => { posts.length = 0; });
+beforeEach(() => {
+    posts.length = 0;
+    deletes.length = 0;
+    window.confirm = vi.fn(() => true);
+});
 
 describe('header', () => {
     it('shows the serial in the title', () => {
@@ -115,6 +138,67 @@ describe('overview panel', () => {
     it('shows the not-printed state for a code with no printed_at', () => {
         renderPage();
         expect(screen.getByText('Not printed')).toBeTruthy();
+    });
+});
+
+describe('printed status — cannot contradict the badge', () => {
+    /**
+     * ⚠️ THE REPORTED SYMPTOM. A code whose status is `printed` but whose
+     * printed_at was never written (Change Stage before the fix, or any historic
+     * row) must not read "Not printed" beside a badge saying "Printed".
+     */
+    it('reads Printed for status=printed even with no timestamp', () => {
+        renderPage({ code: { ...code, status: 'printed', printed_at: null } });
+        expect(fieldValue('Printed status')).toBe('Printed');
+    });
+
+    /** The other direction: printed then damaged keeps reading as printed. */
+    it('reads Printed when a timestamp exists but the status has moved on', () => {
+        renderPage({ code: { ...code, status: 'damaged', printed_at: '2026-03-12T00:00:00Z' } });
+        expect(fieldValue('Printed status')).toContain('Printed');
+        expect(fieldValue('Printed status')).not.toBe('Not printed');
+    });
+
+    it('reads Not printed only when neither signal is set', () => {
+        renderPage({ code: { ...code, status: 'generated', printed_at: null } });
+        expect(fieldValue('Printed status')).toBe('Not printed');
+    });
+
+    /**
+     * ⚠️ No invented date. A code known printed without a timestamp says so
+     * without fabricating when.
+     */
+    it('omits the date when the code is printed but has no timestamp', () => {
+        renderPage({ code: { ...code, status: 'printed', printed_at: null } });
+        expect(fieldValue('Printed status')).toBe('Printed');
+        expect(fieldValue('Printed status')).not.toContain('·');
+    });
+});
+
+describe('active status row', () => {
+    /**
+     * ⚠️ POSITION IS THE REQUIREMENT: Batch → Active status → Printed status.
+     * Asserted by DOM order, since "the row exists" would pass wherever it sat.
+     */
+    it('sits between Batch and Printed status when assigned', () => {
+        renderPage({ currentAssignment: assignment });
+
+        const labels = Array.from(document.querySelectorAll('span'))
+            .map((el) => el.textContent)
+            .filter((t) => ['Batch', 'Active status', 'Printed status'].includes(t));
+
+        expect(labels).toEqual(['Batch', 'Active status', 'Printed status']);
+    });
+
+    it('is absent entirely when the code is unassigned', () => {
+        renderPage();
+        expect(screen.queryByText('Active status')).toBeNull();
+    });
+
+    /** ⚠️ The ASSIGNMENT's vocabulary (active/inactive/ended), not the code's. */
+    it('renders the assignment status, not the code status', () => {
+        renderPage({ currentAssignment: { ...assignment, status: 'inactive' } });
+        expect(screen.getByText('Inactive')).toBeTruthy();
     });
 });
 
@@ -157,32 +241,92 @@ describe('assignment block — assigned', () => {
     });
 });
 
-describe('export dropdown', () => {
+describe('download buttons', () => {
     /**
-     * ⚠️ REAL ANCHORS. Dropdown.Item defaults to <button>, so an href on it
-     * renders a button that does nothing; an Inertia Link would intercept the
-     * navigation and wait for an Inertia response a file download never sends.
+     * ⚠️ THEY MOVED OUT OF THE HEADER. The dropdown put the format choice three
+     * panels away from the image it produces; these now sit under it. Asserted by
+     * DOM POSITION, not merely by existence — a test that only checked "an anchor
+     * exists" would pass with them back in the header.
      */
-    it('offers one download anchor per format, each carrying its format param', () => {
+    it('renders the download anchors after the preview image in DOM order', () => {
         renderPage();
-        // ⚠️ Dropdown.Content mounts only while open — asserting before the
-        // click finds nothing and passes any "not present" check by accident.
-        fireEvent.click(screen.getByText('Export QR'));
+
+        const img = screen.getByAltText('AX-000001');
+        const anchors = screen.getAllByRole('link')
+            .filter((a) => (a.getAttribute('href') || '').includes('inventory.download'));
+
+        expect(anchors.length).toBe(3);
+        for (const a of anchors) {
+            const after = img.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING;
+            expect(after).toBeTruthy();
+        }
+    });
+
+    it('offers exactly one anchor per format, each carrying its format param', () => {
+        renderPage();
+        const hrefs = screen.getAllByRole('link')
+            .map((a) => a.getAttribute('href') || '')
+            .filter((h) => h.includes('inventory.download'));
 
         for (const fmt of ['svg', 'png', 'pdf']) {
-            const anchors = screen.getAllByRole('link')
-                .filter((a) => (a.getAttribute('href') || '').includes('inventory.download'));
-            expect(anchors.some((a) => a.getAttribute('href').includes(fmt))).toBe(true);
+            expect(hrefs.filter((h) => h.includes(fmt)).length).toBe(1);
         }
+    });
+
+    /**
+     * ⚠️ NO DROPDOWN ANY MORE. Pins the removal, so re-adding one would fail
+     * rather than silently leaving two ways to do the same thing.
+     */
+    it('no longer offers an Export QR dropdown in the header', () => {
+        renderPage();
+        expect(screen.queryByText('Export QR')).toBeNull();
     });
 
     it('points at the admin download route, not the client one', () => {
         renderPage();
-        fireEvent.click(screen.getByText('Export QR'));
-        const anchors = screen.getAllByRole('link').map((a) => a.getAttribute('href') || '');
-        const dl = anchors.filter((h) => h.includes('download'));
+        const dl = screen.getAllByRole('link')
+            .map((a) => a.getAttribute('href') || '')
+            .filter((h) => h.includes('download'));
         expect(dl.length).toBeGreaterThan(0);
         expect(dl.every((h) => h.includes('admin.qr.inventory.download'))).toBe(true);
+    });
+});
+
+describe('assign / unassign — mutually exclusive', () => {
+    it('shows Assign QR and not Unassign QR when unassigned', () => {
+        renderPage();
+        expect(screen.queryByText('Assign QR')).not.toBeNull();
+        expect(screen.queryByText('Unassign QR')).toBeNull();
+    });
+
+    it('shows Unassign QR and not Assign QR when assigned', () => {
+        renderPage({ currentAssignment: assignment });
+        expect(screen.queryByText('Unassign QR')).not.toBeNull();
+        expect(screen.queryByText('Assign QR')).toBeNull();
+    });
+
+    /**
+     * ⚠️ REUSES the existing endpoint, keyed on the ASSIGNMENT's uuid — its route
+     * key — not the code's serial or id. A wrong key 404s at route binding, before
+     * the permission check runs.
+     */
+    it('unassign calls the existing assignments.destroy route with the assignment uuid', () => {
+        renderPage({ currentAssignment: assignment });
+        fireEvent.click(screen.getByText('Unassign QR'));
+
+        expect(deletes.length).toBe(1);
+        expect(deletes[0].url).toContain('admin.qr.assignments.destroy');
+        expect(deletes[0].url).toContain('a-uuid');
+        expect(deletes[0].url).not.toContain('AX-000001');
+    });
+
+    /** ⚠️ Unassigning a live sticker has no undo, so it is confirmed first. */
+    it('does not unassign when the confirm is declined', () => {
+        window.confirm = vi.fn(() => false);
+        renderPage({ currentAssignment: assignment });
+        fireEvent.click(screen.getByText('Unassign QR'));
+
+        expect(deletes.length).toBe(0);
     });
 });
 

@@ -10,6 +10,7 @@ use App\Models\Workspace;
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\SmartQr\Models\SmartQrAssignment;
 use App\Modules\SmartQr\Models\SmartQrCode;
+use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Support\SmartQrStatus;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -321,6 +322,131 @@ class SmartQrInventoryDetailTest extends TestCase
             ->get(route('admin.qr.inventory.download', $code->serial_number))
             ->assertOk()
             ->assertHeader('Content-Type', 'image/svg+xml');
+    }
+
+    // ══ printed_at / status coherence ══════════════════════════════════════
+
+    /**
+     * ⚠️ THE REPORTED BUG. Change Stage → Printed set the status and nothing else,
+     * so the badge said "Printed" while the panel beside it said "Not printed" —
+     * because the display reads printed_at. Three such rows existed in the
+     * development database, all produced by this action.
+     */
+    #[Test]
+    public function changing_stage_to_printed_records_the_print_timestamp(): void
+    {
+        $code = SmartQrCode::factory()->create(['status' => 'generated', 'printed_at' => null]);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post(route('admin.qr.inventory.change-status'), [
+                'code_ids' => [$code->id],
+                'status' => 'printed',
+            ])->assertSessionHasNoErrors();
+
+        $fresh = $code->fresh();
+        $this->assertSame('printed', $fresh->status);
+        $this->assertNotNull($fresh->printed_at,
+            'status=printed with no printed_at is the exact contradiction this fix removes.');
+    }
+
+    /**
+     * ⚠️ NEVER OVERWRITTEN. Re-selecting Printed on an already-printed code must
+     * not rewrite when the print actually happened.
+     */
+    #[Test]
+    public function changing_stage_to_printed_again_does_not_rewrite_the_timestamp(): void
+    {
+        $original = now()->subDays(30);
+        $code = SmartQrCode::factory()->create(['status' => 'printed', 'printed_at' => $original]);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post(route('admin.qr.inventory.change-status'), [
+                'code_ids' => [$code->id],
+                'status' => 'printed',
+            ]);
+
+        $this->assertSame(
+            $original->toDateTimeString(),
+            $code->fresh()->printed_at->toDateTimeString(),
+            'An existing print timestamp is historical fact and must not move.'
+        );
+    }
+
+    /**
+     * ⚠️ HISTORICAL RETENTION, AND THE REASON THE FIX IS ASYMMETRIC. A code
+     * printed and later damaged keeps its timestamp: SmartQrDeletability
+     * ::everPrinted() reads it to REFUSE deletion, so clearing it would report a
+     * genuinely printed sticker as never-printed and let destroy() take it —
+     * a cosmetic bug turned destructive.
+     */
+    #[Test]
+    public function moving_away_from_printed_never_clears_the_timestamp(): void
+    {
+        $code = SmartQrCode::factory()->create(['status' => 'printed', 'printed_at' => now()->subDay()]);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post(route('admin.qr.inventory.change-status'), [
+                'code_ids' => [$code->id],
+                'status' => 'damaged',
+            ]);
+
+        $fresh = $code->fresh();
+        $this->assertSame('damaged', $fresh->status);
+        $this->assertNotNull($fresh->printed_at, 'printed_at is history, not current state.');
+        $this->assertTrue(app(SmartQrDeletability::class)->everPrinted($fresh),
+            'Delete-protection must survive a status change away from printed.');
+    }
+
+    /**
+     * ⚠️ Only the print event is recorded. Selecting any OTHER status must not
+     * stamp printed_at onto a code that was never printed.
+     */
+    #[Test]
+    public function changing_stage_to_a_non_printed_status_does_not_stamp_printed_at(): void
+    {
+        $admin = $this->admin();
+
+        foreach (['generated', 'damaged', 'lost', 'retired'] as $status) {
+            $code = SmartQrCode::factory()->create(['status' => 'generated', 'printed_at' => null]);
+
+            $this->actingAs($admin, 'admin')
+                ->post(route('admin.qr.inventory.change-status'), [
+                    'code_ids' => [$code->id],
+                    'status' => $status,
+                ]);
+
+            $this->assertNull($code->fresh()->printed_at, "[{$status}] must not stamp printed_at.");
+        }
+    }
+
+    /** Bulk stays bulk: every selected code gets the timestamp, not just the first. */
+    #[Test]
+    public function a_bulk_stage_change_stamps_every_selected_code(): void
+    {
+        $codes = SmartQrCode::factory()->count(3)->create(['status' => 'generated', 'printed_at' => null]);
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post(route('admin.qr.inventory.change-status'), [
+                'code_ids' => $codes->pluck('id')->all(),
+                'status' => 'printed',
+            ]);
+
+        foreach ($codes as $c) {
+            $this->assertNotNull($c->fresh()->printed_at, "{$c->serial_number} was missed.");
+        }
+    }
+
+    // ══ Active status ══════════════════════════════════════════════════════
+
+    #[Test]
+    public function the_assignment_status_is_exposed_for_the_active_status_row(): void
+    {
+        ['code' => $code] = $this->assignedElsewhere();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->get(route('admin.qr.inventory.show', $code->serial_number))
+            ->assertInertia(fn ($page) => $page
+                ->where('currentAssignment.status', SmartQrStatus::ASSIGNMENT_ACTIVE));
     }
 
     // ══ Permissions ════════════════════════════════════════════════════════
