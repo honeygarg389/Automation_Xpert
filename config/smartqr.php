@@ -43,4 +43,14 @@ return [
     */
     'scan_retention_days' => (int) env('SMART_QR_SCAN_RETENTION_DAYS', 90),
 
+    /*
+     * How long a built export ZIP stays on disk.
+     *
+     * ⚠️ MUCH SHORTER THAN scan_retention_days, and deliberately: a scan is
+     * customer data that reports depend on, while an export is a rebuildable
+     * convenience file. 58 archives had accumulated to 170 MB in development
+     * with nothing ever deleting them.
+     */
+    'export_retention_days' => (int) env('SMART_QR_EXPORT_RETENTION_DAYS', 7),
+
 ];

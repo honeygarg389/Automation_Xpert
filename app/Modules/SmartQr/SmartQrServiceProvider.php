@@ -3,6 +3,7 @@
 namespace App\Modules\SmartQr;
 
 use App\Modules\SmartQr\Console\Commands\AggregateSmartQrStatsCommand;
+use App\Modules\SmartQr\Console\Commands\PruneSmartQrExportsCommand;
 use App\Modules\SmartQr\Console\Commands\PruneSmartQrScansCommand;
 use Illuminate\Support\ServiceProvider;
 
@@ -32,6 +33,7 @@ class SmartQrServiceProvider extends ServiceProvider
             $this->commands([
                 AggregateSmartQrStatsCommand::class,
                 PruneSmartQrScansCommand::class,
+                PruneSmartQrExportsCommand::class,
             ]);
         }
     }

@@ -16,6 +16,7 @@ use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -40,6 +41,14 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class QrInventoryController extends Controller
 {
     private const EXPORT_DIR = 'smartqr-exports';
+
+    /**
+     * Rows per page in the inventory table.
+     *
+     * ⚠️ Named rather than inline so the number the controller paginates by and
+     * the number anything else assumes cannot drift apart silently.
+     */
+    private const CODES_PER_PAGE = 25;
 
     public function index(Request $request): Response
     {
@@ -91,7 +100,7 @@ class QrInventoryController extends Controller
                 fn ($a) => $unscoped($a)->where('qr_type', $v)
             ))
             ->orderBy('serial_number')
-            ->paginate(50)
+            ->paginate(self::CODES_PER_PAGE)
             ->withQueryString();
 
         return Inertia::render('Admin/SmartQr/Inventory/Index', [
@@ -118,7 +127,31 @@ class QrInventoryController extends Controller
                 ->zippedBytesPerCode(SmartQrBatch::whereNotNull('logo_path')->exists()),
             'exportMaxCodes' => GenerateQrExportJob::MAX_CODES,
             'exportFormats' => GenerateQrExportJob::FORMATS,
-            'readyExports' => $this->readyExports(),
+            'readyExports' => $this->readyExports($request),
+
+            // ⚠️ THE LIVENESS SIGNAL FOR THE READY-EXPORTS AUTO-REFRESH, and it
+            // comes from the QUEUE because nothing else here can answer it.
+            //
+            // The batch detail page polls on `batch.status`, a column the job
+            // moves. This page has no equivalent: the ad-hoc inventory export
+            // dispatches GenerateQrExportJob and creates NO smart_qr_exports row
+            // (that table's batch_id is NOT NULL, so an export spanning batches
+            // has nowhere to live). The archive simply appears on disk when the
+            // job finishes.
+            //
+            // ⚠️ Asking the jobs table instead means the signal SURVIVES A PAGE
+            // RELOAD and sees exports queued by anyone — a flash-based "you just
+            // clicked export" flag would do neither. It also covers batch-scoped
+            // exports, which write into this same directory and therefore show
+            // up in this same panel.
+            //
+            // ⚠️ A LIKE over `payload`, which is a text column with no index.
+            // Measured at ~1 ms against this installation, where `jobs` drains to
+            // empty; it is a scan of a table whose whole purpose is to stay small.
+            // If that ever stops being true, this is the line to revisit.
+            'exportInFlight' => DB::table('jobs')
+                ->where('payload', 'like', '%GenerateQrExportJob%')
+                ->exists(),
 
             // ⚠️ ADDED IN SLICE 3b, and it is a gap 3a did not notice.
             //
@@ -527,50 +560,143 @@ class QrInventoryController extends Controller
      *
      * @return array<int, array{name: string, size: int, built_at: string}>
      */
-    private function readyExports(): array
+    /** Newest archives first, capped, then paginated for display. */
+    private const EXPORT_LIST_MAX = 20;
+
+    private const EXPORT_PER_PAGE = 5;
+
+    /**
+     * The Ready Exports panel — a paginated view over a DIRECTORY, not a table.
+     *
+     * ⚠️ SORTED ON lastModified(), NOT THE FORMATTED STRING. This sorted by
+     * `built_at`, which is 'Y-m-d H:i' — minute precision. Lexicographic order
+     * happens to match chronological there, so it was not wrong, but archives
+     * built in the same minute ordered arbitrarily among themselves. A 20-part
+     * export writes all its parts inside one minute, and at five per page that
+     * decides which ones an admin sees first. The integer timestamp has no ties.
+     *
+     * ⚠️ THE CAP IS PRESENTATION ONLY. downloadExport() no longer consults this
+     * list, so a file falling off the end stays downloadable — it is simply not
+     * listed. Retention, not truncation, is what removes files now
+     * (smartqr:prune-exports).
+     *
+     * ⚠️ Paginated in PHP rather than by the database, because the source is a
+     * disk glob. Shaped to match Laravel's paginator JSON so the page can use
+     * the same <Pagination> component every other admin list uses.
+     *
+     * @return array{data: list<array{name: string, size: int, built_at: string}>, current_page: int, last_page: int, per_page: int, total: int}
+     */
+    private function readyExports(Request $request): array
     {
         $disk = Storage::disk('local');
 
-        if (! $disk->exists(self::EXPORT_DIR)) {
-            return [];
+        $all = $disk->exists(self::EXPORT_DIR)
+            ? collect($disk->files(self::EXPORT_DIR))
+                ->filter(fn (string $f) => str_ends_with($f, '.zip'))
+                ->map(fn (string $f) => [
+                    'name' => basename($f),
+                    'size' => $disk->size($f),
+                    'modified' => $disk->lastModified($f),
+                ])
+                ->sortByDesc('modified')
+                ->take(self::EXPORT_LIST_MAX)
+                ->values()
+            : collect();
+
+        $lastPage = max(1, (int) ceil($all->count() / self::EXPORT_PER_PAGE));
+
+        // Clamped rather than trusted: ?export_page=999 should land on the last
+        // page, not render an empty panel that looks like "no exports".
+        $page = min($lastPage, max(1, (int) $request->query('export_page', 1)));
+
+        // ⚠️ SHAPED LIKE A LARAVEL PAGINATOR, links included, because the shared
+        // <Pagination> component returns NULL when `links` is empty — a
+        // hand-rolled current/last pair renders nothing at all. Building the
+        // array here means the panel reuses the same control every other admin
+        // list uses instead of a second one that drifts.
+        //
+        // ⚠️ fullUrlWithQuery PRESERVES THE INVENTORY FILTERS. Paging the export
+        // panel must not silently clear the search, batch or status the admin
+        // set on the table above it.
+        $url = fn (int $p) => $request->fullUrlWithQuery(['export_page' => $p]);
+
+        $links = [['url' => $page > 1 ? $url($page - 1) : null, 'label' => '&laquo; Previous', 'active' => false]];
+
+        for ($p = 1; $p <= $lastPage; $p++) {
+            $links[] = ['url' => $url($p), 'label' => (string) $p, 'active' => $p === $page];
         }
 
-        return collect($disk->files(self::EXPORT_DIR))
-            ->filter(fn (string $f) => str_ends_with($f, '.zip'))
-            ->map(fn (string $f) => [
-                'name' => basename($f),
-                'size' => $disk->size($f),
-                'built_at' => date('Y-m-d H:i', $disk->lastModified($f)),
-            ])
-            ->sortByDesc('built_at')
-            ->take(20)
-            ->values()
-            ->all();
+        $links[] = ['url' => $page < $lastPage ? $url($page + 1) : null, 'label' => 'Next &raquo;', 'active' => false];
+
+        $offset = ($page - 1) * self::EXPORT_PER_PAGE;
+
+        return [
+            'data' => $all
+                ->slice($offset, self::EXPORT_PER_PAGE)
+                ->map(fn (array $f) => [
+                    'name' => $f['name'],
+                    'size' => $f['size'],
+                    'built_at' => date('Y-m-d H:i', $f['modified']),
+                ])
+                ->values()
+                ->all(),
+            'links' => $links,
+            'current_page' => $page,
+            'last_page' => $lastPage,
+            'per_page' => self::EXPORT_PER_PAGE,
+            'total' => $all->count(),
+            'from' => $all->isEmpty() ? null : $offset + 1,
+            'to' => min($offset + self::EXPORT_PER_PAGE, $all->count()),
+        ];
     }
 
-    public function exports(): JsonResponse
+    public function exports(Request $request): JsonResponse
     {
-        return response()->json(['exports' => $this->readyExports()]);
+        return response()->json(['exports' => $this->readyExports($request)]);
     }
 
     /**
-     * ⚠️ `$name` is BASENAME-ONLY and re-validated against the listing.
+     * ⚠️ `$name` is BASENAME-ONLY and validated against the DISK.
      *
      * A route parameter interpolated into a storage path is a directory
      * traversal waiting to happen — `..%2f..%2f.env` is the classic. Matching
      * the request against the files we already decided to expose means a path
      * that is not in that list cannot be fetched, whatever it contains.
      */
+    /**
+     * ⚠️ VALIDATES EXISTENCE, NOT THE DISPLAY LIST — and that separation is the
+     * whole point of this method's shape.
+     *
+     * It used to check the requested name against readyExports(), which is
+     * TRUNCATED for display. So the cap silently doubled as an authorization
+     * rule: any archive outside the window 404'd even though the file was right
+     * there. That is the defect batches.export-download was created to escape
+     * (see QrBatchController::downloadExport and the routes file), and lowering
+     * the display cap would have made it bite far more often.
+     *
+     * A listing is a presentation choice. Whether a file may be downloaded is
+     * not, and the two must not share a function.
+     *
+     * ⚠️ basename() FIRST, then a .zip check, then existence. basename() strips
+     * any traversal (`../../.env`), the extension check keeps this endpoint from
+     * serving anything else that lands in the directory, and exists() is asked of
+     * the disk rather than inferred from a list.
+     */
     public function downloadExport(string $name): StreamedResponse
     {
         $safe = basename($name);
 
-        $known = collect($this->readyExports())->firstWhere('name', $safe);
-
-        if ($known === null) {
+        if (! str_ends_with($safe, '.zip')) {
             abort(404);
         }
 
-        return Storage::disk('local')->download(self::EXPORT_DIR.'/'.$safe);
+        $disk = Storage::disk('local');
+        $relative = self::EXPORT_DIR.'/'.$safe;
+
+        if (! $disk->exists($relative)) {
+            abort(404);
+        }
+
+        return $disk->download($relative);
     }
 }

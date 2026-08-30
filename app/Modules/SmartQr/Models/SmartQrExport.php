@@ -45,12 +45,24 @@ class SmartQrExport extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    /**
+     * Built successfully, then pruned off disk past the retention window.
+     *
+     * ⚠️ A FOURTH TERMINAL STATE, not a reuse of FAILED. The export worked; its
+     * archive was later reclaimed. Calling that "failed" would tell an admin
+     * something went wrong when nothing did, and would hide real failures among
+     * routine housekeeping. The row survives so the batch page can still say an
+     * export happened — only `path` is nulled, because the file is gone.
+     */
+    public const STATUS_EXPIRED = 'expired';
+
     /** @var list<string> */
     public const STATUSES = [
         self::STATUS_QUEUED,
         self::STATUS_PROCESSING,
         self::STATUS_READY,
         self::STATUS_FAILED,
+        self::STATUS_EXPIRED,
     ];
 
     protected $fillable = [

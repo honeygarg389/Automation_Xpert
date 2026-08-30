@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, ConfirmDestructiveModal, Input, Modal, Pagination, Select } from '@/Components/ui';
@@ -30,6 +30,30 @@ function formatBytes(bytes) {
     return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
 
+/**
+ * ═══ AUTO-REFRESH WHILE AN EXPORT IS BUILDING ═══════════════════════════════
+ *
+ * Same shape as Batches/Show.jsx — guard clause, interval, router.reload({only}),
+ * clearInterval, keyed on liveness — so there is one polling pattern in this
+ * module rather than two.
+ *
+ * ⚠️ THE LIVENESS SOURCE DIFFERS, AND IT HAS TO. That page reads batch.status, a
+ * column the job writes. An ad-hoc inventory export has no such row: it just
+ * queues a job and an archive appears. So the server answers "is an export in
+ * flight" from the QUEUE instead — see exportInFlight in QrInventoryController.
+ */
+const POLL_INTERVAL_MS = 5000;
+
+/**
+ * ⚠️ A CAP, BECAUSE "STILL BUILDING" AND "NOTHING IS CONSUMING THE QUEUE" LOOK
+ * IDENTICAL FROM HERE — and on this page they look MORE identical than on the
+ * batch page, because a job sitting unclaimed in the table reads as in-flight.
+ * That is exactly the measured incident this codebase already has on record.
+ *
+ * 60 x 5s = 5 minutes, then the page says it stopped rather than spinning on.
+ */
+const MAX_POLL_ATTEMPTS = 60;
+
 export default function SmartQrInventoryIndex({
     codes,
     filters = {},
@@ -41,7 +65,8 @@ export default function SmartQrInventoryIndex({
     // rather than invents.
     exportBytesPerCode = { svg: 4495, png: 6809, pdf: 4984 },
     exportMaxCodes = 500,
-    readyExports = [],
+    readyExports = { data: [], links: [] },
+    exportInFlight = false,
 }) {
     const { t } = useTranslation();
     const page = usePage();
@@ -65,6 +90,47 @@ export default function SmartQrInventoryIndex({
 
     const [selected, setSelected] = useState([]);
     const [exportOpen, setExportOpen] = useState(false);
+
+    /**
+     * ⚠️ KEYED ON WHAT IS BEING WAITED FOR, not a bare boolean — the same shape
+     * Batches/Show.jsx uses, and for the same reason: a plain flag needs an
+     * effect to reset it, and setState inside an effect body is both a lint
+     * error and a cascading-render hazard. When exportInFlight flips, this key
+     * stops matching and polling resumes on its own.
+     */
+    const livenessKey = String(exportInFlight);
+    const [exhaustedFor, setExhaustedFor] = useState(null);
+    const pollExhausted = exhaustedFor === livenessKey;
+
+    /** A ref, not state: counting in state re-renders and rebuilds the interval. */
+    const attemptsRef = useRef(0);
+
+    useEffect(() => {
+        if (! exportInFlight || pollExhausted) return undefined;
+
+        attemptsRef.current = 0;
+
+        const id = setInterval(() => {
+            attemptsRef.current += 1;
+
+            if (attemptsRef.current > MAX_POLL_ATTEMPTS) {
+                setExhaustedFor(livenessKey);
+
+                return;
+            }
+
+            // ⚠️ Both props: the panel needs the new archive, and the guard needs
+            // to learn the queue has drained — reloading only readyExports would
+            // poll forever because exportInFlight would never change.
+            router.reload({
+                only: ['readyExports', 'exportInFlight'],
+                preserveScroll: true,
+                preserveState: true,
+            });
+        }, POLL_INTERVAL_MS);
+
+        return () => clearInterval(id);
+    }, [exportInFlight, pollExhausted, livenessKey]);
     const [exportFormat, setExportFormat] = useState('svg');
     const bytesPerCode = exportBytesPerCode;
     const overExportCap = selected.length > exportMaxCodes;
@@ -390,13 +456,24 @@ export default function SmartQrInventoryIndex({
                 "appear in storage". storage/app/private is not web-reachable,
                 so every archive ever built was unreachable by the admin who
                 asked for it. Four of them were sitting on this machine. */}
-            {readyExports.length > 0 && (
+            {/* ⚠️ ALSO SHOWN WHILE AN EXPORT IS BUILDING, not only once archives
+                exist. Gated on data.length alone, the very first export on an
+                installation renders nothing at all: the poll runs, the archive
+                arrives, and until it does the admin has no indication anything is
+                happening — which is precisely what the auto-refresh is for. */}
+            {(readyExports.data.length > 0 || exportInFlight) && (
                 <Card className="mt-4">
                     <h3 className="mb-3 text-sm font-semibold text-neutral-800 dark:text-neutral-100">
                         {t('smart_qr.ready_exports')}
                     </h3>
+                    {readyExports.data.length === 0 && exportInFlight && (
+                        <p className="py-2 text-sm text-neutral-500 dark:text-neutral-400">
+                            {t('smart_qr.export_building')}
+                        </p>
+                    )}
+
                     <ul className="divide-y divide-neutral-100 dark:divide-neutral-700">
-                        {readyExports.map((x) => (
+                        {readyExports.data.map((x) => (
                             <li key={x.name} className="flex items-center justify-between py-2 text-sm">
                                 <span className="font-mono text-neutral-700 dark:text-neutral-200">{x.name}</span>
                                 <span className="flex items-center gap-4">
@@ -413,6 +490,30 @@ export default function SmartQrInventoryIndex({
                             </li>
                         ))}
                     </ul>
+
+                    {/* ⚠️ THE SAME <Pagination> THE TABLE ABOVE USES. The list is
+                        built from a disk glob rather than a query, so the
+                        controller shapes it like a Laravel paginator — links
+                        included, because this component renders nothing without
+                        them. Five per page, twenty most-recent in total.
+
+                        ⚠️ Paging here no longer changes what is DOWNLOADABLE.
+                        downloadExport() checks the disk, not this list, so an
+                        archive off the end of page four is still reachable by
+                        URL — it is simply not shown. */}
+                    <Pagination data={readyExports} />
+
+                    {/* ⚠️ ONLY AFTER THE CAP, and only while the queue still says
+                        work is pending — the one state an admin cannot infer from
+                        anything else on screen. The panel looks identical whether
+                        a job is building or nothing is consuming the queue. Says
+                        the page stopped asking, not that the export failed: it
+                        does not know which. */}
+                    {pollExhausted && exportInFlight && (
+                        <p role="status" className="mt-3 text-sm text-amber-700 dark:text-amber-300">
+                            {t('smart_qr.poll_stalled')}
+                        </p>
+                    )}
                 </Card>
             )}
 

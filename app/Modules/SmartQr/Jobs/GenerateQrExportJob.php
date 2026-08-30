@@ -6,12 +6,14 @@ use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Models\SmartQrExport;
 use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use ZipArchive;
 
 /**
@@ -57,6 +59,12 @@ class GenerateQrExportJob implements ShouldQueue
      */
     public const MAX_CODES = 500;
 
+    /** The one directory both export kinds write to. */
+    public const DIR = 'smartqr-exports';
+
+    /** Ceiling on the daily sequence number — a guard, not a quota. */
+    private const MAX_PER_DAY = 999;
+
     /**
      * ⚠️ PDF was withheld from the bulk export on an ASSUMPTION that Dompdf
      * would be too slow for 500 codes. Measured: 0.04 s and 6 KB per code, so
@@ -97,6 +105,53 @@ class GenerateQrExportJob implements ShouldQueue
      *
      * @param  array<string, mixed>  $attributes
      */
+    /**
+     * Claim an unused `Export_30-Aug-2026_01.zip` name, atomically.
+     *
+     * ═══ ⚠️ WHY THIS IS NOT count(files)+1 ═════════════════════════════════
+     *
+     * A 20-part batch export dispatches twenty jobs at once. Counting the
+     * directory and adding one is a read followed by a write with nothing in
+     * between: two workers counting 3 both pick 04, and the second `put()`
+     * OVERWRITES the first worker's archive. Nothing errors — an admin simply
+     * downloads one part twice and never receives the other.
+     *
+     * `fopen($path, 'x')` fails if the file exists and is atomic on a local
+     * filesystem, so the first worker to claim a number owns it. The loser
+     * moves to the next number rather than clobbering.
+     *
+     * ⚠️ THE CLAIMED FILE IS AN EMPTY PLACEHOLDER until the archive is moved
+     * over it on success, and the catch block deletes it on failure. That is
+     * why the name is claimed HERE and not after the ZIP is built: claiming
+     * late reopens the race it exists to close.
+     *
+     * ⚠️ ONE NAMING POINT FOR BOTH EXPORT KINDS. The inventory screen's ad-hoc
+     * export and the batch-scoped export both dispatch THIS job, so the format
+     * cannot drift between them.
+     */
+    private static function claimFilename(Filesystem $disk): string
+    {
+        $date = now()->format('j-M-Y');
+
+        for ($n = 1; $n <= self::MAX_PER_DAY; $n++) {
+            $relative = sprintf('%s/Export_%s_%02d.zip', self::DIR, $date, $n);
+            $handle = @fopen($disk->path($relative), 'x');
+
+            if ($handle !== false) {
+                fclose($handle);
+
+                return $relative;
+            }
+        }
+
+        // 999 archives in one day is not a naming problem, it is a runaway
+        // caller. Failing loudly beats silently reusing a name.
+        throw new \RuntimeException(sprintf(
+            'Exhausted %d export filenames for %s.', self::MAX_PER_DAY, $date
+        ));
+    }
+
+    /** @param  array<string, mixed>  $attributes */
     private function track(array $attributes): void
     {
         if ($this->exportId === null) {
@@ -116,9 +171,10 @@ class GenerateQrExportJob implements ShouldQueue
         // replayed from a queue payload written before the limit existed.
         $ids = array_slice($this->codeIds, 0, self::MAX_CODES);
 
-        $relative = 'smartqr-exports/'.now()->format('Ymd-His').'-'.bin2hex(random_bytes(4)).'.zip';
         $disk = Storage::disk('local');
-        $disk->makeDirectory('smartqr-exports');
+        $disk->makeDirectory(self::DIR);
+
+        $relative = self::claimFilename($disk);
 
         // ⚠️ Built at a TEMPORARY path and moved on success, so a partial
         // archive never occupies the name a download would resolve.
@@ -185,7 +241,22 @@ class GenerateQrExportJob implements ShouldQueue
             // ⚠️ LESSON 2 + 3. Clean up the partial artefact, then record the
             // reason OUTSIDE the cleanup so it survives, then rethrow so the
             // queue marks the job failed rather than silently succeeding.
-            @$zip->close();
+            // ⚠️ `@` DOES NOT SUPPRESS EXCEPTIONS IN PHP 8 — only diagnostics.
+            //
+            // This was `@$zip->close();`. Closing an already-closed archive
+            // throws ValueError('Invalid or uninitialized Zip object'), and it
+            // threw from inside the catch — so the ORIGINAL failure was replaced
+            // by a misleading one, and every line below (the Log::error and the
+            // track(FAILED)) never ran. A genuinely failed export therefore
+            // stayed `processing` forever with nothing in the log.
+            //
+            // Measured: first close() returns true, second throws.
+            try {
+                $zip->close();
+            } catch (\Throwable) {
+                // Already closed, or never opened. Either way it is not the
+                // failure worth reporting — $e is.
+            }
 
             @unlink($temp);
 
@@ -223,5 +294,37 @@ class GenerateQrExportJob implements ShouldQueue
             'format' => $format,
             'admin_id' => $this->adminId,
         ]);
+    }
+
+    /**
+     * ⚠️ THE ROW WOULD OTHERWISE BE STRANDED FOREVER.
+     *
+     * handle()'s own catch records FAILED and rethrows — but it can only run if
+     * handle() runs. MaxAttemptsExceededException and the queue's timeout are
+     * raised by the WORKER, before or instead of handle(), so nothing inside it
+     * ever executes and the row keeps whatever status it last held: `queued` if
+     * the job was never picked up, `processing` if it timed out mid-build.
+     *
+     * Five such rows existed in development (ids 5-9, all `queued`, no file),
+     * left by a worker that was up but consuming nothing. Nothing in the
+     * application could ever move them, and the batch page showed them as
+     * pending indefinitely.
+     *
+     * ⚠️ Only touches rows that are still in flight. A row already FAILED by
+     * handle()'s catch keeps that reason — this hook must not overwrite the
+     * specific message with a generic one.
+     */
+    public function failed(?\Throwable $e): void
+    {
+        if ($this->exportId === null) {
+            return;
+        }
+
+        SmartQrExport::whereKey($this->exportId)
+            ->whereIn('status', [SmartQrExport::STATUS_QUEUED, SmartQrExport::STATUS_PROCESSING])
+            ->update([
+                'status' => SmartQrExport::STATUS_FAILED,
+                'error' => Str::limit($e?->getMessage() ?? 'The export job failed without reaching the builder.', 500),
+            ]);
     }
 }
