@@ -347,7 +347,12 @@ export default function AssignQrModal({ show, onClose, onAssigned, codeIds = [],
                         {t('common.cancel')}
                     </Button>
                     <Button type="submit" disabled={processing || codeIds.length === 0}>
-                        {t('smart_qr.assign_confirm', { count: codeIds.length })}
+                        {/* ⚠️ STATIC, and reuses the header button's key rather than a
+                            counted string of its own. The count is already stated
+                            in the subtitle above; repeating it on the button made
+                            the primary action read differently for one code than
+                            for fifty, for no benefit. */}
+                        {t('smart_qr.assign_qr')}
                     </Button>
                 </Modal.Footer>
             </form>

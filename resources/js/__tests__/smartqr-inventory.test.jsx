@@ -201,6 +201,34 @@ describe('DEFECT 2 — the checkbox focus ring must not be clipped', () => {
     });
 });
 
+describe('assign modal — static submit label', () => {
+    /**
+     * ⚠️ ASSERTED IN THIS FILE'S KEY CONVENTION, and it still discriminates.
+     * The t() mock here returns the raw key, and appends ":<count>" when a count
+     * option is passed — so the OLD code rendered "smart_qr.assign_confirm:5" and
+     * the new one renders "smart_qr.assign_qr". The absence of the count suffix
+     * is the whole point of the change, and this harness shows it directly.
+     *
+     * ⚠️ The rendered VALUE ("Assign QR") cannot be checked here — that needs a
+     * mock reading en.json, which smartqr-inventory-detail.test.jsx does. Both
+     * halves are covered, in the file able to see each.
+     *
+     * Two counts, because a single-count assertion passes against a string that
+     * still interpolates.
+     */
+    it.each([[[1]], [[1, 2, 3, 4, 5]]])('is the same key at any count: %j', (ids) => {
+        render(<AssignQrModal show onClose={vi.fn()} codeIds={ids} workspaces={[{ id: 7, name: 'Main' }]} />);
+
+        const submit = Array.from(document.body.querySelectorAll('button'))
+            .find((b) => b.getAttribute('type') === 'submit');
+
+        expect(submit).toBeDefined();
+        expect(submit.textContent.trim()).toBe('smart_qr.assign_qr');
+        expect(submit.textContent).not.toMatch(/\d/);
+        expect(submit.textContent).not.toContain('assign_confirm');
+    });
+});
+
 describe('DEFECT 3 — the QR type picker must be the shared Select', () => {
     it('renders a <select> with the R-3 vocabulary, not a datalist', () => {
         render(<AssignQrModal show onClose={vi.fn()} codeIds={[1]} workspaces={[{ id: 7, name: 'Main' }]} />);

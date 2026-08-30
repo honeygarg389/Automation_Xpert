@@ -11,6 +11,7 @@ use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use App\Modules\SmartQr\Support\SmartQrStatus;
+use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -150,6 +152,209 @@ class QrInventoryController extends Controller
     }
 
     /**
+     * One code's detail page. §5.
+     *
+     * ⚠️ BOUND ON serial_number — SmartQrCode::getRouteKeyName() returns it, not
+     * `uuid` (batches) and not `id`. The serial is what is PRINTED, so it is what
+     * an operator holding a sticker can type into a URL.
+     *
+     * ⚠️ THE ID IS PASSED TO THE PAGE ANYWAY, and that is not redundant. Every
+     * action this page offers — Change Stage, Assign — reuses the existing BULK
+     * endpoints, whose validation is `exists:smart_qr_codes,id`. The serial gets
+     * you the page; the id is what the actions post.
+     *
+     * ⚠️ NAME / QR TYPE / MESSAGE / DESTINATION PHONE ARE NOT ON THE CODE. They
+     * live on the ASSIGNMENT, deliberately: a code is physical inventory that
+     * outlives any one tenancy, and a recycled sticker must not carry the
+     * previous customer's label. That is the same reasoning that removed
+     * `qr_type` from batch creation. The page therefore renders them only when
+     * `current_assignment` exists, rather than showing empty fields that imply
+     * inventory-level data which has nowhere to be stored.
+     *
+     * ⚠️ THE SCOPE REMOVALS BELOW ARE MEASURED NO-OPS ON THIS ROUTE, AND THAT
+     * IS RECORDED RATHER THAN ASSUMED — the same finding QrBatchController::show()
+     * documents for its loadCount() closures.
+     *
+     * Mutation-tested against this action: deleting the closure on
+     * `currentAssignment.channelAccount` changes NOTHING, because
+     * WorkspaceScope::apply() returns before attaching a constraint when
+     * `Auth::guard('admin')->check()` is true, and this route sits under
+     * `auth:admin` with no other entry point.
+     *
+     * `workspace` is doubly inert: Workspace carries no global scope at all —
+     * it IS the tenant — so there is nothing there to remove. Not written.
+     *
+     * ⚠️ WHAT IS LOAD-BEARING IS THE REMOVAL ON THE RELATION ITSELF,
+     * SmartQrAssignment::channelAccount(). Reverting that one fails a test,
+     * because the relation is also read outside an admin request (jobs, console,
+     * direct model use) where the scope is live and resolves it to NULL —
+     * "Destination Phone: —" reading as absent data rather than as a bug.
+     *
+     * The closure here is kept for the reason the batch controller keeps its
+     * own: it costs nothing, and it is correct against a future caller that is
+     * not admin-guard-only.
+     */
+    public function show(SmartQrCode $code): Response
+    {
+        $code->load([
+            'batch:id,uuid,batch_number,batch_name,prefix',
+            'currentAssignment' => fn ($q) => $q->withoutGlobalScope(WorkspaceScope::class),
+            'currentAssignment.workspace',
+            'currentAssignment.assignedUser',
+            'currentAssignment.channelAccount' => fn ($q) => $q->withoutGlobalScope(WorkspaceScope::class),
+        ]);
+
+        $assignment = $code->currentAssignment;
+        $channel = $assignment?->channelAccount;
+
+        // ═══ ⚠️ THE DIALABLE NUMBER IS NOT ON channel_accounts ═════════════════
+        //
+        // That table has display_name (the BUSINESS name), phone_number_id (Meta's
+        // opaque identifier) and business_account_id — and no phone column at all.
+        // The number lives on whatsapp_phone_numbers.display_phone, reached by
+        // matching phone_number_id, which carries a UNIQUE index there.
+        //
+        // This previously rendered `display_name ?? phone_number_id`. display_name
+        // is NOT NULL, so it always won and the field showed a company name under
+        // a "Destination phone" label — plausible enough that it read as data
+        // rather than as a bug.
+        //
+        // ⚠️ QUERIED HERE RATHER THAN VIA A RELATION ON ChannelAccount, and the
+        // direction is the reason. ChannelAccount lives in Shared; hanging a
+        // WhatsappPhoneNumber relation off it would make a shared model depend on
+        // a feature module for one consumer's display need. SmartQr is already the
+        // only module outside Whatsapp that reads this table, and it already does
+        // so from its own code — SmartQrRedirectResolver::dialableNumber(), whose
+        // query shape this mirrors.
+        //
+        // ⚠️ RAW, NOT NORMALISED. display_phone is stored free-form
+        // ("+91 88828 33998") and every UI consumer passes it through unchanged;
+        // only the redirect resolver strips it to digits, because wa.me demands
+        // that. A display panel is not that caller.
+        $destinationPhone = $channel?->phone_number_id === null
+            ? null
+            : WhatsappPhoneNumber::query()
+                ->where('phone_number_id', $channel->phone_number_id)
+                ->value('display_phone');
+
+        return Inertia::render('Admin/SmartQr/Inventory/Show', [
+            'code' => [
+                'id' => $code->id,
+                'serial_number' => $code->serial_number,
+                'status' => $code->status,
+                'printed_at' => $code->printed_at,
+                'created_at' => $code->created_at,
+
+                // ⚠️ The PUBLIC scan URL, built from the token — never the token
+                // on its own. It is the thing encoded in the artwork, and the
+                // page offers it for copy-to-clipboard so an admin can test a
+                // destination without a phone.
+                'public_url' => route('smartqr.scan', ['token' => $code->public_token]),
+            ],
+            'batch' => $code->batch ? [
+                'uuid' => $code->batch->uuid,
+                'batch_number' => $code->batch->batch_number,
+                'batch_name' => $code->batch->batch_name,
+            ] : null,
+            'currentAssignment' => $code->currentAssignment ? [
+                'uuid' => $code->currentAssignment->uuid,
+                'name' => $code->currentAssignment->name,
+                'qr_type' => $code->currentAssignment->qr_type,
+                'default_message' => $code->currentAssignment->default_message,
+                'status' => $code->currentAssignment->status,
+                'starts_at' => $code->currentAssignment->starts_at,
+                'expires_at' => $code->currentAssignment->expires_at,
+                'workspace_name' => $code->currentAssignment->workspace?->name,
+                'assigned_user_name' => $code->currentAssignment->assignedUser?->name,
+
+                // ⚠️ display_name first — channel_accounts has no plain phone
+                // column, and phone_number_id is a Meta identifier, not a number
+                // anybody can read off a screen. Falling back to it is better
+                // than a dash when the account was created without a label.
+                // ⚠️ NO FALLBACK TO display_name ON A MISS. A channel account
+                // whose phone_number_id matches no row yields null, and the page
+                // shows "—". Falling back to the business name would put
+                // confident-looking wrong data under a "phone" label, which is
+                // worse than an honest blank — it is the exact failure being fixed.
+                'destination_phone' => $destinationPhone,
+            ] : null,
+            'statuses' => SmartQrStatus::CODE_STATUSES,
+            'exportFormats' => GenerateQrExportJob::FORMATS,
+            'workspaces' => Workspace::query()
+                ->with('client:id,name')
+                ->orderBy('name')
+                ->get(['id', 'name', 'client_id'])
+                ->map(fn (Workspace $w) => [
+                    'id' => $w->id,
+                    'name' => $w->name,
+                    'client_name' => $w->client?->name,
+                ])
+                ->values(),
+        ]);
+    }
+
+    /**
+     * The QR artwork for one code, as SVG, for the detail page's preview.
+     *
+     * ⚠️ THE CUSTOMER-FACING preview() CANNOT BE REUSED, which is the whole
+     * reason this exists. SmartQrCodeController::preview() resolves the code via
+     * findForWorkspace() and 404s otherwise — so it refuses every code an admin
+     * would want to look at: anything unassigned, and anything belonging to a
+     * different tenant. This is the same eight lines with that scoping removed.
+     *
+     * ⚠️ The BATCH's logo, not the platform's, and null renders plain — the
+     * preview must be the artwork the printer receives, or an admin approves one
+     * thing and ships another.
+     */
+    public function preview(SmartQrCode $code, SmartQrImageRenderer $renderer): SymfonyResponse
+    {
+        $rendered = $renderer->svg(
+            route('smartqr.scan', ['token' => $code->public_token]),
+            $code->serial_number,
+            $renderer->batchLogoPath($code->batch),
+        );
+
+        return response($rendered['data'], 200, [
+            'Content-Type' => $rendered['mime'],
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
+    }
+
+    /**
+     * Download ONE code's artwork in one format.
+     *
+     * ⚠️ SYNCHRONOUS, AND THE BULK PIPELINE IS DELIBERATELY NOT USED. Generated
+     * per request, not stored: a single code is cheap; only bulk needs the queue.
+     * That is the same reasoning SmartQrCodeController::download() records, and
+     * it is measured rather than assumed — one code with a batch logo renders in
+     * 31 ms (SVG), 41 ms (PNG), 77 ms (PDF), against a batch export where every
+     * format breached the 30 s limit at 1000 codes.
+     *
+     * So there is no job, no smart_qr_exports row and no ZIP here. All three
+     * exist to solve chunking, progress and retrieval — none of which arises at
+     * n=1, where the file is simply the response.
+     */
+    public function download(Request $request, SmartQrCode $code, SmartQrImageRenderer $renderer): SymfonyResponse
+    {
+        $format = (string) $request->query('format', 'svg');
+
+        if (! in_array($format, GenerateQrExportJob::FORMATS, true)) {
+            abort(422, 'Unsupported format.');
+        }
+
+        $rendered = $renderer->{$format}(
+            route('smartqr.scan', ['token' => $code->public_token]),
+            $code->serial_number,
+            $renderer->batchLogoPath($code->batch),
+        );
+
+        return response($rendered['data'], 200, [
+            'Content-Type' => $rendered['mime'],
+            'Content-Disposition' => 'attachment; filename="'.$code->serial_number.'.'.$format.'"',
+        ]);
+    }
+
+    /**
      * §5 bulk action — mark printed.
      *
      * ⚠️ A PHYSICAL transition, so it moves `codes.status` (R-10). It says
@@ -184,6 +389,34 @@ class QrInventoryController extends Controller
         ]);
 
         SmartQrCode::whereIn('id', $data['code_ids'])->update(['status' => $data['status']]);
+
+        // ═══ ⚠️ `printed` IS AN EVENT, NOT ONLY A STATE ════════════════════════
+        //
+        // Setting status='printed' without a timestamp produced a code that said
+        // "Printed" on its badge and "Not printed" in the same panel, because the
+        // display reads printed_at. Three such rows existed in development before
+        // this line — all from this action, which was the only way to reach that
+        // combination through the UI.
+        //
+        // markPrinted() has always written both and is deliberately untouched.
+        //
+        // ⚠️ whereNull() IS THE WHOLE GUARD, and it is doing two jobs:
+        //
+        //   - it never OVERWRITES an existing timestamp, so re-selecting Printed
+        //     on an already-printed code cannot rewrite when the print happened;
+        //   - it makes the action idempotent, so a double-submit is harmless.
+        //
+        // ⚠️ AND NOTHING CLEARS printed_at WHEN MOVING AWAY FROM `printed`. A
+        // code printed and later marked damaged keeps its timestamp, because that
+        // is a historical fact and SmartQrDeletability::everPrinted() reads it to
+        // refuse deletion. Clearing it would report a genuinely printed sticker as
+        // never-printed and let destroy() take it — turning a cosmetic bug into a
+        // destructive one.
+        if ($data['status'] === SmartQrStatus::CODE_PRINTED) {
+            SmartQrCode::whereIn('id', $data['code_ids'])
+                ->whereNull('printed_at')
+                ->update(['printed_at' => now()]);
+        }
 
         return back()->with('success', __('Status updated.'));
     }

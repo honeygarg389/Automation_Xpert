@@ -353,25 +353,21 @@ export default function SmartQrInventoryIndex({
                                         <td className="py-3 pr-4 text-neutral-600 dark:text-neutral-300">
                                             {code.current_assignment?.qr_type ?? '—'}
                                         </td>
-                                        {/* ⚠️ DISABLED PLACEHOLDER — no route, no onClick.
-                                            There is NO admin per-QR detail page: the only
-                                            per-serial routes are client.smartqr.codes.*,
-                                            which are workspace-scoped and 404 for an admin.
-                                            Building it needs a route, a controller method
-                                            and an admin preview endpoint — Slice B.
+                                        {/* ⚠️ WAS A DISABLED PLACEHOLDER. The note here recorded that
+                                            building it needed "a route, a controller method
+                                            and an admin preview endpoint — Slice B". All
+                                            three now exist; this is Slice B.
 
-                                            The title sits on the WRAPPER: Button applies
-                                            `disabled:pointer-events-none`, so a title on the
-                                            button itself would never render a tooltip. */}
+                                            ⚠️ The route param is the SERIAL, not the id.
+                                            SmartQrCode::getRouteKeyName() returns
+                                            serial_number, so passing code.id 404s at route
+                                            binding before any controller runs. */}
                                         <td className="py-3 pr-4">
-                                            <span
-                                                title={t('smart_qr.view_qr_coming_soon')}
-                                                className="inline-flex cursor-not-allowed"
-                                            >
-                                                <Button variant="outline" size="sm" disabled>
+                                            <Link href={route('admin.qr.inventory.show', code.serial_number)}>
+                                                <Button variant="outline" size="sm">
                                                     <Eye className="mr-1.5 h-4 w-4" /> {t('common.view')}
                                                 </Button>
-                                            </span>
+                                            </Link>
                                         </td>
                                     </tr>
                                 ))}

@@ -3,8 +3,10 @@
 namespace App\Modules\SmartQr\Models;
 
 use App\Models\Concerns\BelongsToWorkspace;
+use App\Models\Scopes\WorkspaceScope;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Modules\Shared\Models\ChannelAccount;
 use Database\Factories\SmartQrAssignmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -119,6 +121,32 @@ class SmartQrAssignment extends Model
     public function assignedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_user_id');
+    }
+
+    /**
+     * The WhatsApp number a scan of this QR lands on (§6 step 4).
+     *
+     * ⚠️ UNSCOPED, AND THAT IS THE WHOLE REASON THIS RELATION NEEDS A COMMENT.
+     *
+     * ChannelAccount uses BelongsToWorkspace, so the global scope filters it to
+     * the CURRENT workspace. The admin inventory detail screen reads this for an
+     * arbitrary code belonging to an arbitrary tenant, and the failure mode is
+     * not an error — the scope simply matches nothing and the relation resolves
+     * to NULL. "Destination Phone: —" on a code that has one reads as missing
+     * data, not as a bug, so nothing would ever report it.
+     *
+     * Mirrors SmartQrCode::currentAssignment(), which removes the same scope for
+     * the same reason and on the same screens.
+     *
+     * ⚠️ Displayable fields are `display_name` and `phone_number_id` — there is
+     * no plain phone column on channel_accounts.
+     *
+     * @return BelongsTo<ChannelAccount, $this>
+     */
+    public function channelAccount(): BelongsTo
+    {
+        return $this->belongsTo(ChannelAccount::class, 'channel_account_id')
+            ->withoutGlobalScope(WorkspaceScope::class);
     }
 
     /** @return BelongsTo<SmartQrCode, $this> */

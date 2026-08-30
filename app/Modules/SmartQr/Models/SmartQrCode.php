@@ -49,6 +49,8 @@ use Illuminate\Support\Carbon;
  * @property string $status
  * @property int $batch_id
  * @property Carbon|null $printed_at
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class SmartQrCode extends Model
 {
