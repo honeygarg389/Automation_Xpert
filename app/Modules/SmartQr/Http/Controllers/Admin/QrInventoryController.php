@@ -11,6 +11,7 @@ use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use App\Modules\SmartQr\Support\SmartQrStatus;
+use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -206,6 +207,36 @@ class QrInventoryController extends Controller
         $assignment = $code->currentAssignment;
         $channel = $assignment?->channelAccount;
 
+        // ═══ ⚠️ THE DIALABLE NUMBER IS NOT ON channel_accounts ═════════════════
+        //
+        // That table has display_name (the BUSINESS name), phone_number_id (Meta's
+        // opaque identifier) and business_account_id — and no phone column at all.
+        // The number lives on whatsapp_phone_numbers.display_phone, reached by
+        // matching phone_number_id, which carries a UNIQUE index there.
+        //
+        // This previously rendered `display_name ?? phone_number_id`. display_name
+        // is NOT NULL, so it always won and the field showed a company name under
+        // a "Destination phone" label — plausible enough that it read as data
+        // rather than as a bug.
+        //
+        // ⚠️ QUERIED HERE RATHER THAN VIA A RELATION ON ChannelAccount, and the
+        // direction is the reason. ChannelAccount lives in Shared; hanging a
+        // WhatsappPhoneNumber relation off it would make a shared model depend on
+        // a feature module for one consumer's display need. SmartQr is already the
+        // only module outside Whatsapp that reads this table, and it already does
+        // so from its own code — SmartQrRedirectResolver::dialableNumber(), whose
+        // query shape this mirrors.
+        //
+        // ⚠️ RAW, NOT NORMALISED. display_phone is stored free-form
+        // ("+91 88828 33998") and every UI consumer passes it through unchanged;
+        // only the redirect resolver strips it to digits, because wa.me demands
+        // that. A display panel is not that caller.
+        $destinationPhone = $channel?->phone_number_id === null
+            ? null
+            : WhatsappPhoneNumber::query()
+                ->where('phone_number_id', $channel->phone_number_id)
+                ->value('display_phone');
+
         return Inertia::render('Admin/SmartQr/Inventory/Show', [
             'code' => [
                 'id' => $code->id,
@@ -240,7 +271,12 @@ class QrInventoryController extends Controller
                 // column, and phone_number_id is a Meta identifier, not a number
                 // anybody can read off a screen. Falling back to it is better
                 // than a dash when the account was created without a label.
-                'destination_phone' => $channel ? ($channel->display_name ?? $channel->phone_number_id) : null,
+                // ⚠️ NO FALLBACK TO display_name ON A MISS. A channel account
+                // whose phone_number_id matches no row yields null, and the page
+                // shows "—". Falling back to the business name would put
+                // confident-looking wrong data under a "phone" label, which is
+                // worse than an honest blank — it is the exact failure being fixed.
+                'destination_phone' => $destinationPhone,
             ] : null,
             'statuses' => SmartQrStatus::CODE_STATUSES,
             'exportFormats' => GenerateQrExportJob::FORMATS,

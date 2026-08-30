@@ -67,7 +67,7 @@ const assignment = {
     default_message: 'Hi from table 4', status: 'active',
     starts_at: '2026-01-02T00:00:00Z', expires_at: null,
     workspace_name: 'Acme Cafe', assigned_user_name: 'Sam',
-    destination_phone: 'Front Desk Line',
+    destination_phone: '+91 88828 33998',
 };
 
 /**
@@ -228,7 +228,7 @@ describe('assignment block — assigned', () => {
     it('renders every assignment-scoped field from currentAssignment', () => {
         renderPage({ currentAssignment: assignment });
 
-        expect(screen.getByText('Front Desk Line')).toBeTruthy();
+        expect(screen.getByText('+91 88828 33998')).toBeTruthy();
         expect(screen.getByText('Acme Cafe')).toBeTruthy();
         expect(screen.getByText('table-tent')).toBeTruthy();
         expect(screen.getByText('Hi from table 4')).toBeTruthy();
@@ -345,6 +345,27 @@ describe('change stage', () => {
         expect(posts[0].url).toContain('admin.qr.inventory.change-status');
         expect(posts[0].data.code_ids).toEqual([42]);
         expect(posts[0].data.status).toBe('printed');
+    });
+});
+
+describe('destination phone', () => {
+    /**
+     * ⚠️ RAW, unformatted — display_phone is stored free-form and every UI
+     * consumer passes it through unchanged.
+     */
+    it('renders the number exactly as stored', () => {
+        renderPage({ currentAssignment: assignment });
+        expect(fieldValue('Destination phone')).toBe('+91 88828 33998');
+    });
+
+    /**
+     * ⚠️ THE MISS CASE. The controller yields null when the phone_number_id
+     * matches no row; the page must show "—", never a business name. A blank or a
+     * plausible-looking wrong value is the defect this whole change removes.
+     */
+    it('renders an em dash when there is no matching number', () => {
+        renderPage({ currentAssignment: { ...assignment, destination_phone: null } });
+        expect(fieldValue('Destination phone')).toBe('—');
     });
 });
 

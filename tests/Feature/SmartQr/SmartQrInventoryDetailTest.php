@@ -12,6 +12,8 @@ use App\Modules\SmartQr\Models\SmartQrAssignment;
 use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Support\SmartQrStatus;
+use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
+use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -65,19 +67,33 @@ class SmartQrInventoryDetailTest extends TestCase
     /**
      * A code assigned inside a workspace the admin has nothing to do with.
      *
-     * @return array{code: SmartQrCode, assignment: SmartQrAssignment, channel: ChannelAccount, workspace: Workspace}
+     * @return array{code: SmartQrCode, assignment: SmartQrAssignment, channel: ChannelAccount, workspace: Workspace, phone: WhatsappPhoneNumber}
      */
     private function assignedElsewhere(): array
     {
         ['workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
         $this->attachPlanToClient($client, Plan::factory()->create(['limits' => ['smart_qr_max_assigned' => 50]]));
 
+        $phoneNumberId = 'PN-'.uniqid();
+
         $channel = ChannelAccount::withoutWorkspaceScope('reason: test fixture')->create([
             'workspace_id' => $workspace->id,
             'channel' => 'whatsapp',
             'display_name' => 'Front Desk Line',
-            'phone_number_id' => 'PN-'.uniqid(),
+            'phone_number_id' => $phoneNumberId,
             'status' => 'active',
+        ]);
+
+        // ⚠️ THE DIALABLE NUMBER LIVES HERE, not on the channel account. Without
+        // this row the fixture reproduces the MISS case, which is a different
+        // test — see the '—' case below.
+        $waba = WhatsappBusinessAccount::factory()->create(['workspace_id' => $workspace->id]);
+
+        $phone = WhatsappPhoneNumber::create([
+            'waba_id_fk' => $waba->id,
+            'phone_number_id' => $phoneNumberId,
+            'display_phone' => '+91 88828 33998',
+            'verified_name' => 'Front Desk Line',
         ]);
 
         $code = SmartQrCode::factory()->create();
@@ -92,7 +108,7 @@ class SmartQrInventoryDetailTest extends TestCase
             'default_message' => 'Hi from table 4',
         ]);
 
-        return compact('code', 'assignment', 'channel', 'workspace');
+        return compact('code', 'assignment', 'channel', 'workspace', 'phone');
     }
 
     // ══ Route binding ══════════════════════════════════════════════════════
@@ -181,7 +197,7 @@ class SmartQrInventoryDetailTest extends TestCase
     #[Test]
     public function an_assignment_in_another_workspace_resolves_all_its_nested_relations(): void
     {
-        ['code' => $code, 'channel' => $channel, 'workspace' => $workspace] = $this->assignedElsewhere();
+        ['code' => $code, 'workspace' => $workspace] = $this->assignedElsewhere();
 
         $this->actingAs($this->admin(), 'admin')
             ->get(route('admin.qr.inventory.show', $code->serial_number))
@@ -190,7 +206,7 @@ class SmartQrInventoryDetailTest extends TestCase
                 ->where('currentAssignment.qr_type', 'table-tent')
                 ->where('currentAssignment.default_message', 'Hi from table 4')
                 ->where('currentAssignment.workspace_name', $workspace->name)
-                ->where('currentAssignment.destination_phone', $channel->display_name)
+                ->where('currentAssignment.destination_phone', '+91 88828 33998')
             );
     }
 
@@ -224,6 +240,80 @@ class SmartQrInventoryDetailTest extends TestCase
             ChannelAccount::withoutWorkspaceScope('reason: control')->find($channel->id),
             'The row must exist unscoped, or the control proves nothing.'
         );
+    }
+
+    // ══ Destination phone ══════════════════════════════════════════════════
+
+    /**
+     * ⚠️ THE NUMBER, NOT THE BUSINESS NAME. channel_accounts has no phone column;
+     * this previously rendered display_name, which is NOT NULL and so always won.
+     * Asserting BOTH halves — the number is present AND the business name is not —
+     * because "shows something" passed the whole time the field was wrong.
+     */
+    #[Test]
+    public function the_destination_phone_is_the_dialable_number(): void
+    {
+        ['code' => $code, 'channel' => $channel] = $this->assignedElsewhere();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->get(route('admin.qr.inventory.show', $code->serial_number))
+            ->assertInertia(fn ($page) => $page
+                ->where('currentAssignment.destination_phone', '+91 88828 33998'));
+
+        $this->assertSame('Front Desk Line', $channel->display_name,
+            'Sanity: the business name is still there — it is simply not what this field shows.');
+    }
+
+    /**
+     * ⚠️ Stored free-form and rendered raw, matching every other UI consumer of
+     * display_phone. Only SmartQrRedirectResolver normalises, because wa.me needs
+     * digits — a display panel is not that caller.
+     */
+    #[Test]
+    public function the_destination_phone_is_not_reformatted(): void
+    {
+        ['code' => $code, 'phone' => $phone] = $this->assignedElsewhere();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->get(route('admin.qr.inventory.show', $code->serial_number))
+            ->assertInertia(fn ($page) => $page
+                ->where('currentAssignment.destination_phone', $phone->display_phone));
+    }
+
+    /**
+     * ⚠️ NULL ON A MISS, NEVER display_name. The join is a string match, not a
+     * foreign key, so a channel account can point at a phone_number_id with no
+     * row. Falling back to the business name would put confident-looking wrong
+     * data under a "phone" label — the exact defect being fixed. The page renders
+     * null as "—".
+     */
+    #[Test]
+    public function an_unmatched_phone_number_id_yields_null_not_the_business_name(): void
+    {
+        ['code' => $code, 'phone' => $phone, 'channel' => $channel] = $this->assignedElsewhere();
+
+        $phone->delete();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->get(route('admin.qr.inventory.show', $code->serial_number))
+            ->assertInertia(fn ($page) => $page
+                ->where('currentAssignment.destination_phone', null));
+
+        $this->assertNotNull($channel->fresh(), 'The channel account still exists — only its number row is missing.');
+    }
+
+    /** A non-WhatsApp channel has no phone_number_id at all; no query, no value. */
+    #[Test]
+    public function a_channel_account_without_a_phone_number_id_yields_null(): void
+    {
+        ['code' => $code, 'channel' => $channel] = $this->assignedElsewhere();
+
+        $channel->forceFill(['phone_number_id' => null])->save();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->get(route('admin.qr.inventory.show', $code->serial_number))
+            ->assertInertia(fn ($page) => $page
+                ->where('currentAssignment.destination_phone', null));
     }
 
     // ══ Preview ════════════════════════════════════════════════════════════
