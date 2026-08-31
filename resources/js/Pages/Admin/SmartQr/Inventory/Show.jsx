@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, Dropdown } from '@/Components/ui';
-import { ArrowLeft, Check, Copy, Download, Layers, Link2, Pencil, Tag, Unlink } from 'lucide-react';
+import { Button, Card, Dropdown, Input, Modal } from '@/Components/ui';
+import { ArrowLeft, Check, Copy, Download, Layers, Link2, Lock, Pencil, Tag, Unlink, Unlock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge, AssignmentStatusBadge } from '../QrStatusBadge';
 import AssignQrModal from '../AssignQrModal';
@@ -87,15 +87,20 @@ export default function SmartQrCodeShow({
     const page = usePage();
     const adminTz = page.props.timezone || 'UTC';
     const flash = page.props.flash || {};
+    const errors = page.props.errors || {};
     const permissions = page.props.auth?.permissions ?? [];
 
     const canManage = permissions.includes('manage_qr_batches');
     const canAssign = permissions.includes('assign_qr_codes');
+    const canLock = permissions.includes('lock_qr_assignments');
 
     const [assigning, setAssigning] = useState(false);
     const [staging, setStaging] = useState(false);
     const [unassigning, setUnassigning] = useState(false);
     const [editing, setEditing] = useState(false);
+    const [locking, setLocking] = useState(false);
+    const [lockReason, setLockReason] = useState('');
+    const [lockBusy, setLockBusy] = useState(false);
 
     /**
      * ⚠️ REUSES THE BULK ENDPOINT with a one-element array. changeStatus()
@@ -128,6 +133,41 @@ export default function SmartQrCodeShow({
         router.delete(route('admin.qr.assignments.destroy', currentAssignment.uuid), {
             preserveScroll: true,
             onFinish: () => setUnassigning(false),
+        });
+    };
+
+    /**
+     * ⚠️ LOCKING ALSO TURNS THE CODE OFF — the server does that in the same
+     * update, and the modal copy says so before the admin commits. A control
+     * that silently changed serving state would be the surprise this wording
+     * exists to prevent.
+     */
+    const submitLock = (e) => {
+        e.preventDefault();
+        setLockBusy(true);
+        router.post(
+            route('admin.qr.assignments.lock', currentAssignment.uuid),
+            { lock_reason: lockReason },
+            {
+                preserveScroll: true,
+                onSuccess: () => { setLocking(false); setLockReason(''); },
+                onFinish: () => setLockBusy(false),
+            },
+        );
+    };
+
+    /**
+     * ⚠️ Confirmed, and the confirmation states what unlock does NOT do: it
+     * hands back control without switching the code on. An admin expecting
+     * "unlock = live again" would otherwise walk away from a still-dark QR.
+     */
+    const submitUnlock = () => {
+        if (! window.confirm(t('smart_qr.unlock_confirm', { serial: code.serial_number }))) return;
+
+        setLockBusy(true);
+        router.delete(route('admin.qr.assignments.unlock', currentAssignment.uuid), {
+            preserveScroll: true,
+            onFinish: () => setLockBusy(false),
         });
     };
 
@@ -313,6 +353,28 @@ export default function SmartQrCodeShow({
 
                             {currentAssignment ? (
                                 <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
+                                    {/* ⚠️ Reason, actor and time together — the three
+                                        things asked when a customer calls about a
+                                        frozen code, and CLAUDE.md §9's record of a
+                                        manual override. */}
+                                    {currentAssignment.admin_locked && (
+                                        <div className="py-2">
+                                            <span className="inline-flex items-center gap-1.5 rounded-soft bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
+                                                <Lock className="h-3 w-3" /> {t('smart_qr.locked')}
+                                            </span>
+                                            <p className="mt-1.5 text-sm text-neutral-700 dark:text-neutral-200">
+                                                {currentAssignment.lock_reason}
+                                            </p>
+                                            {currentAssignment.locked_at && (
+                                                <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
+                                                    {t('smart_qr.locked_by_at', {
+                                                        who: currentAssignment.locked_by ?? '—',
+                                                        when: formatDateTz(currentAssignment.locked_at, adminTz),
+                                                    })}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                     <Field label={t('smart_qr.field_destination_phone')}>
                                         {currentAssignment.destination_phone}
                                     </Field>
@@ -378,17 +440,101 @@ export default function SmartQrCodeShow({
                             must not be intercepted by Inertia, which waits for an
                             Inertia response the browser will never receive. Styled
                             to match Button variant="outline" size="sm". */}
-                        <div className="mt-4 flex items-center justify-center gap-2">
-                            {exportFormats.map((fmt) => (
-                                <a
-                                    key={fmt}
-                                    href={route('admin.qr.inventory.download', { code: code.serial_number, format: fmt })}
-                                    className="inline-flex items-center justify-center rounded-soft border border-neutral-300 bg-transparent px-3 py-1.5 text-sm font-medium text-neutral-700 transition-all duration-150 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                        {/* ⚠️ A CONTENT-SIZED FLEX ROW, not equal-width columns.
+                            At 3 equal columns the cell is 90.7px and px-2 leaves
+                            74.67px of text room, while "PDF (print)" measures 72.39px
+                            in Space Grotesk 500/14 — the 16px icon plus its 6px gap
+                            overflowed and wrapped, and because grid cells stretch, ALL
+                            THREE buttons then rendered 54px tall instead of 34px.
+                            Sizing to content removes the constraint entirely: each
+                            button takes exactly the width its label needs. */}
+                        {/* ⚠️ ONE SHRINK-WRAPPING COLUMN AROUND ALL THREE, which is
+                            what makes the lock button exactly as wide as the download
+                            row rather than as wide as the panel.
+
+                            `flex w-fit flex-col` sizes the column to its widest child
+                            — the download row's natural 285.5px — and `mx-auto` centres
+                            that column in the 288px panel. ⚠️ NOT `inline-flex`: an
+                            inline-level box ignores `margin:auto`, so the column sat
+                            flush left, 2.5px off centre. Measured both ways. `items-stretch`
+                            then lets the lock button's `w-full` resolve against the
+                            COLUMN, not the panel, so its edges land on the SVG and
+                            PDF buttons' outer edges. A plain block div would stretch
+                            to 288px and the button with it, which is the 2.5px-per-side
+                            overhang this replaces.
+
+                            Spacing is the column's `gap-2`; the children carry no
+                            `mt-*` of their own, or the gap would compound with it. */}
+                        <div className="mt-4 mx-auto flex w-fit flex-col items-stretch gap-2">
+                            <div className="flex items-center justify-center gap-2">
+                                {exportFormats.map((fmt) => (
+                                    <a
+                                        key={fmt}
+                                        href={route('admin.qr.inventory.download', { code: code.serial_number, format: fmt })}
+                                        className="inline-flex items-center justify-center rounded-soft border border-neutral-300 bg-transparent px-3 py-1.5 text-sm font-medium text-neutral-700 transition-all duration-150 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                                    >
+                                        <Download className="mr-1.5 h-4 w-4" /> {t(`smart_qr.format_${fmt}`)}
+                                    </a>
+                                ))}
+                            </div>
+
+                            {/* ⚠️ THE DOWNLOAD ANCHORS' EXACT CLASSES, NOT <Button>.
+                                Button's base carries
+                                `focus:ring-2 focus:ring-brand-500/30 focus:ring-offset-1`
+                                — the faint green outer ring that appeared on click, which
+                                the plain <a> siblings never show. Matching the siblings'
+                                class string keeps one styling source for both.
+
+                                ⚠️ The icon mirrors the STATE, not the action: a locked
+                                QR shows the open padlock the click will produce. It is
+                                sized to match the Download icons beside it. */}
+                            {canLock && currentAssignment && (
+                                <button
+                                    type="button"
+                                    disabled={lockBusy}
+                                    onClick={() => (currentAssignment.admin_locked ? submitUnlock() : setLocking(true))}
+                                    className="flex w-full items-center justify-center rounded-soft border border-neutral-300 bg-transparent px-3 py-1.5 text-sm font-medium text-neutral-700 transition-all duration-150 hover:bg-neutral-50 dark:border-neutral-600 dark:text-neutral-300 dark:hover:bg-neutral-800 disabled:opacity-50 disabled:pointer-events-none"
                                 >
-                                    <Download className="mr-1.5 h-4 w-4" /> {t(`smart_qr.format_${fmt}`)}
-                                </a>
-                            ))}
+                                    {currentAssignment.admin_locked ? (
+                                        <><Unlock className="mr-1.5 h-4 w-4" /> {t('smart_qr.unlock_qr')}</>
+                                    ) : (
+                                        <><Lock className="mr-1.5 h-4 w-4" /> {t('smart_qr.lock_qr')}</>
+                                    )}
+                                </button>
+                            )}
+
+                            {/* ⚠️ Guarded on lock_reason as well as admin_locked — a lock
+                                written before the reason column existed, or any row where
+                                it is null, would otherwise render a bare "Reason:" label
+                                with nothing after it. This is the QR Preview panel's own
+                                line; the Current assignment panel keeps its separate
+                                badge + reason block. */}
+                            {currentAssignment?.admin_locked && currentAssignment.lock_reason && (
+                                <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                                    <span className="font-medium text-neutral-700 dark:text-neutral-200">{t('smart_qr.reason_label')}</span> {currentAssignment.lock_reason}
+                                </p>
+                            )}
                         </div>
+
+                        {/* ═══ ⚠️ THE ADMIN LOCK — DELIBERATELY HERE, NOT ON THE
+                            ASSIGNMENT PANEL ═══════════════════════════════════
+
+                            It sat beside the edit pencil, which put it among the
+                            controls that change assignment DATA. Locking is not an
+                            edit: it takes a control away from the customer and
+                            turns the code off. Grouping it with the artwork —
+                            beneath the very image whose destination it disables —
+                            reads as an act on the QR itself.
+
+                            ⚠️ lock_qr_assignments, NOT assign_qr_codes. Hidden
+                            without it, matching Retire/Assign's pattern, and
+                            hidden entirely when nothing is assigned: there is no
+                            tenant toggle to freeze on an unassigned code.
+
+                            ⚠️ A labelled button here rather than the assignment
+                            panel's bare icon — with nothing beside it to infer
+                            meaning from, the action needs its own label. It spans
+                            the download column's width, not the panel's. */}
                     </Card>
                 </div>
             </div>
@@ -402,6 +548,40 @@ export default function SmartQrCodeShow({
                 nesting is rebuilt here. Changing the modal to accept both shapes
                 would put a second contract inside a component that exists to have
                 exactly one. */}
+            {canLock && locking && currentAssignment && (
+                <Modal show onClose={() => setLocking(false)} maxWidth="md">
+                    <Modal.Header title={t('smart_qr.lock_title')} subtitle={code.serial_number} onClose={() => setLocking(false)} />
+                    <form onSubmit={submitLock}>
+                        <Modal.Body className="space-y-4">
+                            <p className="text-sm text-neutral-600 dark:text-neutral-300">
+                                {t('smart_qr.lock_body')}
+                            </p>
+                            {/* ⚠️ REQUIRED, and the label says why: this text is
+                                shown to the customer when their toggle is refused,
+                                so an empty one produces "Reason: ." on a screen
+                                belonging to somebody already frustrated. */}
+                            <Input
+                                name="lock_reason"
+                                label={t('smart_qr.lock_reason_label')}
+                                placeholder={t('smart_qr.lock_reason_placeholder')}
+                                value={lockReason}
+                                onChange={(e) => setLockReason(e.target.value)}
+                                error={errors.lock_reason}
+                                autoFocus
+                            />
+                        </Modal.Body>
+                        <Modal.Footer>
+                            <Button type="button" variant="outline" onClick={() => setLocking(false)}>
+                                {t('common.cancel')}
+                            </Button>
+                            <Button type="submit" disabled={lockBusy || lockReason.trim().length < 5}>
+                                {t('smart_qr.lock_confirm')}
+                            </Button>
+                        </Modal.Footer>
+                    </form>
+                </Modal>
+            )}
+
             {canAssign && editing && currentAssignment && (
                 <EditAssignmentModal
                     assignment={{

@@ -2,6 +2,7 @@
 
 namespace App\Modules\SmartQr\Models;
 
+use App\Models\AdminUser;
 use App\Models\Concerns\BelongsToWorkspace;
 use App\Models\Scopes\WorkspaceScope;
 use App\Models\User;
@@ -36,6 +37,10 @@ use Illuminate\Support\Str;
  * @property Carbon|null $unassigned_at
  * @property string $status
  * @property int|null $channel_account_id
+ * @property bool $admin_locked
+ * @property string|null $lock_reason
+ * @property int|null $locked_by_admin_id
+ * @property Carbon|null $locked_at
  * @property string|null $default_message
  * @property Carbon|null $starts_at
  * @property Carbon|null $expires_at
@@ -64,6 +69,19 @@ class SmartQrAssignment extends Model
         'uuid', 'smart_qr_code_id', 'workspace_id', 'channel_account_id', 'assigned_user_id',
         'name', 'qr_type', 'default_message', 'status', 'assigned_at', 'unassigned_at',
         'starts_at', 'expires_at', 'assigned_by_admin_id', 'config_snapshot',
+
+        // ⚠️ admin_locked, lock_reason, locked_by_admin_id and locked_at are
+        // DELIBERATELY ABSENT, and their absence is load-bearing.
+        //
+        // SmartQrCodeController::update() — the CUSTOMER path — calls
+        // $assignment->update($validated) with tenant input. Any lock column
+        // listed here would let a locked tenant post admin_locked=false and
+        // unlock themselves, defeating the whole feature with no error.
+        //
+        // The lock is written with forceFill() from QrAssignmentController and
+        // nowhere else. SmartQrAssignmentLockTest proves the exclusion by
+        // POSTing the field through the customer route rather than trusting
+        // that it is missing from this list.
     ];
 
     protected function casts(): array
@@ -72,6 +90,8 @@ class SmartQrAssignment extends Model
             'assigned_at' => 'datetime', 'unassigned_at' => 'datetime',
             'starts_at' => 'datetime', 'expires_at' => 'datetime',
             'config_snapshot' => 'array',
+            'admin_locked' => 'boolean',
+            'locked_at' => 'datetime',
         ];
     }
 
@@ -147,6 +167,29 @@ class SmartQrAssignment extends Model
     {
         return $this->belongsTo(ChannelAccount::class, 'channel_account_id')
             ->withoutGlobalScope(WorkspaceScope::class);
+    }
+
+    /**
+     * Is the tenant barred from changing this assignment's active status?
+     *
+     * ⚠️ ASKS ONE QUESTION AND NOT THE OTHER. This does not say whether the QR is
+     * serving — `status` says that, and the two are independent: a locked
+     * assignment may be active or inactive, and the public redirect reads only
+     * `status`. Callers wanting "is it live" must not reach for this.
+     */
+    public function isLocked(): bool
+    {
+        return (bool) $this->admin_locked;
+    }
+
+    /**
+     * The admin who applied the current lock, if the account still exists.
+     *
+     * @return BelongsTo<AdminUser, $this>
+     */
+    public function lockedByAdmin(): BelongsTo
+    {
+        return $this->belongsTo(AdminUser::class, 'locked_by_admin_id');
     }
 
     /** @return BelongsTo<SmartQrCode, $this> */

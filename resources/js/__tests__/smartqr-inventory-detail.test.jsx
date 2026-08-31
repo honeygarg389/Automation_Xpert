@@ -22,10 +22,17 @@ import fs from 'fs';
 const posts = [];
 const deletes = [];
 
+/**
+ * ⚠️ MUTABLE so a test can revoke a permission and assert the control DISAPPEARS.
+ * A fixed list can only ever prove the granted case, which is the half that
+ * passes whether or not the gate exists.
+ */
+let grantedPermissions = ['view_qr_inventory', 'manage_qr_batches', 'assign_qr_codes', 'lock_qr_assignments'];
+
 vi.mock('@inertiajs/react', () => ({
     usePage: () => ({
         props: {
-            auth: { permissions: ['view_qr_inventory', 'manage_qr_batches', 'assign_qr_codes'] },
+            auth: { permissions: grantedPermissions },
             flash: {}, errors: {}, timezone: 'UTC',
         },
         url: '/admin/qr/inventory/AX-000001',
@@ -101,6 +108,7 @@ beforeEach(() => {
     posts.length = 0;
     deletes.length = 0;
     window.confirm = vi.fn(() => true);
+    grantedPermissions = ['view_qr_inventory', 'manage_qr_batches', 'assign_qr_codes', 'lock_qr_assignments'];
 });
 
 describe('header', () => {
@@ -404,6 +412,83 @@ describe('edit pencil on the assignment panel', () => {
         renderPage({ currentAssignment: assignment });
         fireEvent.click(screen.getByLabelText('Edit QR details'));
         expect(screen.getByText('Choose QR Type')).toBeTruthy();
+    });
+});
+
+describe('admin lock control', () => {
+    /**
+     * ⚠️ POSITION IS THE REQUIREMENT. It used to sit beside the edit pencil, among
+     * the controls that change assignment DATA — but locking is not an edit: it
+     * takes the toggle away from the customer and turns the code off. Asserted by
+     * DOM ORDER against the download links, because "the button exists" passes
+     * wherever it sits.
+     */
+    it('renders inside the QR Preview panel, after the download buttons', () => {
+        renderPage({ currentAssignment: assignment });
+
+        const btn = screen.getByRole('button', { name: /Lock QR Status/i });
+        const img = screen.getByAltText('AX-000001');
+        const downloads = screen.getAllByRole('link')
+            .filter((a) => (a.getAttribute('href') || '').includes('inventory.download'));
+
+        expect(downloads.length).toBe(3);
+        expect(img.compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        expect(downloads[2].compareDocumentPosition(btn) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    /** ⚠️ And NOT beside the pencil any more — pins the move, not just the arrival. */
+    it('is no longer inside the Current assignment panel', () => {
+        renderPage({ currentAssignment: assignment });
+
+        const heading = Array.from(document.querySelectorAll('h3'))
+            .find((h) => h.textContent === 'Current assignment');
+        const btn = screen.getByRole('button', { name: /Lock QR Status/i });
+
+        expect(heading).toBeTruthy();
+        expect(heading.parentElement.contains(btn)).toBe(false);
+    });
+
+    it('reads "Lock QR Status" when unlocked', () => {
+        renderPage({ currentAssignment: { ...assignment, admin_locked: false } });
+        expect(screen.getByRole('button', { name: 'Lock QR Status' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Unlock QR Status' })).toBeNull();
+    });
+
+    it('reads "Unlock QR Status" when locked', () => {
+        renderPage({ currentAssignment: { ...assignment, admin_locked: true, lock_reason: 'Chargeback' } });
+        expect(screen.getByRole('button', { name: 'Unlock QR Status' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Lock QR Status' })).toBeNull();
+    });
+
+    /** ⚠️ Hidden without the permission, matching Retire/Assign's hide-not-disable. */
+    it('is hidden without lock_qr_assignments', () => {
+        grantedPermissions = ['view_qr_inventory', 'assign_qr_codes'];
+        renderPage({ currentAssignment: assignment });
+        expect(screen.queryByRole('button', { name: /Lock QR Status/i })).toBeNull();
+    });
+
+    /** ⚠️ Nothing to freeze on an unassigned code — no tenant toggle exists. */
+    it('is hidden when the code is unassigned', () => {
+        renderPage();
+        expect(screen.queryByRole('button', { name: /Lock QR Status/i })).toBeNull();
+    });
+
+    /** Unlocking is confirmed and hits the unlock route; locking opens the modal. */
+    it('unlock confirms and calls the unlock route', () => {
+        renderPage({ currentAssignment: { ...assignment, admin_locked: true } });
+        fireEvent.click(screen.getByRole('button', { name: 'Unlock QR Status' }));
+
+        expect(deletes.length).toBe(1);
+        expect(deletes[0].url).toContain('admin.qr.assignments.unlock');
+        expect(deletes[0].url).toContain('a-uuid');
+    });
+
+    it('lock opens the reason modal rather than posting immediately', () => {
+        renderPage({ currentAssignment: assignment });
+        fireEvent.click(screen.getByRole('button', { name: 'Lock QR Status' }));
+
+        expect(posts.length).toBe(0);
+        expect(document.body.textContent).toContain("Lock this QR's active status");
     });
 });
 

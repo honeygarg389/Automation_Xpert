@@ -70,6 +70,14 @@ class PermissionSeeder extends Seeder
             ['key' => 'manage_qr_batches', 'name' => 'Manage QR Batches', 'category' => 'QR Management', 'description' => 'Create QR batches and trigger code generation'],
             ['key' => 'assign_qr_codes', 'name' => 'Assign QR Codes', 'category' => 'QR Management', 'description' => 'Assign and unassign Smart QR codes to customer workspaces'],
             ['key' => 'override_qr_assignment_limit', 'name' => 'Override QR Assignment Limit', 'category' => 'QR Management', 'description' => 'Assign QR codes beyond a workspace\'s plan limit. Requires a written reason and is audit-logged.'],
+
+            // ⚠️ SEPARATE FROM `assign_qr_codes` for the same reason
+            // `override_qr_assignment_limit` is: locking takes a control away
+            // from a paying customer until an admin gives it back. Everyone who
+            // may assign a code should not automatically be able to freeze the
+            // tenant out of it — that is a different, more consequential act,
+            // and it deserves to be granted deliberately.
+            ['key' => 'lock_qr_assignments', 'name' => 'Lock QR Assignments', 'category' => 'QR Management', 'description' => 'Lock a QR assignment\'s active status so the customer cannot change it. Requires a written reason and is audit-logged.'],
         ];
     }
 

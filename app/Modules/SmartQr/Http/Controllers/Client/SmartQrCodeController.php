@@ -135,6 +135,37 @@ class SmartQrCodeController extends Controller
             }
         }
 
+        // ═══ ⚠️ THE ADMIN LOCK — THE ONLY TENANT-REACHABLE WRITE TO `status` ═══
+        //
+        // This route is the single path by which a customer can change their
+        // assignment's active/inactive state (UpdateCustomerQrRequest permits
+        // `status`, and $assignment->update() writes it), so it is the single
+        // place the lock has to hold. The disabled control on Codes.jsx is a
+        // courtesy; this is the enforcement, and it is tested with the UI
+        // bypassed.
+        //
+        // ⚠️ GUARDS THE CHANGE, NOT THE REQUEST. A locked tenant may still edit
+        // name, qr_type and default_message — the lock is about the toggle and
+        // nothing else. Refusing the whole form would take away edits the admin
+        // never intended to freeze.
+        //
+        // ⚠️ COMPARES AGAINST THE CURRENT VALUE, so a form that resubmits an
+        // unchanged status (which this one does — it posts every field) is not
+        // rejected for changing nothing.
+        //
+        // ⚠️ withErrors, NOT abort(403). The UI offered this control; a bare 403
+        // is indistinguishable from a bug, and the customer would open a ticket
+        // asking why the page is broken instead of reading the reason.
+        if ($assignment->isLocked()
+            && array_key_exists('status', $data)
+            && $data['status'] !== $assignment->status) {
+            return back()->withErrors([
+                'status' => __("This QR's active status is locked by the platform team. Reason: :reason. Contact support to have it unlocked.", [
+                    'reason' => $assignment->lock_reason,
+                ]),
+            ]);
+        }
+
         $assignment->update($data);
 
         return back()->with('success', __('QR code updated.'));
