@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import ClientLayout from '@/Layouts/ClientLayout';
 import { Button, Card, Input, Modal, Pagination, Select } from '@/Components/ui';
-import { Layers, Pencil } from 'lucide-react';
+import { Layers, Lock, Pencil } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { formatDateTz } from '@/Utils/datetime';
 
@@ -81,17 +81,34 @@ function EditModal({ code, channels, users, onClose }) {
                         />
                     </div>
 
+                    {/* ⚠️ DISABLED IS A COURTESY, NOT THE ENFORCEMENT. The server
+                        refuses the change in SmartQrCodeController::update() and
+                        returns the reason; this only spares the customer a form
+                        submission that was always going to be rejected. Anyone
+                        bypassing the UI still meets the guard, which has its own
+                        test with the UI out of the picture.
+
+                        ⚠️ Only this control is disabled — name, type and message stay
+                        editable while locked, because the lock is about the toggle
+                        and nothing else. */}
                     <Select
                         label={t('smart_qr.col_status')}
                         value={data.status}
                         onChange={(e) => setData('status', e.target.value)}
                         placeholder=""
+                        disabled={Boolean(a.admin_locked)}
                         options={[
                             { value: 'active', label: t('smart_qr.assignment_status.active') },
                             { value: 'inactive', label: t('smart_qr.assignment_status.inactive') },
                         ]}
                         error={errors.status}
                     />
+
+                    {a.admin_locked && (
+                        <p className="-mt-2 text-sm text-amber-700 dark:text-amber-300">
+                            {t('smart_qr.locked_customer_hint', { reason: a.lock_reason ?? '' })}
+                        </p>
+                    )}
                 </Modal.Body>
                 <Modal.Footer>
                     <Button type="button" variant="outline" onClick={onClose}>{t('common.cancel')}</Button>
@@ -164,6 +181,18 @@ export default function SmartQrCodes({ codes, stats = {}, canManage, channels = 
                                             <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{a.qr_type ?? '—'}</td>
                                             <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">
                                                 {t(`smart_qr.assignment_status.${a.status}`, a.status ?? '—')}
+                                                {/* ⚠️ Visible BEFORE opening the form, so a
+                                                    customer learns the toggle is frozen from
+                                                    the list rather than by clicking edit and
+                                                    finding a dead control. */}
+                                                {a.admin_locked && (
+                                                    <span
+                                                        title={a.lock_reason ?? ''}
+                                                        className="ml-2 inline-flex items-center gap-1 rounded-soft bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200"
+                                                    >
+                                                        <Lock className="h-3 w-3" /> {t('smart_qr.locked')}
+                                                    </span>
+                                                )}
                                             </td>
                                             <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{s.scans ?? 0}</td>
                                             <td className="px-4 py-3 text-neutral-600 dark:text-neutral-400">{s.attributed_messages ?? 0}</td>

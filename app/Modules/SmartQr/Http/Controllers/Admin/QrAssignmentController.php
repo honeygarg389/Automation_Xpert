@@ -7,10 +7,12 @@ use App\Models\Workspace;
 use App\Modules\SmartQr\Actions\AssignQrCodesAction;
 use App\Modules\SmartQr\Actions\UnassignQrCodeAction;
 use App\Modules\SmartQr\Http\Requests\AssignQrCodesRequest;
+use App\Modules\SmartQr\Http\Requests\LockQrAssignmentRequest;
 use App\Modules\SmartQr\Http\Requests\UpdateQrAssignmentRequest;
 use App\Modules\SmartQr\Models\SmartQrAssignment;
 use App\Modules\SmartQr\Services\SmartQrAssignmentCapacity;
 use App\Modules\SmartQr\Services\SmartQrAssignmentValidator;
+use App\Modules\SmartQr\Support\SmartQrStatus;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -152,6 +154,100 @@ class QrAssignmentController extends Controller
         );
 
         return back()->with('success', __('QR details updated.'));
+    }
+
+    /**
+     * Freeze a tenant out of their own active/inactive toggle. §11.
+     *
+     * ═══ ⚠️ LOCKING ALSO TURNS THE CODE OFF, IN THE SAME UPDATE ══════════════
+     *
+     * `admin_locked` and `status` are independent columns, so a lock could in
+     * principle freeze a code wherever it happened to be. It does not: the
+     * reason an admin reaches for this is that a code must stop serving and stay
+     * stopped. Locking an ACTIVE code and leaving it active would satisfy the
+     * letter of "the tenant cannot change it" while doing the opposite of what
+     * was intended, and nothing on screen would reveal the gap.
+     *
+     * Both writes happen in ONE update so no observer — the customer's page, the
+     * public redirect, another admin — can catch the row locked-but-still-live.
+     *
+     * ⚠️ forceFill(), NOT update(). The lock columns are deliberately absent from
+     * $fillable so the CUSTOMER path cannot mass-assign them; that exclusion
+     * would also silently discard them here. See the model.
+     *
+     * ⚠️ THE PUBLIC REDIRECT IS UNTOUCHED. SmartQrRedirectResolver still routes
+     * on `status` alone. The lock adds no outcome and no branch there — a locked
+     * code shows the ordinary INACTIVE page, because from a scanner's side that
+     * is exactly what it is.
+     */
+    public function lock(LockQrAssignmentRequest $request, string $uuid): RedirectResponse
+    {
+        $assignment = SmartQrAssignment::withoutWorkspaceScope(
+            'reason: the admin locks assignments across all tenants; a scoped bind would 404 on '
+            .'a row that exists and the permission check would never run'
+        )->where('uuid', $uuid)->firstOrFail();
+
+        $before = $assignment->only(['status', 'admin_locked', 'lock_reason']);
+
+        $assignment->forceFill([
+            'admin_locked' => true,
+            'status' => SmartQrStatus::ASSIGNMENT_INACTIVE,
+            'lock_reason' => $request->validated('lock_reason'),
+            'locked_by_admin_id' => $request->user('admin')?->id,
+            'locked_at' => now(),
+        ])->save();
+
+        app(AuditLogService::class)->logAdmin(
+            'smart_qr.assignment_locked',
+            SmartQrAssignment::class,
+            $assignment->id,
+            [
+                'workspace_id' => $assignment->workspace_id,
+                'before' => $before,
+                'reason' => $request->validated('lock_reason'),
+            ],
+            $request->user('admin'),
+        );
+
+        return back()->with('success', __('QR locked. The customer can no longer change its active status.'));
+    }
+
+    /**
+     * Hand the toggle back.
+     *
+     * ⚠️ DOES NOT RE-ACTIVATE. Unlocking returns CONTROL, not state — the tenant
+     * chooses whether to switch the code back on. Forcing `active` here would
+     * make an admin's administrative act publish a live destination on the
+     * customer's behalf, which is their decision and not the platform's.
+     *
+     * ⚠️ Every lock column is cleared together. Leaving lock_reason behind on an
+     * unlocked row would show a stale explanation next to a working control.
+     */
+    public function unlock(string $uuid, Request $request): RedirectResponse
+    {
+        $assignment = SmartQrAssignment::withoutWorkspaceScope(
+            'reason: the admin unlocks assignments across all tenants; a scoped bind would 404 on '
+            .'a row that exists and the permission check would never run'
+        )->where('uuid', $uuid)->firstOrFail();
+
+        $before = $assignment->only(['status', 'admin_locked', 'lock_reason']);
+
+        $assignment->forceFill([
+            'admin_locked' => false,
+            'lock_reason' => null,
+            'locked_by_admin_id' => null,
+            'locked_at' => null,
+        ])->save();
+
+        app(AuditLogService::class)->logAdmin(
+            'smart_qr.assignment_unlocked',
+            SmartQrAssignment::class,
+            $assignment->id,
+            ['workspace_id' => $assignment->workspace_id, 'before' => $before],
+            $request->user('admin'),
+        );
+
+        return back()->with('success', __('QR unlocked. The customer controls its active status again.'));
     }
 
     public function destroy(string $uuid, UnassignQrCodeAction $action, Request $request): RedirectResponse

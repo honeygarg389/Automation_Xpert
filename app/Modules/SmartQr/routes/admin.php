@@ -136,4 +136,19 @@ Route::middleware(['web', 'auth:admin', 'demo'])
 
         Route::delete('/assignments/{assignment}', [QrAssignmentController::class, 'destroy'])
             ->name('assignments.destroy')->middleware('permission:assign_qr_codes');
+
+        // ⚠️ lock_qr_assignments, NOT assign_qr_codes — and the separation is the
+        // point, exactly as override_qr_assignment_limit is separate from
+        // assign_qr_codes. Locking takes a control away from a paying customer
+        // until an admin gives it back; everyone who may assign a code should not
+        // automatically be able to freeze the tenant out of it.
+        //
+        // ⚠️ These are the ONLY routes that write the lock columns. The customer
+        // update path cannot reach them, and cannot mass-assign them either —
+        // they are absent from $fillable, which SmartQrAssignmentLockTest proves
+        // by posting the field rather than trusting the list.
+        Route::post('/assignments/{assignment}/lock', [QrAssignmentController::class, 'lock'])
+            ->name('assignments.lock')->middleware('permission:lock_qr_assignments');
+        Route::delete('/assignments/{assignment}/lock', [QrAssignmentController::class, 'unlock'])
+            ->name('assignments.unlock')->middleware('permission:lock_qr_assignments');
     });

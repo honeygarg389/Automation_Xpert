@@ -234,6 +234,7 @@ class QrInventoryController extends Controller
             'currentAssignment' => fn ($q) => $q->withoutGlobalScope(WorkspaceScope::class),
             'currentAssignment.workspace',
             'currentAssignment.assignedUser',
+            'currentAssignment.lockedByAdmin',
             'currentAssignment.channelAccount' => fn ($q) => $q->withoutGlobalScope(WorkspaceScope::class),
         ]);
 
@@ -298,6 +299,16 @@ class QrInventoryController extends Controller
                 'starts_at' => $code->currentAssignment->starts_at,
                 'expires_at' => $code->currentAssignment->expires_at,
                 'workspace_name' => $code->currentAssignment->workspace?->name,
+
+                // ⚠️ The lock, for the panel's badge and the lock/unlock control.
+                // `admin_locked` is a boolean cast, so it arrives as a real bool
+                // rather than 0/1 — React would treat 0 as falsy correctly but 1
+                // and "0" both truthy, which is how a string-typed flag ends up
+                // showing every assignment as locked.
+                'admin_locked' => (bool) $code->currentAssignment->admin_locked,
+                'lock_reason' => $code->currentAssignment->lock_reason,
+                'locked_at' => $code->currentAssignment->locked_at,
+                'locked_by' => $assignment?->lockedByAdmin?->name,
                 'assigned_user_name' => $code->currentAssignment->assignedUser?->name,
 
                 // ⚠️ display_name first — channel_accounts has no plain phone
