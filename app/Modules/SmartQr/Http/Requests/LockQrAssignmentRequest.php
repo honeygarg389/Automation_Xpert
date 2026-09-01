@@ -30,7 +30,7 @@ class LockQrAssignmentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'lock_reason' => ['required', 'string', 'min:5', 'max:500'],
+            'lock_reason' => ['required', 'string', 'min:5', 'max:100'],
         ];
     }
 

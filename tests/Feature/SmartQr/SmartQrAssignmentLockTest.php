@@ -147,6 +147,31 @@ class SmartQrAssignmentLockTest extends TestCase
         $this->assertFalse($a->fresh()->admin_locked, 'A rejected lock must not have taken effect.');
     }
 
+    /**
+     * ⚠️ A POSITIVE CONTROL SITS BESIDE THE REFUSAL. 101 chars being rejected
+     * proves nothing on its own — the endpoint could be rejecting everything.
+     * The 100-char case must pass through the same route, verb and user type.
+     */
+    #[Test]
+    public function a_reason_may_not_exceed_one_hundred_characters(): void
+    {
+        ['assignment' => $a] = $this->tenant();
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post(route('admin.qr.assignments.lock', $a->uuid), ['lock_reason' => str_repeat('x', 101)])
+            ->assertSessionHasErrors('lock_reason');
+
+        $this->assertFalse($a->fresh()->admin_locked, 'An over-long reason must not have taken effect.');
+
+        $this->actingAs($this->admin(), 'admin')
+            ->post(route('admin.qr.assignments.lock', $a->uuid), ['lock_reason' => str_repeat('x', 100)])
+            ->assertSessionHasNoErrors();
+
+        $fresh = $a->fresh();
+        $this->assertTrue($fresh->admin_locked, 'Exactly 100 characters is the boundary and must be accepted.');
+        $this->assertSame(100, strlen($fresh->lock_reason), 'The stored reason must be the full 100 characters.');
+    }
+
     #[Test]
     public function locking_is_audit_logged(): void
     {
