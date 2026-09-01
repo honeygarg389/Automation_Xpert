@@ -353,26 +353,18 @@ export default function SmartQrCodeShow({
 
                             {currentAssignment ? (
                                 <div className="divide-y divide-neutral-100 dark:divide-neutral-700">
-                                    {/* ⚠️ Reason, actor and time together — the three
-                                        things asked when a customer calls about a
-                                        frozen code, and CLAUDE.md §9's record of a
-                                        manual override. */}
+                                    {/* ⚠️ THE BADGE ONLY. Reason, actor and time moved
+                                        to the QR Preview panel, directly under the
+                                        control that sets them — the three facts asked
+                                        when a customer calls about a frozen code read
+                                        better beside the button than two panels away,
+                                        and duplicating them in both panels meant two
+                                        places to keep in step. */}
                                     {currentAssignment.admin_locked && (
                                         <div className="py-2">
                                             <span className="inline-flex items-center gap-1.5 rounded-soft bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-200">
                                                 <Lock className="h-3 w-3" /> {t('smart_qr.locked')}
                                             </span>
-                                            <p className="mt-1.5 text-sm text-neutral-700 dark:text-neutral-200">
-                                                {currentAssignment.lock_reason}
-                                            </p>
-                                            {currentAssignment.locked_at && (
-                                                <p className="mt-0.5 text-xs text-neutral-500 dark:text-neutral-400">
-                                                    {t('smart_qr.locked_by_at', {
-                                                        who: currentAssignment.locked_by ?? '—',
-                                                        when: formatDateTz(currentAssignment.locked_at, adminTz),
-                                                    })}
-                                                </p>
-                                            )}
                                         </div>
                                     )}
                                     <Field label={t('smart_qr.field_destination_phone')}>
@@ -452,11 +444,23 @@ export default function SmartQrCodeShow({
                             what makes the lock button exactly as wide as the download
                             row rather than as wide as the panel.
 
-                            `flex w-fit flex-col` sizes the column to its widest child
-                            — the download row's natural 285.5px — and `mx-auto` centres
-                            that column in the 288px panel. ⚠️ NOT `inline-flex`: an
-                            inline-level box ignores `margin:auto`, so the column sat
-                            flush left, 2.5px off centre. Measured both ways. `items-stretch`
+                            ⚠️ A FIXED CAP, NOT `w-fit`. Once the reason paragraph moved
+                            into this column, `w-fit` sized the column to its widest
+                            child — which a long reason then became, dragging the
+                            download row and the lock button wider with it. `w-full
+                            max-w-[286px]` makes the width independent of content.
+
+                            ⚠️ 286px, NOT the QR image's 260px. Matching the image was
+                            the obvious intent, and it was measured: at 260 the row must
+                            give up 25.5px, "PDF (print)" shrinks to 94.9px and wraps to
+                            54px tall — the exact defect two earlier passes removed. The
+                            row needs 285.5px with the icons and that label; 286 is the
+                            smallest cap that holds it. `w-full` keeps it from
+                            overflowing a narrower panel.
+
+                            ⚠️ NOT `inline-flex`: an inline-level box ignores
+                            `margin:auto`, so the column sat flush left, 2.5px off
+                            centre. Measured both ways. `items-stretch`
                             then lets the lock button's `w-full` resolve against the
                             COLUMN, not the panel, so its edges land on the SVG and
                             PDF buttons' outer edges. A plain block div would stretch
@@ -465,7 +469,7 @@ export default function SmartQrCodeShow({
 
                             Spacing is the column's `gap-2`; the children carry no
                             `mt-*` of their own, or the gap would compound with it. */}
-                        <div className="mt-4 mx-auto flex w-fit flex-col items-stretch gap-2">
+                        <div className="mt-4 mx-auto flex w-full max-w-[286px] flex-col items-stretch gap-2">
                             <div className="flex items-center justify-center gap-2">
                                 {exportFormats.map((fmt) => (
                                     <a
@@ -506,13 +510,31 @@ export default function SmartQrCodeShow({
                             {/* ⚠️ Guarded on lock_reason as well as admin_locked — a lock
                                 written before the reason column existed, or any row where
                                 it is null, would otherwise render a bare "Reason:" label
-                                with nothing after it. This is the QR Preview panel's own
-                                line; the Current assignment panel keeps its separate
-                                badge + reason block. */}
+                                with nothing after it.
+
+                                ⚠️ The actor/time line matches the reason's SIZE and
+                                WEIGHT (text-sm, normal) but keeps the lighter
+                                neutral-500 — owner's call: same type, colour alone
+                                carries the hierarchy.
+
+                                ⚠️ min-w-0 + break-words: without them a long reason sets
+                                the flex column's min-content width and drags the download
+                                row wider with it, which is the bug the fixed width above
+                                exists to prevent. The text must wrap, not push. */}
                             {currentAssignment?.admin_locked && currentAssignment.lock_reason && (
-                                <p className="text-xs text-neutral-600 dark:text-neutral-400">
-                                    <span className="font-medium text-neutral-700 dark:text-neutral-200">{t('smart_qr.reason_label')}</span> {currentAssignment.lock_reason}
-                                </p>
+                                <div className="min-w-0">
+                                    <p className="break-words text-sm text-neutral-700 dark:text-neutral-200">
+                                        <span className="font-medium">{t('smart_qr.reason_label')}</span> {currentAssignment.lock_reason}
+                                    </p>
+                                    {currentAssignment.locked_at && (
+                                        <p className="mt-0.5 break-words text-sm text-neutral-500 dark:text-neutral-400">
+                                            {t('smart_qr.locked_by_at', {
+                                                who: currentAssignment.locked_by ?? '—',
+                                                when: formatDateTz(currentAssignment.locked_at, adminTz),
+                                            })}
+                                        </p>
+                                    )}
+                                </div>
                             )}
                         </div>
 
