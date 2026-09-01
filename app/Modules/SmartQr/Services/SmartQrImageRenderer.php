@@ -7,7 +7,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
-use Endroid\QrCode\Label\Font\OpenSans;
+use Endroid\QrCode\Label\Font\Font;
 use Endroid\QrCode\RoundBlockSizeMode;
 use Endroid\QrCode\Writer\PngWriter;
 use Endroid\QrCode\Writer\Result\ResultInterface;
@@ -87,10 +87,26 @@ class SmartQrImageRenderer
     public const LOGO_RATIO = 0.22;
 
     /**
-     * ⚠️ Height of the serial band appended to the SVG, in px. Matches the
-     * proportion the PNG writer produces (1056 wide -> 1094 tall).
+     * ⚠️ BUNDLED, NOT endroid's. endroid ships exactly one face — Open Sans
+     * Regular, usWeightClass 400 — and GD does not synthesise weight, so
+     * `new OpenSans(30)` cannot produce the bold serial the SVG path renders.
+     * This is a real static SemiBold (600), verified from its OS/2 table.
+     *
+     * ⚠️ Its Latin subset is only sufficient because `StoreQrBatchRequest`
+     * pins the batch prefix to [A-Z0-9]. Widen that rule and characters
+     * outside the subset render as .notdef boxes on the PNG while the SVG,
+     * on a full system face, still looks right. See assets/README.md.
      */
-    private const SVG_LABEL_BAND = 38;
+    private const LABEL_FONT = __DIR__.'/../assets/OpenSans-SemiBold.ttf';
+
+    /**
+     * ⚠️ Height of the serial band appended to the SVG, in px. Matches what the
+     * PNG writer produces (1056 wide -> 1096 tall), and it must keep matching:
+     * endroid derives the PNG band itself as `label bbox height + 10px bottom
+     * margin`, so raising the PNG label size moves that number and this constant
+     * has to follow or the two formats stop being the same shape.
+     */
+    private const SVG_LABEL_BAND = 40;
 
     /**
      * Masked logo temp files, keyed by source path + mtime + size.
@@ -198,7 +214,7 @@ class SmartQrImageRenderer
      *
      * Measured, not assumed. Same builder, same `labelText`:
      *
-     *     PNG -> 1056 x 1094   (taller: the serial band is rendered)
+     *     PNG -> 1056 x 1096   (taller: the serial band is rendered)
      *     SVG -> 1056 x 1056   (square: the label is gone)
      *
      * `SvgWriter::write()` takes a `LabelInterface $label` parameter and never
@@ -223,7 +239,7 @@ class SmartQrImageRenderer
         // The original pattern stopped at height="…", and in endroid's output the
         // viewBox comes AFTER height — so the viewBox sat OUTSIDE the matched
         // span and the replacement below was a silent no-op. The height grew to
-        // 1094 while the viewBox stayed 0 0 1056 1056, which put the serial band
+        // 1096 while the viewBox stayed 0 0 1056 1056, which put the serial band
         // outside the viewport: present in the file, invisible in every renderer,
         // and inherited by the PDF because pdf() embeds this same SVG.
         //
@@ -265,12 +281,23 @@ class SmartQrImageRenderer
 
         $svg = str_replace($full, $tag, $svg);
 
+        // ⚠️ font-weight="600" RESOLVES TO BOLD, not a true semi-bold, and that is
+        // the best either renderer can do: generic sans-serif is Helvetica in both
+        // the browser and Dompdf, and Helvetica ships Regular and Bold only —
+        // measured, 600 and 700 produce byte-identical metrics. Dompdf reaches the
+        // same place by a different route: php-svg-lib's SurfaceCpdf treats any
+        // numeric weight >= 600 as bold. Written as 600 rather than "bold" because
+        // it states the intent; do not "correct" it to 700 expecting a change.
+        //
+        // ⚠️ The PNG path CANNOT match this. endroid ships one face — Open Sans
+        // Regular (usWeightClass 400) — and GD does not synthesise weight, so the
+        // two formats differ in weight until a bold face is shipped deliberately.
         $text = sprintf(
             '<rect x="0" y="%d" width="%d" height="%d" fill="#ffffff"/>'
-            .'<text x="%d" y="%d" font-family="sans-serif" font-size="24" fill="#000000" '
-            .'text-anchor="middle">S.No: %s</text>',
+            .'<text x="%d" y="%d" font-family="sans-serif" font-size="39.5" font-weight="600" '
+            .'fill="#000000" text-anchor="middle">S.No: %s</text>',
             $height, $width, self::SVG_LABEL_BAND,
-            (int) ($width / 2), $height + 26,
+            (int) ($width / 2), $height + 30,
             htmlspecialchars($serial, ENT_QUOTES | ENT_XML1)
         );
 
@@ -358,7 +385,7 @@ class SmartQrImageRenderer
             // §14: the serial beneath the QR. No customer name, no WhatsApp
             // number, no permanent business details.
             ->labelText('S.No: '.$serial)
-            ->labelFont(new OpenSans(28));
+            ->labelFont(new Font(self::LABEL_FONT, 30));
 
         // ⚠️ NO FALLBACK. The logo is whatever the caller passed, and null
         // means PLAIN. There is deliberately no `?? $this->somethingGlobal()`
