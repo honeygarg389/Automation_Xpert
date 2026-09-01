@@ -83,7 +83,7 @@ class SmartQrImageExportTest extends TestCase
      * ⚠️ §14 requires the serial BENEATH the QR, and endroid's SvgWriter
      * accepts a label then silently discards it.
      *
-     * Measured: same builder, PNG comes out 1056x1094 (band rendered), SVG
+     * Measured: same builder, PNG comes out 1056x1096 (band rendered), SVG
      * 1056x1056 (square, no serial). Since SVG is the ZIP default and the ZIP
      * goes to a printer, shipping this unnoticed means 500 stickers with no
      * human-readable identifier.

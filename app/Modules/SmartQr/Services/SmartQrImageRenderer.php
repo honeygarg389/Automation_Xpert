@@ -87,10 +87,13 @@ class SmartQrImageRenderer
     public const LOGO_RATIO = 0.22;
 
     /**
-     * ⚠️ Height of the serial band appended to the SVG, in px. Matches the
-     * proportion the PNG writer produces (1056 wide -> 1094 tall).
+     * ⚠️ Height of the serial band appended to the SVG, in px. Matches what the
+     * PNG writer produces (1056 wide -> 1096 tall), and it must keep matching:
+     * endroid derives the PNG band itself as `label bbox height + 10px bottom
+     * margin`, so raising the PNG label size moves that number and this constant
+     * has to follow or the two formats stop being the same shape.
      */
-    private const SVG_LABEL_BAND = 38;
+    private const SVG_LABEL_BAND = 40;
 
     /**
      * Masked logo temp files, keyed by source path + mtime + size.
@@ -198,7 +201,7 @@ class SmartQrImageRenderer
      *
      * Measured, not assumed. Same builder, same `labelText`:
      *
-     *     PNG -> 1056 x 1094   (taller: the serial band is rendered)
+     *     PNG -> 1056 x 1096   (taller: the serial band is rendered)
      *     SVG -> 1056 x 1056   (square: the label is gone)
      *
      * `SvgWriter::write()` takes a `LabelInterface $label` parameter and never
@@ -223,7 +226,7 @@ class SmartQrImageRenderer
         // The original pattern stopped at height="…", and in endroid's output the
         // viewBox comes AFTER height — so the viewBox sat OUTSIDE the matched
         // span and the replacement below was a silent no-op. The height grew to
-        // 1094 while the viewBox stayed 0 0 1056 1056, which put the serial band
+        // 1096 while the viewBox stayed 0 0 1056 1056, which put the serial band
         // outside the viewport: present in the file, invisible in every renderer,
         // and inherited by the PDF because pdf() embeds this same SVG.
         //
@@ -267,10 +270,10 @@ class SmartQrImageRenderer
 
         $text = sprintf(
             '<rect x="0" y="%d" width="%d" height="%d" fill="#ffffff"/>'
-            .'<text x="%d" y="%d" font-family="sans-serif" font-size="24" fill="#000000" '
+            .'<text x="%d" y="%d" font-family="sans-serif" font-size="39.5" fill="#000000" '
             .'text-anchor="middle">S.No: %s</text>',
             $height, $width, self::SVG_LABEL_BAND,
-            (int) ($width / 2), $height + 26,
+            (int) ($width / 2), $height + 30,
             htmlspecialchars($serial, ENT_QUOTES | ENT_XML1)
         );
 
@@ -358,7 +361,7 @@ class SmartQrImageRenderer
             // §14: the serial beneath the QR. No customer name, no WhatsApp
             // number, no permanent business details.
             ->labelText('S.No: '.$serial)
-            ->labelFont(new OpenSans(28));
+            ->labelFont(new OpenSans(30));
 
         // ⚠️ NO FALLBACK. The logo is whatever the caller passed, and null
         // means PLAIN. There is deliberately no `?? $this->somethingGlobal()`
