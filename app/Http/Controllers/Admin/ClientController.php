@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Client;
 use App\Models\ClientSubscription;
 use App\Models\Plan;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Services\Billing\BillingGatewayRegistry;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -19,7 +22,10 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ClientController extends Controller
 {
-    public function __construct(private AuditLogService $auditLog) {}
+    public function __construct(
+        private AuditLogService $auditLog,
+        private BillingGatewayRegistry $gateways,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -265,20 +271,123 @@ class ClientController extends Controller
         ]);
 
         $plan = Plan::findOrFail($validated['plan_id']);
-        $client->clientSubscriptions()->where('status', ClientSubscription::STATUS_ACTIVE)->update(['status' => ClientSubscription::STATUS_CANCELLED, 'ends_at' => now()]);
 
-        $sub = $client->clientSubscriptions()->create([
-            'plan_id' => $plan->id,
-            'billing_cycle' => $validated['billing_cycle'],
-            'starts_at' => now(),
-            'status' => ClientSubscription::STATUS_ACTIVE,
-            'assigned_by_admin_id' => $request->user('admin')->id,
-        ]);
+        // ⚠️ NO-OP GUARD, and it is not a nicety. Without it a double-submit
+        // runs the whole cancel-and-recreate a second time: the gateway
+        // subscription cancelled by the first call is now gone, every driver
+        // returns false for it, and block-on-failure would REFUSE an assignment
+        // that changes nothing. It also stops this endpoint stacking a second
+        // client_subscriptions row per click.
+        // ⚠️ Queried through the model class, not $client->clientSubscriptions().
+        // The relation is untyped, so every property read off it degrades to
+        // Illuminate\Database\Eloquent\Model and trips PHPStan's
+        // property.notFound — including the ignore-count baselines this file
+        // already carries.
+        $current = ClientSubscription::query()
+            ->where('client_id', $client->id)
+            ->where('status', ClientSubscription::STATUS_ACTIVE)
+            ->latest('id')
+            ->first();
+
+        if ($current
+            && (int) $current->plan_id === (int) $plan->id
+            && $current->billing_cycle === $validated['billing_cycle']) {
+            return $request->wantsJson()
+                ? response()->json([
+                    'subscription' => [
+                        'id' => $current->id,
+                        'plan' => ['name' => $plan->name],
+                        'billing_cycle' => $current->billing_cycle,
+                    ],
+                ])
+                : redirect()->back()->with('success', __('Plan assigned.'));
+        }
+
+        // ⚠️ BUG-031. This endpoint used to cancel only the client_subscriptions
+        // row and never tell the payment gateway, so a customer paying through
+        // Stripe kept being charged for the old plan while receiving the newly
+        // assigned one — two active subscriptions, one of them invisible to
+        // everyone except the processor.
+        //
+        // ⚠️ subscriptions is keyed on user_id, NOT client_id, so there is no
+        // Client->Subscription relation to lean on. This is the same bridge
+        // Client::effectivePlan() uses, and isActive() rather than a raw status
+        // check because a row left 'active' past its ends_at by a missed webhook
+        // must not be treated as live.
+        $gatewaySubscriptions = Subscription::whereIn('user_id', $client->users()->select('id'))
+            ->whereIn('status', ['active', 'trialing'])
+            ->get()
+            ->filter(fn (Subscription $s) => $s->isActive())
+            ->values();
+
+        $outcomes = [];
+
+        try {
+            DB::transaction(function () use ($client, $plan, $validated, $request, $gatewaySubscriptions, &$outcomes) {
+                foreach ($gatewaySubscriptions as $gatewaySubscription) {
+                    $gateway = $this->gateways->get($gatewaySubscription->gateway);
+
+                    // Same guard shape as Client\SubscriptionController::destroy():
+                    // an unknown registry key yields null and must not fatal.
+                    $ok = $gateway !== null && $gateway->cancel($gatewaySubscription);
+
+                    $outcomes[] = [
+                        'subscription_id' => (int) $gatewaySubscription->id,
+                        'gateway' => (string) $gatewaySubscription->gateway,
+                        'cancelled' => $ok,
+                        'note' => $this->gatewayCancelCaveat((string) $gatewaySubscription->gateway),
+                    ];
+
+                    if (! $ok) {
+                        // Rolls back this loop's earlier local writes AND the
+                        // client_subscriptions changes below.
+                        throw new \RuntimeException('gateway_cancel_failed');
+                    }
+                }
+
+                $client->clientSubscriptions()
+                    ->where('status', ClientSubscription::STATUS_ACTIVE)
+                    ->update(['status' => ClientSubscription::STATUS_CANCELLED, 'ends_at' => now()]);
+
+                $client->clientSubscriptions()->create([
+                    'plan_id' => $plan->id,
+                    'billing_cycle' => $validated['billing_cycle'],
+                    'starts_at' => now(),
+                    'status' => ClientSubscription::STATUS_ACTIVE,
+                    'assigned_by_admin_id' => $request->user('admin')->id,
+                ]);
+            });
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() !== 'gateway_cancel_failed') {
+                throw $e;
+            }
+
+            $this->auditLog->logAdmin('client.plan_assign_failed', Client::class, (int) $client->id, [
+                'plan_id' => $plan->id,
+                'plan_name' => $plan->name,
+                'billing_cycle' => $validated['billing_cycle'],
+                'gateway_cancellations' => $outcomes,
+            ]);
+
+            $message = __('Could not cancel the existing gateway subscription. No changes were made. Please contact support.');
+
+            return $request->wantsJson()
+                ? response()->json(['message' => $message], 422)
+                : redirect()->back()->with('error', $message);
+        }
+
+        // Re-read through the typed model class for the same reason as above.
+        $sub = ClientSubscription::query()
+            ->where('client_id', $client->id)
+            ->where('status', ClientSubscription::STATUS_ACTIVE)
+            ->latest('id')
+            ->firstOrFail();
 
         $this->auditLog->logAdmin('client.plan_assigned', Client::class, (int) $client->id, [
             'plan_id' => $plan->id,
             'plan_name' => $plan->name,
             'billing_cycle' => $validated['billing_cycle'],
+            'gateway_cancellations' => $outcomes,
         ]);
 
         if ($request->wantsJson()) {
@@ -292,6 +401,39 @@ class ClientController extends Controller
         }
 
         return redirect()->back()->with('success', __('Plan assigned.'));
+    }
+
+    /**
+     * ⚠️ WHAT A `true` FROM cancel() ACTUALLY MEANS, per gateway — recorded in
+     * the audit entry because the bool alone is misleading and the differences
+     * are load-bearing for anyone auditing a double-billing complaint.
+     *
+     * Measured by reading all thirteen drivers:
+     *
+     *   tap / myfatoorah / paymob   No remote subscription object exists. These
+     *                               are merchant-initiated saved-card gateways
+     *                               billed by the billing:charge-recurring* jobs,
+     *                               so cancel() only flips the local row and
+     *                               ALWAYS returns true. Nothing was called.
+     *
+     *   paystack                    Returns true WITHOUT calling the API when
+     *                               subscription_code or email_token is missing.
+     *                               It logs a warning and marks the row locally.
+     *                               A true here does not prove billing stopped.
+     *
+     *   mollie                      Same shape when customer_id is absent.
+     *
+     * Everything else performs a real remote call and only returns true on a
+     * successful response.
+     */
+    private function gatewayCancelCaveat(string $gateway): ?string
+    {
+        return match ($gateway) {
+            'tap', 'myfatoorah', 'paymob' => 'local_only: no remote subscription exists; scheduler billing stopped',
+            'paystack' => 'may_be_local_only: returns true without an API call when subscription_code/email_token are missing',
+            'mollie' => 'may_be_local_only: returns true without an API call when customer_id is missing',
+            default => null,
+        };
     }
 
     public function impersonate(Request $request, Client $client): RedirectResponse
