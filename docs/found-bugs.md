@@ -2556,9 +2556,23 @@ the right start, because it currently fails and nothing else does.
   still wrong** from earlier runs (measured: undiscoverable by the fixed scanner *and* carrying
   `keyToDefaultEnglish()`'s exact output, e.g. `client.tenants.index` = `"Index"`,
   `client.profile.sessions.destroy` = `"Destroy"`). Deciding which to delete or restore is a data
-  question, not a code one, and one of them — `client.profile.2fa.enable` — sits **inside** a
-  subtree the fix now protects, having been created by this same bug. `en.json` was deliberately
-  left untouched by the fix commit.
+  question, not a code one. `en.json` was deliberately left untouched by the fix commit.
+
+  ⚠️ **CORRECTED 2026-09-03 by a full inventory of those keys — the earlier note here was
+  misleading.** It said `client.profile.2fa.enable` "sits inside a subtree the fix now protects",
+  implying real translations were at risk. They were not: the entire `client.profile` namespace
+  (`edit`, `2fa.enable`, `2fa.disable`, `sessions.destroy`) is fabricated route-name junk, and
+  every one of those keys was already present in the **initial WhatsMine import** (`4ec7e3e`).
+  The `unflatten` guard was protecting junk, not preserving anything of value.
+
+  The inventory also found that **no destruction was ever committed**: zero keys present at
+  `4ec7e3e` are missing from the current file. The Case A/B mechanism is real and was
+  demonstrated, but it damaged working copies only — nobody committed the damage. Of the 246
+  flagged keys, **231 are spurious** (183 route names, 47 orphans, one filename) and **none of
+  them is rendered anywhere** — zero are passed to `t()`, `__()` or `@lang()`. The remaining 15
+  are legitimate `smart_qr.*_status.*` labels that merely look humanised because their correct
+  value genuinely is the title-cased word, and they read as undiscoverable only because they are
+  built dynamically (`` t(`smart_qr.code_status.${status}`) ``).
 - **Files:** `app/Services/I18n/TranslationKeyScanner.php` (root cause),
   `app/Services/I18n/I18nFileService.php` (`unflatten`, the destruction),
   `database/seeders/TranslationSeeder.php`, `app/Services/Install/InstallerService.php`

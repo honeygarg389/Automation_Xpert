@@ -1,7 +1,4 @@
 {
-    "sidebar": {
-        "menu": "菜单"
-    },
     "common": {
         "create": "创建",
         "close": "关闭",
@@ -35,17 +32,13 @@
         "dashboard": "仪表板",
         "backToApp": "返回应用",
         "rtlPreview": "RTL 预览",
-        "home": "首页",
-        "websites": "网站",
         "workspaces": "工作区",
         "pricing": "定价",
-        "components": "组件",
         "twoFactor": "双重认证",
         "sessions": "会话",
         "features": "功能",
         "use_cases": "使用案例",
         "faq": "常见问题",
-        "blog": "博客",
         "contact": "联系",
         "sign_out": "退出",
         "light_mode": "浅色模式",
@@ -60,78 +53,15 @@
         "create_workspace": "创建工作区",
         "manage_workspaces": "管理工作区",
         "language": "语言",
-        "currency": "货币",
         "account": "账户"
     },
-    "theme": {
-        "update": "更新"
-    },
-    "currency": {
-        "update": "更新"
-    },
     "client": {
-        "profile": {
-            "edit": "编辑",
-            "2fa": {
-                "enable": "启用",
-                "disable": "禁用"
-            },
-            "sessions": {
-                "destroy": "终止"
-            }
-        },
-        "tenants": {
-            "switch": "切换",
-            "index": "列表",
-            "store": "保存"
-        },
         "dashboard": "仪表板",
         "panel": "客户面板",
         "pricing": "定价",
-        "websites": {
-            "pages": {
-                "index": "列表",
-                "store": "保存",
-                "update": "更新",
-                "create": "创建",
-                "edit": "编辑"
-            },
-            "index": "列表",
-            "store": "保存",
-            "create": "创建",
-            "domains": {
-                "store": "保存",
-                "verify": "验证",
-                "index": "列表"
-            },
-            "templates": "模板",
-            "publish": {
-                "store": "保存"
-            },
-            "export": {
-                "store": "保存"
-            }
-        },
-        "checkout": {
-            "store": "保存"
-        },
-        "pages": "页面",
         "no_tenant": "无工作区",
         "create_workspace": "创建工作区",
         "billing": "账单",
-        "subscription": {
-            "show": "查看",
-            "destroy": "取消"
-        },
-        "team": {
-            "index": "列表",
-            "store": "保存",
-            "update": "更新",
-            "destroy": "删除"
-        },
-        "settings": {
-            "update": "更新"
-        },
         "audit_log": "审计日志",
         "audit_log_subtitle": "审计日志详情",
         "filter_by_action": "按操作筛选",
@@ -155,9 +85,6 @@
         "managed_by_admin": "由管理员管理",
         "upgrade_plan": "升级计划",
         "no_plan": "无计划",
-        "ai_credits": "AI 积分",
-        "use_ai": "使用 AI",
-        "manage_websites": "管理网站",
         "quick_links": "快速链接",
         "billing_plans": "账单计划",
         "settings_subtitle": "自定义偏好设置",
@@ -175,7 +102,6 @@
         "save_settings": "保存设置",
         "cancel_subscription_confirm": "确认取消订阅？",
         "subscription_subtitle": "管理您的订阅",
-        "ends": "到期",
         "cancel_subscription": "取消订阅",
         "view_billing_history": "查看账单历史",
         "team_for": "团队",
@@ -195,201 +121,47 @@
         "inactive": "非活跃",
         "save": "保存",
         "remove_member_confirm": "确认移除此成员？",
-        "search": "搜索",
         "workspaces": {
             "switch": "切换",
             "index": "列表",
             "store": "保存"
         },
-        "notifications": {
-            "index": "列表",
-            "read": "已读",
-            "destroy": "删除",
-            "recent": "最近"
-        },
-        "webhooks": {
-            "index": "列表",
-            "update": "更新",
-            "store": "保存",
-            "destroy": "删除",
-            "test": "测试",
-            "deliveries": "投递记录"
-        },
-        "media": {
-            "index": "列表",
-            "store": "保存",
-            "destroy": "删除"
-        },
-        "onboarding": {
-            "show": "查看",
-            "complete": "完成"
-        },
         "team_members": "团队成员",
         "manage_team": "管理团队",
         "manage_workspaces": "管理工作区",
         "change_plan": "更改计划",
-        "coupon": {
-            "check": "验证"
-        },
-        "support": {
-            "store": "保存",
-            "index": "列表",
-            "create": "创建",
-            "show": "查看",
-            "reply": "回复"
-        },
         "no_workspace": "无工作区",
         "contacts": {
-            "index": "列表",
-            "show": "查看",
-            "destroy": "删除",
-            "import": "导入",
-            "store": "保存",
-            "update": "更新",
-            "export": "导出",
-            "avatar": {
-                "upload": "上传",
-                "delete": "删除"
-            }
-        },
-        "segments": {
-            "index": "列表",
-            "store": "保存",
-            "destroy": "删除"
+            "index": "列表"
         },
         "whatsapp": {
             "setup": {
                 "store": "保存"
-            },
-            "templates": {
-                "index": "列表",
-                "store": "保存",
-                "sync": "同步",
-                "create": "创建"
-            },
-            "widget": {
-                "index": "列表"
-            },
-            "widgets": {
-                "destroy": "删除",
-                "store": "保存"
-            }
-        },
-        "broadcasts": {
-            "campaigns": {
-                "index": "列表"
             }
         },
         "inbox": {
             "index": "列表",
-            "show": "查看",
-            "reply": "回复",
-            "status": "状态",
-            "labels": {
-                "update": "更新",
-                "store": "保存",
-                "destroy": "删除",
-                "detach": "分离",
-                "attach": "附加"
-            },
-            "typing": "正在输入",
-            "notes": {
-                "index": "列表",
-                "store": "保存"
-            },
-            "handover": "转交",
-            "contacts": {
-                "search": "搜索"
-            },
-            "start": "开始",
             "setup": {
-                "destroy": "删除",
                 "instagram": "Instagram",
                 "messenger": "Messenger"
-            },
-            "templates": "模板",
-            "assign": "分配"
+            }
         },
         "ai": {
-            "providers": {
-                "index": "列表",
-                "update": "更新"
-            },
             "chatbots": {
-                "index": "列表",
-                "playground": "测试场",
-                "update": "更新",
-                "destroy": "删除",
-                "store": "保存"
-            },
-            "documents": {
-                "destroy": "删除",
-                "reindex": "重新索引"
+                "index": "列表"
             }
         },
         "social": {
             "accounts": {
-                "index": "列表",
-                "disconnect": "断开连接",
-                "connect": "连接"
+                "index": "列表"
             },
             "composer": "内容创作",
-            "calendar": "日历",
-            "posts": {
-                "store": "保存"
-            }
-        },
-        "leads": {
-            "index": "列表",
-            "scrape": "抓取",
-            "destroy": "删除"
-        },
-        "automations": {
-            "index": "列表",
-            "update": "更新",
-            "store": "保存",
-            "destroy": "删除",
-            "edit": "编辑",
-            "runs": "运行记录"
+            "calendar": "日历"
         },
         "campaigns": {
-            "index": "列表",
-            "launch": "发布",
-            "pause": "暂停",
-            "destroy": "删除",
-            "create": "创建",
-            "show": "查看",
-            "store": "保存",
-            "update": "更新",
-            "edit": "编辑"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "列表",
-                "show": "查看"
-            },
-            "ai": {
-                "index": "列表"
-            },
-            "inbox": {
-                "index": "列表"
-            },
-            "automations": {
-                "index": "列表"
-            },
-            "social": {
-                "index": "列表"
-            }
-        },
-        "push": {
-            "subscribe": "订阅",
-            "unsubscribe": "取消订阅"
+            "create": "创建"
         },
         "invite_by_email": "通过邮件邀请",
-        "invitations": {
-            "store": "保存",
-            "destroy": "删除"
-        },
         "next_step": "下一步：",
         "go": "前往",
         "view_all": "查看全部",
@@ -414,9 +186,6 @@
         "page_of": "第 {{current}} 页，共 {{last}} 页",
         "showing": "显示 {{from}}–{{to}}，共 {{total}} 条"
     },
-    "locale": {
-        "update": "更新"
-    },
     "admin": {
         "nav": {
             "subscriptions": "订阅",
@@ -433,10 +202,8 @@
         "client_login": "客户登录",
         "dashboard": "仪表板",
         "client_management": "客户管理",
-        "clients": "客户",
         "subscriptions": {
-            "index": "订阅列表",
-            "export": "导出"
+            "index": "订阅列表"
         },
         "subscriptions_export": "导出 CSV",
         "mrr_trend": "月度经常性收入趋势（12个月）",
@@ -474,9 +241,6 @@
         "email": "邮件",
         "settings": {
             "index": "设置",
-            "general": {
-                "update": "更新"
-            },
             "logo": {
                 "upload": "上传",
                 "delete": "删除"
@@ -484,22 +248,14 @@
             "favicon": {
                 "upload": "上传",
                 "delete": "删除"
-            },
-            "update": "更新",
-            "firebase": {
-                "update": "更新"
             }
         },
         "currencies": {
-            "index": "货币列表",
-            "update": "更新"
+            "index": "货币列表"
         },
         "languages": "语言",
         "locales": {
-            "index": "列表",
-            "store": "保存",
-            "destroy": "删除",
-            "update": "更新"
+            "index": "列表"
         },
         "website_templates": "网站/落地页",
         "roles_permissions": "角色与权限",
@@ -510,12 +266,7 @@
             "update": "更新"
         },
         "ai_requests": "AI 请求",
-        "templates": "模板",
         "audit_log": "审计日志",
-        "logout": "退出登录",
-        "impersonation": {
-            "stop": "停止"
-        },
         "user_id": "用户ID",
         "all_statuses": "所有状态",
         "status_success": "成功",
@@ -523,7 +274,6 @@
         "status_failed": "失败",
         "action": "操作",
         "admin_log_in": "管理员登录",
-        "login": "登录",
         "dashboard_overview": "平台指标概览。",
         "quick_links": "快速链接",
         "mrr": "月度经常性收入",
@@ -531,29 +281,14 @@
         "ai_requests_this_month": "AI 请求（本月）",
         "ai_tokens_this_month": "AI Token（本月）",
         "payments_this_month": "本月付款",
-        "translations": {
-            "update": "更新"
-        },
         "view_subscriptions": "查看订阅 →",
-        "roles": {
-            "store": "保存",
-            "update": "更新",
-            "destroy": "删除"
-        },
-        "permissions": {
-            "store": "保存",
-            "update": "更新",
-            "destroy": "删除"
-        },
         "system_settings": "系统设置",
         "view_payments": "查看付款 →",
         "add_client": "添加客户",
         "edit_client": "编辑客户",
         "delete_client": "删除客户",
-        "manage_client_users": "管理客户用户",
         "add_user": "添加用户",
         "edit_user": "编辑用户",
-        "delete_user": "删除用户",
         "assign_plan": "为客户分配计划",
         "edit_client_title": "编辑客户",
         "manage_users_title": "管理客户用户",
@@ -647,36 +382,23 @@
         "delete_user_confirm": "确认要从此客户中移除 {{name}}（{{email}}）？",
         "delete_client_confirm": "确认要删除 {{name}}？这将移除所有客户用户和订阅。",
         "coupons": {
-            "index": "优惠券列表",
-            "update": "更新",
-            "store": "保存",
-            "destroy": "删除"
+            "index": "优惠券列表"
         },
         "tax_rates": "税率",
         "landing_page": "落地页",
         "cms_pages": "CMS 页面",
         "support": {
-            "index": "支持列表",
-            "show": "查看",
-            "reply": "回复",
-            "status": "状态"
+            "index": "支持列表"
         },
         "queue": {
-            "index": "队列列表",
-            "retry": "重试",
-            "flush": "清空"
+            "index": "队列列表"
         },
         "clients_count": "客户总数",
         "users_count": "用户总数",
         "integrations": {
-            "index": "集成列表",
-            "update": "更新",
-            "test": "测试",
-            "rotate": "轮换",
-            "edit": "编辑"
+            "index": "集成列表"
         },
         "pusher_settings": "Pusher 设置",
-        "search": "搜索",
         "admin_management_desc": "管理管理员用户及其角色。",
         "total_admins": "管理员总数",
         "col_admin": "管理员",
@@ -763,8 +485,7 @@
         "impersonating": "正在模拟：{{name}}"
     },
     "head": {
-        "admin": "管理员",
-        "welcome": "欢迎"
+        "admin": "管理员"
     },
     "locales": {
         "add_language": "添加语言",
@@ -784,8 +505,7 @@
         "no_translations": "没有符合筛选条件的翻译。请运行 i18n:seed-defaults 填充。",
         "saving": "保存中…",
         "title": "语言",
-        "languages_translations": "语言与翻译",
-        "translations": "翻译"
+        "languages_translations": "语言与翻译"
     },
     "rtl": {
         "title": "RTL 预览",
@@ -814,13 +534,6 @@
         "verification_sent": "新的验证链接已发送到您注册时提供的邮箱地址。",
         "resend_verification": "重新发送验证邮件",
         "log_out": "退出登录",
-        "verify_email": "验证邮箱",
-        "invitations": {
-            "accept": "接受"
-        },
-        "social": {
-            "redirect": "重定向"
-        },
         "admin_panel_label": "管理员面板",
         "welcome_to": "欢迎来到",
         "admin_tagline": "高效专业地管理您的平台",
@@ -867,22 +580,9 @@
         "google_signin_failed": "Google 登录失败。请重试。",
         "continue_with_google": "使用 Google 继续",
         "continue_with": "使用 {{provider}} 继续",
-        "or_continue_with_email": "或使用邮箱继续",
-        "firebase": "Firebase"
-    },
-    "password": {
-        "confirm": "确认",
-        "email": "邮箱",
-        "request": "请求",
-        "store": "保存",
-        "update": "更新"
-    },
-    "verification": {
-        "send": "发送"
+        "or_continue_with_email": "或使用邮箱继续"
     },
     "profile": {
-        "destroy": "删除",
-        "update": "更新",
         "edit": "个人资料",
         "update_profile": "更新个人资料信息",
         "update_password": "更新密码",
@@ -918,8 +618,6 @@
         "most_popular": "最受欢迎"
     },
     "plans": {
-        "name": "名称",
-        "slug": "标识符",
         "monthly_price_cents": "月价格（分）",
         "yearly_price_cents": "年价格（分）",
         "currency_code": "货币代码",
@@ -942,7 +640,6 @@
         "invite_accepted": "已接受邀请"
     },
     "contact": {
-        "store": "保存",
         "created": "已创建",
         "tag_added": "已添加标签",
         "name": "名称",
@@ -964,9 +661,6 @@
         "received": "已接收"
     },
     "reports": {
-        "exports": {
-            "contacts": "联系人"
-        },
         "ai_title": "AI 使用报告",
         "ai_subtitle": "令牌消耗、成本和延迟分析",
         "tokens_per_day": "每日令牌",
@@ -1329,11 +1023,6 @@
         "02em": "02Em",
         "08em": "08Em"
     },
-    "www": {
-        "example": {
-            "com": "com"
-        }
-    },
     "smtp": {
         "gmail": {
             "com": "com"
@@ -1347,9 +1036,6 @@
     },
     "wamid": {
         "xxx": "xxx"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "context": {
         "key": "键"
@@ -1618,11 +1304,9 @@
         "no_timezones": "未找到时区"
     },
     "inbox_ui": {
-        "new_conversation": "新建对话",
         "search_contact": "按姓名、电话或邮箱搜索…",
         "no_channels": "没有活跃的频道账户。",
         "select_channel": "选择要开始对话的频道：",
-        "contact_details": "联系人详情",
         "opening_message": "输入对话开始时要发送的消息…"
     }
 }

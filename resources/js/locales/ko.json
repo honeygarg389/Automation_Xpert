@@ -38,13 +38,10 @@
         "settings": "설정"
     },
     "nav": {
-        "home": "홈",
         "dashboard": "대시보드",
-        "websites": "웹사이트",
         "workspaces": "워크스페이스",
         "profile": "프로필",
         "admin": "관리자",
-        "components": "컴포넌트",
         "pricing": "요금제",
         "logout": "로그아웃",
         "login": "로그인",
@@ -59,7 +56,6 @@
         "integrations": "연동",
         "about": "소개",
         "faq": "자주 묻는 질문",
-        "blog": "블로그",
         "contact": "문의",
         "sign_out": "로그아웃",
         "light_mode": "라이트 모드",
@@ -152,9 +148,6 @@
         "description": "이 페이지는 오른쪽에서 왼쪽 레이아웃으로 표시됩니다. 언어 전환기를 사용해 아랍어(العربية)로 전환하면 전체 앱을 RTL로 볼 수 있습니다.",
         "ltrNote": "LTR로 보려면 영어 또는 벵골어로 다시 전환하세요."
     },
-    "sidebar": {
-        "menu": "메뉴"
-    },
     "topbar": {
         "switch_theme": "테마 전환",
         "visit_website": "웹사이트 방문",
@@ -163,67 +156,14 @@
         "create_workspace": "워크스페이스 생성",
         "manage_workspaces": "워크스페이스 관리",
         "language": "언어",
-        "currency": "통화",
         "account": "계정"
     },
-    "theme": {
-        "update": "업데이트"
-    },
-    "currency": {
-        "update": "업데이트"
-    },
     "client": {
-        "profile": {
-            "edit": "편집",
-            "2fa": {
-                "enable": "활성화",
-                "disable": "비활성화"
-            },
-            "sessions": {
-                "destroy": "종료"
-            }
-        },
-        "tenants": {
-            "switch": "전환",
-            "index": "목록",
-            "store": "저장"
-        },
         "dashboard": "대시보드",
         "panel": "클라이언트 패널",
         "pricing": "요금제",
-        "websites": {
-            "pages": {
-                "index": "목록",
-                "store": "저장",
-                "update": "업데이트",
-                "create": "생성",
-                "edit": "편집"
-            },
-            "index": "목록",
-            "store": "저장",
-            "create": "생성",
-            "domains": {
-                "store": "저장",
-                "verify": "확인",
-                "index": "목록"
-            },
-            "templates": "템플릿",
-            "publish": {
-                "store": "저장"
-            },
-            "export": {
-                "store": "저장"
-            }
-        },
-        "checkout": {
-            "store": "저장"
-        },
-        "pages": "페이지",
         "no_tenant": "워크스페이스 없음",
         "create_workspace": "워크스페이스 생성",
-        "billing": {
-            "index": "목록"
-        },
         "audit_log": "감사 로그",
         "audit_log_subtitle": "감사 로그 부제목",
         "filter_by_action": "작업별 필터",
@@ -247,9 +187,6 @@
         "managed_by_admin": "조직 관리자가 관리합니다",
         "upgrade_plan": "요금제 업그레이드",
         "no_plan": "활성 구독 없음",
-        "ai_credits": "AI 크레딧",
-        "use_ai": "AI 사용",
-        "manage_websites": "웹사이트 관리",
         "quick_links": "빠른 링크",
         "billing_plans": "결제 요금제",
         "settings_subtitle": "환경설정 및 조직",
@@ -267,7 +204,6 @@
         "save_settings": "설정 저장",
         "cancel_subscription_confirm": "정말 구독을 취소하시겠습니까?",
         "subscription_subtitle": "현재 요금제 및 결제",
-        "ends": "종료일",
         "cancel_subscription": "구독 취소",
         "view_billing_history": "결제 내역 보기",
         "team_for": "팀:",
@@ -287,210 +223,36 @@
         "inactive": "비활성",
         "save": "저장",
         "remove_member_confirm": "제거",
-        "search": "검색",
-        "notifications": {
-            "index": "목록",
-            "read": "읽음",
-            "destroy": "삭제",
-            "recent": "최근"
-        },
-        "webhooks": {
-            "index": "목록",
-            "update": "업데이트",
-            "store": "저장",
-            "destroy": "삭제",
-            "test": "테스트",
-            "deliveries": "전송 내역"
-        },
-        "media": {
-            "index": "목록",
-            "store": "저장",
-            "destroy": "삭제"
-        },
-        "onboarding": {
-            "show": "보기",
-            "complete": "완료"
-        },
         "team_members": "팀 구성원",
         "manage_team": "팀 관리",
         "manage_workspaces": "워크스페이스 관리",
         "change_plan": "요금제 변경",
-        "coupon": {
-            "check": "확인"
-        },
-        "support": {
-            "store": "저장",
-            "index": "목록",
-            "create": "생성",
-            "show": "보기",
-            "reply": "답변"
-        },
         "no_workspace": "워크스페이스 없음",
         "contacts": {
-            "index": "목록",
-            "show": "보기",
-            "destroy": "삭제",
-            "import": "가져오기",
-            "store": "저장",
-            "update": "업데이트",
-            "export": "내보내기",
-            "avatar": {
-                "upload": "업로드",
-                "delete": "삭제"
-            }
-        },
-        "segments": {
-            "index": "목록",
-            "store": "저장",
-            "destroy": "삭제",
-            "contacts": {
-                "attach": "연결",
-                "detach": "연결 해제"
-            }
+            "index": "목록"
         },
         "whatsapp": {
-            "templates": {
-                "index": "목록",
-                "store": "저장",
-                "sync": "동기화",
-                "create": "생성",
-                "destroy": "삭제",
-                "edit": "편집",
-                "update": "업데이트"
-            },
-            "widget": {
-                "index": "목록"
-            },
-            "widgets": {
-                "destroy": "삭제",
-                "store": "저장",
-                "update": "업데이트",
-                "create": "생성",
-                "edit": "편집"
-            },
             "setup": "설정"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "목록"
-            }
-        },
         "inbox": {
-            "index": "목록",
-            "show": "보기",
-            "reply": "답장",
-            "status": "상태",
-            "labels": {
-                "update": "업데이트",
-                "store": "저장",
-                "destroy": "삭제",
-                "detach": "연결 해제",
-                "attach": "연결"
-            },
-            "typing": "입력 중",
-            "notes": {
-                "index": "목록",
-                "store": "저장"
-            },
-            "handover": "이관",
-            "contacts": {
-                "search": "검색"
-            },
-            "start": "시작",
-            "templates": "템플릿",
-            "assign": "배정",
-            "setup": {
-                "destroy": "삭제"
-            }
+            "index": "목록"
         },
         "ai": {
-            "providers": {
-                "index": "목록",
-                "update": "업데이트"
-            },
             "chatbots": {
-                "index": "목록",
-                "playground": "플레이그라운드",
-                "update": "업데이트",
-                "destroy": "삭제",
-                "store": "저장"
-            },
-            "documents": {
-                "destroy": "삭제",
-                "reindex": "재색인"
+                "index": "목록"
             }
         },
         "social": {
             "accounts": {
-                "index": "목록",
-                "disconnect": "연결 해제",
-                "connect": "연결"
+                "index": "목록"
             },
             "composer": "작성기",
-            "calendar": "캘린더",
-            "posts": {
-                "store": "저장",
-                "index": "목록",
-                "update": "업데이트",
-                "bulk": "일괄",
-                "edit": "편집",
-                "cancel": "취소",
-                "destroy": "삭제"
-            }
-        },
-        "leads": {
-            "index": "목록",
-            "scrape": "수집",
-            "destroy": "삭제"
-        },
-        "automations": {
-            "index": "목록",
-            "update": "업데이트",
-            "store": "저장",
-            "destroy": "삭제",
-            "edit": "편집",
-            "runs": "실행 내역",
-            "generate": "생성",
-            "test": "테스트"
+            "calendar": "캘린더"
         },
         "campaigns": {
-            "index": "목록",
-            "launch": "시작",
-            "pause": "일시중지",
-            "destroy": "삭제",
-            "create": "생성",
-            "show": "보기",
-            "store": "저장",
-            "update": "업데이트",
-            "edit": "편집"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "목록",
-                "show": "보기"
-            },
-            "ai": {
-                "index": "목록"
-            },
-            "inbox": {
-                "index": "목록"
-            },
-            "automations": {
-                "index": "목록"
-            },
-            "social": {
-                "index": "목록"
-            }
-        },
-        "push": {
-            "subscribe": "구독",
-            "unsubscribe": "구독 해제"
+            "create": "생성"
         },
         "invite_by_email": "이메일로 초대",
-        "invitations": {
-            "store": "저장",
-            "destroy": "삭제"
-        },
         "next_step": "다음 단계:",
         "go": "이동",
         "view_all": "전체 보기",
@@ -529,45 +291,10 @@
         "ecommerce": {
             "stores": {
                 "test": "테스트",
-                "sync": "동기화",
-                "index": "목록",
-                "destroy": "삭제",
-                "store": "저장"
-            },
-            "orders": {
-                "index": "목록",
-                "show": "보기",
-                "refresh": "새로고침",
-                "fulfill": "처리"
-            },
-            "products": {
-                "index": "목록",
-                "search": "검색"
-            },
-            "contacts": {
-                "orders": "주문"
-            },
-            "oauth": {
-                "connect": "연결"
+                "sync": "동기화"
             }
         },
-        "workspaces": "워크스페이스",
-        "settings": {
-            "update": "업데이트",
-            "notifications": "알림",
-            "index": "목록"
-        },
-        "team": {
-            "store": "저장",
-            "update": "업데이트",
-            "destroy": "삭제",
-            "index": "목록"
-        },
-        "subscription": {
-            "destroy": "삭제",
-            "invoice": "청구서",
-            "show": "보기"
-        }
+        "workspaces": "워크스페이스"
     },
     "pagination": {
         "label": "페이지네이션",
@@ -581,9 +308,6 @@
         "page_num": "{{num}} 페이지",
         "page_of": "{{last}} 중 {{current}} 페이지",
         "showing": "전체 {{total}}개 중 {{from}}–{{to}} 표시"
-    },
-    "locale": {
-        "update": "업데이트"
     },
     "admin": {
         "nav": {
@@ -638,20 +362,12 @@
         "email": "이메일",
         "languages": "언어",
         "locales": {
-            "index": "목록",
-            "store": "저장",
-            "destroy": "삭제",
-            "update": "업데이트"
+            "index": "목록"
         },
         "website_templates": "웹사이트/랜딩 페이지",
         "roles_permissions": "역할 및 권한",
         "ai_requests": "AI 요청",
-        "templates": "템플릿",
         "audit_log": "감사 로그",
-        "logout": "로그아웃",
-        "impersonation": {
-            "stop": "중지"
-        },
         "user_id": "사용자 ID",
         "all_statuses": "모든 상태",
         "status_success": "성공",
@@ -659,7 +375,6 @@
         "status_failed": "실패",
         "action": "작업",
         "admin_log_in": "관리자 로그인",
-        "login": "로그인",
         "dashboard_overview": "플랫폼 지표 개요입니다.",
         "arpu": "ARPU",
         "this_period": "이번 기간",
@@ -687,29 +402,14 @@
         "ai_requests_this_month": "AI 요청 (이번 달)",
         "ai_tokens_this_month": "AI 토큰 (이번 달)",
         "payments_this_month": "이번 달 결제",
-        "translations": {
-            "update": "업데이트"
-        },
         "view_subscriptions": "구독 보기 →",
-        "roles": {
-            "store": "저장",
-            "update": "업데이트",
-            "destroy": "삭제"
-        },
-        "permissions": {
-            "store": "저장",
-            "update": "업데이트",
-            "destroy": "삭제"
-        },
         "system_settings": "시스템 설정",
         "view_payments": "결제 보기 →",
         "add_client": "클라이언트 추가",
         "edit_client": "클라이언트 편집",
         "delete_client": "클라이언트 삭제",
-        "manage_client_users": "클라이언트 사용자 관리",
         "add_user": "사용자 추가",
         "edit_user": "사용자 편집",
-        "delete_user": "사용자 삭제",
         "assign_plan": "클라이언트에 요금제 배정",
         "edit_client_title": "클라이언트 편집",
         "manage_users_title": "클라이언트 사용자 관리",
@@ -802,37 +502,24 @@
         "delete_user_confirm": "정말 {{name}}({{email}})을(를) 이 클라이언트에서 제거하시겠습니까?",
         "delete_client_confirm": "정말 {{name}}을(를) 삭제하시겠습니까? 모든 클라이언트 사용자와 구독이 제거됩니다.",
         "coupons": {
-            "index": "목록",
-            "update": "업데이트",
-            "store": "저장",
-            "destroy": "삭제"
+            "index": "목록"
         },
         "tax_rates": "세율",
         "landing_page": "사이트 콘텐츠",
         "cms_pages": "CMS 페이지",
         "cron_setup": "Cron 설정",
         "support": {
-            "index": "목록",
-            "show": "보기",
-            "reply": "답변",
-            "status": "상태"
+            "index": "목록"
         },
         "queue": {
-            "index": "목록",
-            "retry": "재시도",
-            "flush": "비우기"
+            "index": "목록"
         },
         "clients_count": "전체 클라이언트",
         "users_count": "전체 사용자",
         "integrations": {
-            "index": "목록",
-            "update": "업데이트",
-            "test": "테스트",
-            "rotate": "교체",
-            "edit": "편집"
+            "index": "목록"
         },
         "pusher_settings": "Pusher 설정",
-        "search": "검색",
         "admin_management_desc": "관리자 사용자와 역할을 관리합니다.",
         "total_admins": "전체 관리자",
         "col_admin": "관리자",
@@ -922,24 +609,16 @@
         "secret_key_hint": "서버 측 시크릿 키 — 비공개로 유지하세요",
         "stripe_webhook_hint": "Stripe 대시보드의 Webhook 서명 시크릿 (whsec_…)",
         "webhook_hint": "수신 게이트웨이 이벤트를 검증하는 데 사용되는 Webhook 시크릿",
-        "clients": "클라이언트",
         "subscriptions": {
-            "index": "목록",
-            "store": "저장",
-            "export": "내보내기"
+            "index": "목록"
         },
         "payments": "결제",
         "plans": "요금제",
         "currencies": {
-            "index": "목록",
-            "update": "업데이트"
+            "index": "목록"
         },
-        "admins": "관리자",
         "settings": {
             "index": "목록",
-            "general": {
-                "update": "업데이트"
-            },
             "logo": {
                 "upload": "업로드",
                 "delete": "삭제"
@@ -947,10 +626,6 @@
             "favicon": {
                 "upload": "업로드",
                 "delete": "삭제"
-            },
-            "update": "업데이트",
-            "firebase": {
-                "update": "업데이트"
             }
         },
         "ai": {
@@ -1015,8 +690,7 @@
         "impersonating": "대리 로그인 중: {{name}}"
     },
     "head": {
-        "admin": "관리자",
-        "welcome": "환영합니다"
+        "admin": "관리자"
     },
     "locales": {
         "add_language": "언어 추가",
@@ -1037,7 +711,6 @@
         "saving": "저장 중…",
         "title": "언어",
         "languages_translations": "언어 및 번역",
-        "translations": "번역",
         "translations_tab": "번역",
         "languages_and_translations": "언어 및 번역",
         "flag": "국기",
@@ -1069,13 +742,6 @@
         "verification_sent": "가입 시 입력하신 이메일 주소로 새 인증 링크가 발송되었습니다.",
         "resend_verification": "인증 이메일 재발송",
         "log_out": "로그아웃",
-        "verify_email": "이메일 인증",
-        "invitations": {
-            "accept": "수락"
-        },
-        "social": {
-            "redirect": "리디렉션"
-        },
         "admin_panel_label": "관리자 패널",
         "welcome_to": "환영합니다",
         "admin_tagline": "자신 있게 플랫폼을 관리하세요",
@@ -1130,7 +796,6 @@
         "continue_with_google": "Google로 계속하기",
         "continue_with": "{{provider}}(으)로 계속하기",
         "or_continue_with_email": "또는 이메일로 계속하기",
-        "firebase": "Firebase",
         "trusted_by_count": "10,000개 이상의 비즈니스가 신뢰합니다",
         "proof_businesses": "비즈니스",
         "proof_messages_sent": "발송된 메시지",
@@ -1145,24 +810,7 @@
         "demo_role_admin": "데모 역할 관리자",
         "demo_role_client": "데모 역할 클라이언트"
     },
-    "password": {
-        "confirm": "확인",
-        "email": "이메일",
-        "request": "요청",
-        "store": "저장",
-        "update": "업데이트"
-    },
-    "verification": {
-        "send": "보내기"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "삭제",
-        "update": "업데이트",
         "edit": "프로필",
         "update_profile": "프로필 정보 업데이트",
         "update_password": "비밀번호 변경",
@@ -1206,8 +854,6 @@
         "two_factor_disable": "2단계 인증 비활성화"
     },
     "plans": {
-        "name": "이름",
-        "slug": "슬러그",
         "monthly_price_cents": "월간 가격 (센트)",
         "yearly_price_cents": "연간 가격 (센트)",
         "currency_code": "통화 코드",
@@ -1277,7 +923,6 @@
         "ping": "Ping"
     },
     "contact": {
-        "store": "저장",
         "created": "생성됨",
         "tag_added": "태그 추가됨",
         "name": "이름",
@@ -1475,9 +1120,6 @@
         "no_deliveries": "전송 내역이 아직 없습니다."
     },
     "reports": {
-        "exports": {
-            "contacts": "연락처"
-        },
         "ai_title": "AI 사용 보고서",
         "ai_subtitle": "토큰 소비량, 비용, 지연 시간 분석",
         "tokens_per_day": "일별 토큰",
@@ -2586,11 +2228,9 @@
         "upload_failed_retry": "Upload failed. Please try again."
     },
     "inbox_ui": {
-        "new_conversation": "New Conversation",
         "search_contact": "Search by name, phone, or email…",
         "no_channels": "No active channel accounts.",
         "select_channel": "Select which channel to start the conversation on:",
-        "contact_details": "Contact Details",
         "opening_message": "Type a message to send when the conversation opens…"
     },
     "inbox": {
@@ -2874,9 +2514,6 @@
     },
     "context": {
         "key": "Key"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Automations",
@@ -3962,9 +3599,6 @@
         "finance_b3": "Fraud / security alerts",
         "finance_b4": "Account & loan updates"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3974,8 +3608,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

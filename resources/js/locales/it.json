@@ -38,13 +38,10 @@
         "settings": "Impostazioni"
     },
     "nav": {
-        "home": "Home",
         "dashboard": "Dashboard",
-        "websites": "Siti web",
         "workspaces": "Aree di lavoro",
         "profile": "Profilo",
         "admin": "Admin",
-        "components": "Componenti",
         "pricing": "Prezzi",
         "logout": "Esci",
         "login": "Accedi",
@@ -59,7 +56,6 @@
         "integrations": "Integrazioni",
         "about": "Chi siamo",
         "faq": "FAQ",
-        "blog": "Blog",
         "contact": "Contatti",
         "sign_out": "Disconnetti",
         "light_mode": "Modalità chiara",
@@ -152,9 +148,6 @@
         "description": "Questa pagina è visualizzata con layout da destra a sinistra. Usa il selettore della lingua per passare all'arabo (العربية) e vedere l'intera app in RTL.",
         "ltrNote": "Torna all'inglese o al bengalese per il layout LTR."
     },
-    "sidebar": {
-        "menu": "Menu"
-    },
     "topbar": {
         "switch_theme": "Cambia tema",
         "visit_website": "Visita il sito web",
@@ -163,67 +156,14 @@
         "create_workspace": "Crea area di lavoro",
         "manage_workspaces": "Gestisci aree di lavoro",
         "language": "Lingua",
-        "currency": "Valuta",
         "account": "Account"
     },
-    "theme": {
-        "update": "Aggiorna"
-    },
-    "currency": {
-        "update": "Aggiorna"
-    },
     "client": {
-        "profile": {
-            "edit": "Modifica",
-            "2fa": {
-                "enable": "Abilita",
-                "disable": "Disabilita"
-            },
-            "sessions": {
-                "destroy": "Termina"
-            }
-        },
-        "tenants": {
-            "switch": "Cambia",
-            "index": "Elenco",
-            "store": "Salva"
-        },
         "dashboard": "Dashboard",
         "panel": "Pannello cliente",
         "pricing": "Prezzi",
-        "websites": {
-            "pages": {
-                "index": "Elenco",
-                "store": "Salva",
-                "update": "Aggiorna",
-                "create": "Crea",
-                "edit": "Modifica"
-            },
-            "index": "Elenco",
-            "store": "Salva",
-            "create": "Crea",
-            "domains": {
-                "store": "Salva",
-                "verify": "Verifica",
-                "index": "Elenco"
-            },
-            "templates": "Modelli",
-            "publish": {
-                "store": "Salva"
-            },
-            "export": {
-                "store": "Salva"
-            }
-        },
-        "checkout": {
-            "store": "Salva"
-        },
-        "pages": "Pagine",
         "no_tenant": "Nessuna area di lavoro",
         "create_workspace": "Crea area di lavoro",
-        "billing": {
-            "index": "Elenco"
-        },
         "audit_log": "Registro attività",
         "audit_log_subtitle": "Sottotitolo del registro attività",
         "filter_by_action": "Filtra per azione",
@@ -247,9 +187,6 @@
         "managed_by_admin": "Gestito dall'amministratore della tua organizzazione",
         "upgrade_plan": "Aggiorna piano",
         "no_plan": "Nessun abbonamento attivo",
-        "ai_credits": "Crediti AI",
-        "use_ai": "Usa l'AI",
-        "manage_websites": "Gestisci siti web",
         "quick_links": "Collegamenti rapidi",
         "billing_plans": "Piani di fatturazione",
         "settings_subtitle": "Preferenze e organizzazione",
@@ -267,7 +204,6 @@
         "save_settings": "Salva impostazioni",
         "cancel_subscription_confirm": "Sei sicuro di voler annullare il tuo abbonamento?",
         "subscription_subtitle": "Il tuo piano attuale e la fatturazione",
-        "ends": "Termina",
         "cancel_subscription": "Annulla abbonamento",
         "view_billing_history": "Vedi cronologia fatturazione",
         "team_for": "Team di",
@@ -287,210 +223,36 @@
         "inactive": "Inattivo",
         "save": "Salva",
         "remove_member_confirm": "Rimuovi",
-        "search": "Cerca",
-        "notifications": {
-            "index": "Elenco",
-            "read": "Letto",
-            "destroy": "Elimina",
-            "recent": "Recenti"
-        },
-        "webhooks": {
-            "index": "Elenco",
-            "update": "Aggiorna",
-            "store": "Salva",
-            "destroy": "Elimina",
-            "test": "Test",
-            "deliveries": "Consegne"
-        },
-        "media": {
-            "index": "Elenco",
-            "store": "Salva",
-            "destroy": "Elimina"
-        },
-        "onboarding": {
-            "show": "Mostra",
-            "complete": "Completa"
-        },
         "team_members": "Membri del team",
         "manage_team": "Gestisci team",
         "manage_workspaces": "Gestisci aree di lavoro",
         "change_plan": "Cambia piano",
-        "coupon": {
-            "check": "Verifica"
-        },
-        "support": {
-            "store": "Salva",
-            "index": "Elenco",
-            "create": "Crea",
-            "show": "Mostra",
-            "reply": "Rispondi"
-        },
         "no_workspace": "Nessuna area di lavoro",
         "contacts": {
-            "index": "Elenco",
-            "show": "Mostra",
-            "destroy": "Elimina",
-            "import": "Importa",
-            "store": "Salva",
-            "update": "Aggiorna",
-            "export": "Esporta",
-            "avatar": {
-                "upload": "Carica",
-                "delete": "Elimina"
-            }
-        },
-        "segments": {
-            "index": "Elenco",
-            "store": "Salva",
-            "destroy": "Elimina",
-            "contacts": {
-                "attach": "Associa",
-                "detach": "Dissocia"
-            }
+            "index": "Elenco"
         },
         "whatsapp": {
-            "templates": {
-                "index": "Elenco",
-                "store": "Salva",
-                "sync": "Sincronizza",
-                "create": "Crea",
-                "destroy": "Elimina",
-                "edit": "Modifica",
-                "update": "Aggiorna"
-            },
-            "widget": {
-                "index": "Elenco"
-            },
-            "widgets": {
-                "destroy": "Elimina",
-                "store": "Salva",
-                "update": "Aggiorna",
-                "create": "Crea",
-                "edit": "Modifica"
-            },
             "setup": "Configurazione"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "Elenco"
-            }
-        },
         "inbox": {
-            "index": "Elenco",
-            "show": "Mostra",
-            "reply": "Rispondi",
-            "status": "Stato",
-            "labels": {
-                "update": "Aggiorna",
-                "store": "Salva",
-                "destroy": "Elimina",
-                "detach": "Dissocia",
-                "attach": "Associa"
-            },
-            "typing": "Sta scrivendo",
-            "notes": {
-                "index": "Elenco",
-                "store": "Salva"
-            },
-            "handover": "Passaggio di consegne",
-            "contacts": {
-                "search": "Cerca"
-            },
-            "start": "Avvia",
-            "templates": "Modelli",
-            "assign": "Assegna",
-            "setup": {
-                "destroy": "Elimina"
-            }
+            "index": "Elenco"
         },
         "ai": {
-            "providers": {
-                "index": "Elenco",
-                "update": "Aggiorna"
-            },
             "chatbots": {
-                "index": "Elenco",
-                "playground": "Playground",
-                "update": "Aggiorna",
-                "destroy": "Elimina",
-                "store": "Salva"
-            },
-            "documents": {
-                "destroy": "Elimina",
-                "reindex": "Reindicizza"
+                "index": "Elenco"
             }
         },
         "social": {
             "accounts": {
-                "index": "Elenco",
-                "disconnect": "Disconnetti",
-                "connect": "Connetti"
+                "index": "Elenco"
             },
             "composer": "Compositore",
-            "calendar": "Calendario",
-            "posts": {
-                "store": "Salva",
-                "index": "Elenco",
-                "update": "Aggiorna",
-                "bulk": "In blocco",
-                "edit": "Modifica",
-                "cancel": "Annulla",
-                "destroy": "Elimina"
-            }
-        },
-        "leads": {
-            "index": "Elenco",
-            "scrape": "Estrai",
-            "destroy": "Elimina"
-        },
-        "automations": {
-            "index": "Elenco",
-            "update": "Aggiorna",
-            "store": "Salva",
-            "destroy": "Elimina",
-            "edit": "Modifica",
-            "runs": "Esecuzioni",
-            "generate": "Genera",
-            "test": "Test"
+            "calendar": "Calendario"
         },
         "campaigns": {
-            "index": "Elenco",
-            "launch": "Avvia",
-            "pause": "Metti in pausa",
-            "destroy": "Elimina",
-            "create": "Crea",
-            "show": "Mostra",
-            "store": "Salva",
-            "update": "Aggiorna",
-            "edit": "Modifica"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "Elenco",
-                "show": "Mostra"
-            },
-            "ai": {
-                "index": "Elenco"
-            },
-            "inbox": {
-                "index": "Elenco"
-            },
-            "automations": {
-                "index": "Elenco"
-            },
-            "social": {
-                "index": "Elenco"
-            }
-        },
-        "push": {
-            "subscribe": "Iscriviti",
-            "unsubscribe": "Annulla iscrizione"
+            "create": "Crea"
         },
         "invite_by_email": "Invita via email",
-        "invitations": {
-            "store": "Salva",
-            "destroy": "Elimina"
-        },
         "next_step": "Prossimo passo:",
         "go": "Vai",
         "view_all": "Vedi tutto",
@@ -529,45 +291,10 @@
         "ecommerce": {
             "stores": {
                 "test": "Test",
-                "sync": "Sincronizza",
-                "index": "Elenco",
-                "destroy": "Elimina",
-                "store": "Salva"
-            },
-            "orders": {
-                "index": "Elenco",
-                "show": "Mostra",
-                "refresh": "Aggiorna",
-                "fulfill": "Evadi"
-            },
-            "products": {
-                "index": "Elenco",
-                "search": "Cerca"
-            },
-            "contacts": {
-                "orders": "Ordini"
-            },
-            "oauth": {
-                "connect": "Connetti"
+                "sync": "Sincronizza"
             }
         },
-        "workspaces": "Aree di lavoro",
-        "settings": {
-            "update": "Aggiorna",
-            "notifications": "Notifiche",
-            "index": "Elenco"
-        },
-        "team": {
-            "store": "Salva",
-            "update": "Aggiorna",
-            "destroy": "Elimina",
-            "index": "Elenco"
-        },
-        "subscription": {
-            "destroy": "Elimina",
-            "invoice": "Fattura",
-            "show": "Mostra"
-        }
+        "workspaces": "Aree di lavoro"
     },
     "pagination": {
         "label": "Paginazione",
@@ -581,9 +308,6 @@
         "page_num": "Pagina {{num}}",
         "page_of": "Pagina {{current}} di {{last}}",
         "showing": "Visualizzazione {{from}}–{{to}} di {{total}}"
-    },
-    "locale": {
-        "update": "Aggiorna"
     },
     "admin": {
         "nav": {
@@ -638,20 +362,12 @@
         "email": "Email",
         "languages": "Lingue",
         "locales": {
-            "index": "Elenco",
-            "store": "Salva",
-            "destroy": "Elimina",
-            "update": "Aggiorna"
+            "index": "Elenco"
         },
         "website_templates": "Siti web/Landing page",
         "roles_permissions": "Ruoli e permessi",
         "ai_requests": "Richieste AI",
-        "templates": "Modelli",
         "audit_log": "Registro attività",
-        "logout": "Esci",
-        "impersonation": {
-            "stop": "Interrompi"
-        },
         "user_id": "ID utente",
         "all_statuses": "Tutti gli stati",
         "status_success": "Riuscito",
@@ -659,7 +375,6 @@
         "status_failed": "Non riuscito",
         "action": "Azione",
         "admin_log_in": "Accesso amministratore",
-        "login": "Accedi",
         "dashboard_overview": "Panoramica delle metriche della tua piattaforma.",
         "arpu": "ARPU",
         "this_period": "in questo periodo",
@@ -687,29 +402,14 @@
         "ai_requests_this_month": "Richieste AI (questo mese)",
         "ai_tokens_this_month": "Token AI (questo mese)",
         "payments_this_month": "Pagamenti questo mese",
-        "translations": {
-            "update": "Aggiorna"
-        },
         "view_subscriptions": "Vedi abbonamenti →",
-        "roles": {
-            "store": "Salva",
-            "update": "Aggiorna",
-            "destroy": "Elimina"
-        },
-        "permissions": {
-            "store": "Salva",
-            "update": "Aggiorna",
-            "destroy": "Elimina"
-        },
         "system_settings": "Impostazioni di sistema",
         "view_payments": "Vedi pagamenti →",
         "add_client": "Aggiungi cliente",
         "edit_client": "Modifica cliente",
         "delete_client": "Elimina cliente",
-        "manage_client_users": "Gestisci utenti del cliente",
         "add_user": "Aggiungi utente",
         "edit_user": "Modifica utente",
-        "delete_user": "Elimina utente",
         "assign_plan": "Assegna piano al cliente",
         "edit_client_title": "Modifica cliente",
         "manage_users_title": "Gestisci utenti del cliente",
@@ -802,37 +502,24 @@
         "delete_user_confirm": "Sei sicuro di voler rimuovere {{name}} ({{email}}) da questo cliente?",
         "delete_client_confirm": "Sei sicuro di voler eliminare {{name}}? Verranno rimossi tutti gli utenti e gli abbonamenti del cliente.",
         "coupons": {
-            "index": "Elenco",
-            "update": "Aggiorna",
-            "store": "Salva",
-            "destroy": "Elimina"
+            "index": "Elenco"
         },
         "tax_rates": "Aliquote fiscali",
         "landing_page": "Contenuti del sito",
         "cms_pages": "Pagine CMS",
         "cron_setup": "Configurazione cron",
         "support": {
-            "index": "Elenco",
-            "show": "Mostra",
-            "reply": "Rispondi",
-            "status": "Stato"
+            "index": "Elenco"
         },
         "queue": {
-            "index": "Elenco",
-            "retry": "Riprova",
-            "flush": "Svuota"
+            "index": "Elenco"
         },
         "clients_count": "Totale clienti",
         "users_count": "Totale utenti",
         "integrations": {
-            "index": "Elenco",
-            "update": "Aggiorna",
-            "test": "Test",
-            "rotate": "Ruota",
-            "edit": "Modifica"
+            "index": "Elenco"
         },
         "pusher_settings": "Impostazioni Pusher",
-        "search": "Cerca",
         "admin_management_desc": "Gestisci gli utenti amministratori e i loro ruoli.",
         "total_admins": "Totale amministratori",
         "col_admin": "Amministratore",
@@ -922,24 +609,16 @@
         "secret_key_hint": "Chiave segreta lato server — mantienila privata",
         "stripe_webhook_hint": "Segreto di firma del webhook (whsec_…) dalla dashboard Stripe",
         "webhook_hint": "Segreto webhook usato per verificare gli eventi in arrivo dal gateway",
-        "clients": "Clienti",
         "subscriptions": {
-            "index": "Elenco",
-            "store": "Salva",
-            "export": "Esporta"
+            "index": "Elenco"
         },
         "payments": "Pagamenti",
         "plans": "Piani",
         "currencies": {
-            "index": "Elenco",
-            "update": "Aggiorna"
+            "index": "Elenco"
         },
-        "admins": "Amministratori",
         "settings": {
             "index": "Elenco",
-            "general": {
-                "update": "Aggiorna"
-            },
             "logo": {
                 "upload": "Carica",
                 "delete": "Elimina"
@@ -947,10 +626,6 @@
             "favicon": {
                 "upload": "Carica",
                 "delete": "Elimina"
-            },
-            "update": "Aggiorna",
-            "firebase": {
-                "update": "Aggiorna"
             }
         },
         "ai": {
@@ -1015,8 +690,7 @@
         "impersonating": "Stai impersonando: {{name}}"
     },
     "head": {
-        "admin": "Admin",
-        "welcome": "Benvenuto"
+        "admin": "Admin"
     },
     "locales": {
         "add_language": "Aggiungi lingua",
@@ -1037,7 +711,6 @@
         "saving": "Salvataggio…",
         "title": "Lingue",
         "languages_translations": "Lingue e traduzioni",
-        "translations": "Traduzioni",
         "translations_tab": "Traduzioni",
         "languages_and_translations": "Lingue e traduzioni",
         "flag": "Bandiera",
@@ -1069,13 +742,6 @@
         "verification_sent": "Un nuovo link di verifica è stato inviato all'indirizzo email fornito durante la registrazione.",
         "resend_verification": "Invia di nuovo l'email di verifica",
         "log_out": "Esci",
-        "verify_email": "Verifica email",
-        "invitations": {
-            "accept": "Accetta"
-        },
-        "social": {
-            "redirect": "Reindirizza"
-        },
         "admin_panel_label": "Pannello di amministrazione",
         "welcome_to": "Benvenuto in",
         "admin_tagline": "Gestisci la tua piattaforma con sicurezza",
@@ -1130,7 +796,6 @@
         "continue_with_google": "Continua con Google",
         "continue_with": "Continua con {{provider}}",
         "or_continue_with_email": "oppure continua con l'email",
-        "firebase": "Firebase",
         "trusted_by_count": "Scelto da oltre 10.000 aziende",
         "proof_businesses": "Aziende",
         "proof_messages_sent": "Messaggi inviati",
@@ -1145,24 +810,7 @@
         "demo_role_admin": "Ruolo demo amministratore",
         "demo_role_client": "Ruolo demo cliente"
     },
-    "password": {
-        "confirm": "Conferma",
-        "email": "Email",
-        "request": "Richiedi",
-        "store": "Salva",
-        "update": "Aggiorna"
-    },
-    "verification": {
-        "send": "Invia"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "Elimina",
-        "update": "Aggiorna",
         "edit": "Profilo",
         "update_profile": "Aggiorna informazioni del profilo",
         "update_password": "Aggiorna password",
@@ -1206,8 +854,6 @@
         "two_factor_disable": "Disabilita 2FA"
     },
     "plans": {
-        "name": "Nome",
-        "slug": "Slug",
         "monthly_price_cents": "Prezzo mensile (centesimi)",
         "yearly_price_cents": "Prezzo annuale (centesimi)",
         "currency_code": "Codice valuta",
@@ -1277,7 +923,6 @@
         "ping": "Ping"
     },
     "contact": {
-        "store": "Salva",
         "created": "Creato",
         "tag_added": "Tag aggiunto",
         "name": "Nome",
@@ -1475,9 +1120,6 @@
         "no_deliveries": "Ancora nessuna consegna."
     },
     "reports": {
-        "exports": {
-            "contacts": "Contatti"
-        },
         "ai_title": "Report utilizzo AI",
         "ai_subtitle": "Analisi di consumo token, costi e latenza",
         "tokens_per_day": "Token al giorno",
@@ -2586,11 +2228,9 @@
         "upload_failed_retry": "Upload failed. Please try again."
     },
     "inbox_ui": {
-        "new_conversation": "New Conversation",
         "search_contact": "Search by name, phone, or email…",
         "no_channels": "No active channel accounts.",
         "select_channel": "Select which channel to start the conversation on:",
-        "contact_details": "Contact Details",
         "opening_message": "Type a message to send when the conversation opens…"
     },
     "inbox": {
@@ -2874,9 +2514,6 @@
     },
     "context": {
         "key": "Key"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Automations",
@@ -3962,9 +3599,6 @@
         "finance_b3": "Fraud / security alerts",
         "finance_b4": "Account & loan updates"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3974,8 +3608,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

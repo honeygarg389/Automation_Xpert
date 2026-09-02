@@ -32,13 +32,10 @@
         "settings": "Settings"
     },
     "nav": {
-        "home": "হোম",
         "dashboard": "ড্যাশবোর্ড",
-        "websites": "ওয়েবসাইট",
         "workspaces": "ওয়ার্কস্পেস",
         "profile": "প্রোফাইল",
         "admin": "অ্যাডমিন",
-        "components": "কম্পোনেন্টস",
         "pricing": "মূল্য নির্ধারণ",
         "logout": "লগ আউট",
         "login": "লগ ইন",
@@ -51,7 +48,6 @@
         "features": "বৈশিষ্ট্য",
         "use_cases": "ব্যবহারের ক্ষেত্র",
         "faq": "FAQ",
-        "blog": "ব্লগ",
         "contact": "যোগাযোগ",
         "sign_out": "সাইন আউট",
         "light_mode": "লাইট মোড",
@@ -146,9 +142,6 @@
         "description": "এই পৃষ্ঠাটি ডান-থেকে-বাম লেআউটে দেখানো হচ্ছে। পুরো অ্যাপ আরটিএল দেখতে ল্যাঙ্গুয়েজ সুইচার দিয়ে আরবি (العربية) সিলেক্ট করুন।",
         "ltrNote": "এলটিআরের জন্য ইংরেজি বা বাংলায় ফিরে যান।"
     },
-    "sidebar": {
-        "menu": "মেনু"
-    },
     "topbar": {
         "switch_theme": "থিম পরিবর্তন করুন",
         "visit_website": "ওয়েবসাইট দেখুন",
@@ -157,62 +150,18 @@
         "create_workspace": "ওয়ার্কস্পেস তৈরি করুন",
         "manage_workspaces": "ওয়ার্কস্পেস পরিচালনা করুন",
         "language": "ভাষা",
-        "currency": "মুদ্রা",
         "account": "অ্যাকাউন্ট"
-    },
-    "theme": {
-        "update": "আপডেট"
-    },
-    "currency": {
-        "update": "আপডেট"
     },
     "client": {
         "profile": {
-            "edit": "সম্পাদনা",
             "2fa": "2Fa",
             "sessions": "Sessions"
-        },
-        "tenants": {
-            "switch": "পরিবর্তন",
-            "index": "তালিকা",
-            "store": "সংরক্ষণ"
         },
         "dashboard": "ড্যাশবোর্ড",
         "panel": "ক্লায়েন্ট প্যানেল",
         "pricing": "মূল্য নির্ধারণ",
-        "websites": {
-            "pages": {
-                "index": "তালিকা",
-                "store": "সংরক্ষণ",
-                "update": "আপডেট",
-                "create": "তৈরি",
-                "edit": "সম্পাদনা"
-            },
-            "index": "তালিকা",
-            "store": "সংরক্ষণ",
-            "create": "তৈরি করুন",
-            "domains": {
-                "store": "সংরক্ষণ",
-                "verify": "যাচাই",
-                "index": "তালিকা"
-            },
-            "templates": "টেমপ্লেট",
-            "publish": {
-                "store": "সংরক্ষণ"
-            },
-            "export": {
-                "store": "সংরক্ষণ"
-            }
-        },
-        "checkout": {
-            "store": "সংরক্ষণ"
-        },
-        "pages": "পেজ",
         "no_tenant": "কোনো ওয়ার্কস্পেস নেই",
         "create_workspace": "ওয়ার্কস্পেস তৈরি করুন",
-        "billing": {
-            "index": "ইনডেক্স"
-        },
         "audit_log": "অডিট লগ",
         "audit_log_subtitle": "অডিট লগের বিস্তারিত",
         "filter_by_action": "কার্য অনুযায়ী ফিল্টার",
@@ -236,9 +185,6 @@
         "managed_by_admin": "আপনার সংস্থার অ্যাডমিন দ্বারা পরিচালিত",
         "upgrade_plan": "পরিকল্পনা আপগ্রেড করুন",
         "no_plan": "কোনো সক্রিয় সাবস্ক্রিপশন নেই",
-        "ai_credits": "এআই ক্রেডিট",
-        "use_ai": "এআই ব্যবহার করুন",
-        "manage_websites": "ওয়েবসাইট পরিচালনা করুন",
         "quick_links": "দ্রুত লিংক",
         "billing_plans": "বিলিং পরিকল্পনা",
         "settings_subtitle": "পছন্দ ও সংস্থা",
@@ -256,7 +202,6 @@
         "save_settings": "সেটিংস সংরক্ষণ করুন",
         "cancel_subscription_confirm": "আপনি কি নিশ্চিত যে আপনি আপনার সাবস্ক্রিপশন বাতিল করতে চান?",
         "subscription_subtitle": "আপনার বর্তমান প্ল্যান ও বিলিং",
-        "ends": "শেষ হয়",
         "cancel_subscription": "সাবস্ক্রিপশন বাতিল করুন",
         "view_billing_history": "বিলিং ইতিহাস দেখুন",
         "team_for": "টিম",
@@ -276,207 +221,42 @@
         "inactive": "নিষ্ক্রিয়",
         "save": "সংরক্ষণ করুন",
         "remove_member_confirm": "সরান",
-        "search": "খুঁজুন",
-        "notifications": {
-            "index": "তালিকা",
-            "read": "পড়া হয়েছে",
-            "destroy": "মুছুন",
-            "recent": "সাম্প্রতিক"
-        },
-        "webhooks": {
-            "index": "তালিকা",
-            "update": "আপডেট",
-            "store": "সংরক্ষণ",
-            "destroy": "মুছুন",
-            "test": "পরীক্ষা",
-            "deliveries": "ডেলিভারি"
-        },
-        "media": {
-            "index": "তালিকা",
-            "store": "সংরক্ষণ",
-            "destroy": "মুছুন"
-        },
-        "onboarding": {
-            "show": "দেখুন",
-            "complete": "সম্পন্ন"
-        },
         "team_members": "টিম সদস্য",
         "manage_team": "টিম পরিচালনা করুন",
         "manage_workspaces": "ওয়ার্কস্পেস পরিচালনা করুন",
         "change_plan": "প্ল্যান পরিবর্তন করুন",
-        "coupon": {
-            "check": "যাচাই করুন"
-        },
-        "support": {
-            "store": "সংরক্ষণ",
-            "index": "তালিকা",
-            "create": "তৈরি",
-            "show": "দেখুন",
-            "reply": "উত্তর"
-        },
         "no_workspace": "কোনো ওয়ার্কস্পেস নেই",
         "contacts": {
-            "index": "তালিকা",
-            "show": "দেখুন",
-            "destroy": "মুছুন",
-            "import": "আমদানি",
-            "store": "সংরক্ষণ",
-            "update": "আপডেট",
-            "export": "রপ্তানি",
-            "avatar": {
-                "upload": "আপলোড",
-                "delete": "মুছুন"
-            }
+            "index": "তালিকা"
         },
         "segments": {
-            "index": "তালিকা",
-            "store": "সংরক্ষণ",
-            "destroy": "মুছুন",
             "contacts": "Contacts"
         },
         "whatsapp": {
-            "templates": {
-                "index": "তালিকা",
-                "store": "সংরক্ষণ",
-                "sync": "সিঙ্ক",
-                "create": "তৈরি",
-                "destroy": "মুছুন",
-                "edit": "সম্পাদনা",
-                "update": "আপডেট"
-            },
-            "widget": {
-                "index": "তালিকা"
-            },
-            "widgets": {
-                "destroy": "মুছুন",
-                "store": "সংরক্ষণ",
-                "update": "আপডেট",
-                "create": "তৈরি করুন",
-                "edit": "সম্পাদনা"
-            },
             "setup": {
                 "destroy": "Destroy"
             }
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "তালিকা"
-            }
-        },
         "inbox": {
             "index": "তালিকা",
-            "show": "দেখুন",
-            "reply": "উত্তর",
-            "status": "অবস্থা",
-            "labels": {
-                "update": "আপডেট",
-                "store": "সংরক্ষণ",
-                "destroy": "মুছুন",
-                "detach": "আলাদা করুন",
-                "attach": "যুক্ত করুন"
-            },
-            "typing": "টাইপ করছেন",
-            "notes": {
-                "index": "তালিকা",
-                "store": "সংরক্ষণ"
-            },
-            "handover": "হ্যান্ডওভার",
-            "contacts": {
-                "search": "খুঁজুন"
-            },
-            "start": "শুরু করুন",
-            "templates": "টেমপ্লেট",
-            "assign": "বরাদ্দ করুন",
             "setup": "Setup"
         },
         "ai": {
-            "providers": {
-                "index": "তালিকা",
-                "update": "আপডেট"
-            },
             "chatbots": {
-                "index": "তালিকা",
-                "playground": "প্লেগ্রাউন্ড",
-                "update": "আপডেট",
-                "destroy": "মুছুন",
-                "store": "সংরক্ষণ"
-            },
-            "documents": {
-                "destroy": "মুছুন",
-                "reindex": "পুনরায় ইন্ডেক্স"
+                "index": "তালিকা"
             }
         },
         "social": {
             "accounts": {
-                "index": "তালিকা",
-                "disconnect": "সংযোগ বিচ্ছিন্ন",
-                "connect": "সংযুক্ত করুন"
+                "index": "তালিকা"
             },
             "composer": "কম্পোজার",
-            "calendar": "ক্যালেন্ডার",
-            "posts": {
-                "store": "সংরক্ষণ",
-                "index": "ইনডেক্স",
-                "update": "আপডেট",
-                "bulk": "বাল্ক",
-                "edit": "সম্পাদনা",
-                "cancel": "বাতিল",
-                "destroy": "মুছুন"
-            }
-        },
-        "leads": {
-            "index": "তালিকা",
-            "scrape": "স্ক্র্যাপ",
-            "destroy": "মুছুন"
-        },
-        "automations": {
-            "index": "তালিকা",
-            "update": "আপডেট",
-            "store": "সংরক্ষণ",
-            "destroy": "মুছুন",
-            "edit": "সম্পাদনা",
-            "runs": "রান",
-            "generate": "Generate",
-            "test": "Test"
+            "calendar": "ক্যালেন্ডার"
         },
         "campaigns": {
-            "index": "তালিকা",
-            "launch": "চালু করুন",
-            "pause": "বিরতি",
-            "destroy": "মুছুন",
-            "create": "তৈরি",
-            "show": "দেখুন",
-            "store": "সংরক্ষণ",
-            "update": "আপডেট",
-            "edit": "সম্পাদনা"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "তালিকা",
-                "show": "দেখুন"
-            },
-            "ai": {
-                "index": "তালিকা"
-            },
-            "inbox": {
-                "index": "তালিকা"
-            },
-            "automations": {
-                "index": "তালিকা"
-            },
-            "social": {
-                "index": "তালিকা"
-            }
-        },
-        "push": {
-            "subscribe": "সাবস্ক্রাইব",
-            "unsubscribe": "আনসাবস্ক্রাইব"
+            "create": "তৈরি"
         },
         "invite_by_email": "ইমেইলের মাধ্যমে আমন্ত্রণ জানান",
-        "invitations": {
-            "store": "সংরক্ষণ",
-            "destroy": "মুছুন"
-        },
         "next_step": "পরবর্তী ধাপ:",
         "go": "যান",
         "view_all": "সব দেখুন",
@@ -491,48 +271,13 @@
         "ecommerce": {
             "stores": {
                 "test": "টেস্ট",
-                "sync": "সিঙ্ক",
-                "index": "ইনডেক্স",
-                "destroy": "মুছুন",
-                "store": "স্টোর"
-            },
-            "orders": {
-                "index": "ইনডেক্স",
-                "show": "দেখুন",
-                "refresh": "রিফ্রেশ",
-                "fulfill": "সম্পন্ন করুন"
-            },
-            "products": {
-                "index": "ইনডেক্স",
-                "search": "অনুসন্ধান"
-            },
-            "contacts": {
-                "orders": "অর্ডার"
-            },
-            "oauth": {
-                "connect": "সংযোগ করুন"
+                "sync": "সিঙ্ক"
             }
         },
         "workspaces": {
             "switch": "Switch",
             "index": "Index",
             "store": "Store"
-        },
-        "settings": {
-            "update": "আপডেট",
-            "notifications": "নোটিফিকেশন",
-            "index": "Index"
-        },
-        "team": {
-            "store": "স্টোর",
-            "update": "আপডেট",
-            "destroy": "মুছুন",
-            "index": "Index"
-        },
-        "subscription": {
-            "destroy": "মুছুন",
-            "invoice": "ইনভয়েস",
-            "show": "Show"
         },
         "kpi_messages_sent": "Messages sent",
         "kpi_messages_received": "Messages received",
@@ -571,9 +316,6 @@
         "page_num": "পেজ {{num}}",
         "page_of": "পেজ {{current}} এর {{last}}",
         "showing": "{{from}}–{{to}} দেখানো হচ্ছে, মোট {{total}}"
-    },
-    "locale": {
-        "update": "আপডেট"
     },
     "admin": {
         "nav": {
@@ -617,20 +359,12 @@
         "email": "ইমেল",
         "languages": "ভাষাসমূহ",
         "locales": {
-            "index": "তালিকা",
-            "store": "সংরক্ষণ",
-            "destroy": "মুছুন",
-            "update": "আপডেট"
+            "index": "তালিকা"
         },
         "website_templates": "ওয়েবসাইট/ল্যান্ডিং পেজ",
         "roles_permissions": "ভূমিকা ও অনুমতি",
         "ai_requests": "এআই অনুরোধ",
-        "templates": "টেমপ্লেট",
         "audit_log": "অডিট লগ",
-        "logout": "লগ আউট",
-        "impersonation": {
-            "stop": "বন্ধ করুন"
-        },
         "user_id": "ব্যবহারকারী আইডি",
         "all_statuses": "সব স্ট্যাটাস",
         "status_success": "সফল",
@@ -638,7 +372,6 @@
         "status_failed": "ব্যর্থ",
         "action": "কার্য",
         "admin_log_in": "অ্যাডমিন লগ ইন",
-        "login": "লগইন",
         "dashboard_overview": "আপনার প্ল্যাটফর্ম মেট্রিক্সের সংক্ষিপ্ত বিবরণ।",
         "quick_links": "দ্রুত লিংক",
         "mrr": "মাসিক পুনরাবৃত্তি রাজস্ব",
@@ -646,29 +379,14 @@
         "ai_requests_this_month": "এআই অনুরোধ (এই মাসে)",
         "ai_tokens_this_month": "এআই টোকেন (এই মাসে)",
         "payments_this_month": "এই মাসে পেমেন্ট",
-        "translations": {
-            "update": "আপডেট"
-        },
         "view_subscriptions": "সাবস্ক্রিপশন দেখুন →",
-        "roles": {
-            "store": "সংরক্ষণ",
-            "update": "আপডেট",
-            "destroy": "মুছুন"
-        },
-        "permissions": {
-            "store": "সংরক্ষণ",
-            "update": "আপডেট",
-            "destroy": "মুছুন"
-        },
         "system_settings": "সিস্টেম সেটিংস",
         "view_payments": "পেমেন্ট দেখুন →",
         "add_client": "ক্লায়েন্ট যোগ করুন",
         "edit_client": "ক্লায়েন্ট সম্পাদনা করুন",
         "delete_client": "ক্লায়েন্ট মুছুন",
-        "manage_client_users": "ক্লায়েন্ট ব্যবহারকারী পরিচালনা করুন",
         "add_user": "ব্যবহারকারী যোগ করুন",
         "edit_user": "ব্যবহারকারী সম্পাদনা করুন",
-        "delete_user": "ব্যবহারকারী মুছুন",
         "assign_plan": "ক্লায়েন্টকে পরিকল্পনা বরাদ্দ করুন",
         "edit_client_title": "ক্লায়েন্ট সম্পাদনা করুন",
         "manage_users_title": "ক্লায়েন্ট ব্যবহারকারী পরিচালনা করুন",
@@ -761,37 +479,24 @@
         "delete_user_confirm": "আপনি কি নিশ্চিত যে {{name}} ({{email}}) কে এই ক্লায়েন্ট থেকে সরাতে চান?",
         "delete_client_confirm": "আপনি কি নিশ্চিত যে {{name}} মুছতে চান? এটি সমস্ত ক্লায়েন্ট ব্যবহারকারী এবং সাবস্ক্রিপশন সরিয়ে দেবে।",
         "coupons": {
-            "index": "কুপন তালিকা",
-            "update": "আপডেট",
-            "store": "সংরক্ষণ",
-            "destroy": "মুছুন"
+            "index": "কুপন তালিকা"
         },
         "tax_rates": "কর হার",
         "landing_page": "ল্যান্ডিং পেজ",
         "cms_pages": "সিএমএস পেজ",
         "cron_setup": "ক্রন সেটআপ",
         "support": {
-            "index": "সাপোর্ট তালিকা",
-            "show": "দেখুন",
-            "reply": "উত্তর দিন",
-            "status": "অবস্থা"
+            "index": "সাপোর্ট তালিকা"
         },
         "queue": {
-            "index": "কিউ তালিকা",
-            "retry": "পুনরায় চেষ্টা",
-            "flush": "মুছে ফেলুন"
+            "index": "কিউ তালিকা"
         },
         "clients_count": "মোট ক্লায়েন্ট",
         "users_count": "মোট ব্যবহারকারী",
         "integrations": {
-            "index": "ইন্টিগ্রেশন তালিকা",
-            "update": "আপডেট",
-            "test": "পরীক্ষা",
-            "rotate": "ঘোরান",
-            "edit": "সম্পাদনা"
+            "index": "ইন্টিগ্রেশন তালিকা"
         },
         "pusher_settings": "পুশার সেটিংস",
-        "search": "খুঁজুন",
         "admin_management_desc": "অ্যাডমিন ব্যবহারকারী ও তাদের ভূমিকা পরিচালনা করুন।",
         "total_admins": "মোট অ্যাডমিন",
         "col_admin": "অ্যাডমিন",
@@ -1008,8 +713,7 @@
         "impersonating": "ছদ্মবেশ: {{name}}"
     },
     "head": {
-        "admin": "অ্যাডমিন",
-        "welcome": "স্বাগতম"
+        "admin": "অ্যাডমিন"
     },
     "locales": {
         "add_language": "ভাষা যোগ করুন",
@@ -1030,7 +734,6 @@
         "saving": "সংরক্ষণ হচ্ছে…",
         "title": "ভাষাসমূহ",
         "languages_translations": "ভাষা ও অনুবাদ",
-        "translations": "অনুবাদ",
         "translations_tab": "অনুবাদ",
         "languages_and_translations": "ভাষা ও অনুবাদ",
         "flag": "পতাকা",
@@ -1062,13 +765,6 @@
         "verification_sent": "নিবন্ধনের সময় প্রদত্ত ইমেল ঠিকানায় একটি নতুন যাচাইকরণ লিংক পাঠানো হয়েছে।",
         "resend_verification": "যাচাইকরণ ইমেল পুনরায় পাঠান",
         "log_out": "লগ আউট",
-        "verify_email": "ইমেল যাচাই করুন",
-        "invitations": {
-            "accept": "গ্রহণ করুন"
-        },
-        "social": {
-            "redirect": "পুনঃনির্দেশ"
-        },
         "admin_panel_label": "অ্যাডমিন প্যানেল",
         "welcome_to": "স্বাগতম",
         "admin_tagline": "আত্মবিশ্বাসের সাথে আপনার প্ল্যাটফর্ম পরিচালনা করুন",
@@ -1119,7 +815,6 @@
         "continue_with_google": "Google দিয়ে চালিয়ে যান",
         "continue_with": "{{provider}} দিয়ে চালিয়ে যান",
         "or_continue_with_email": "বা ইমেল দিয়ে চালিয়ে যান",
-        "firebase": "Firebase",
         "trusted_by_count": "১০,০০০+ ব্যবসা প্রতিষ্ঠানের আস্থা",
         "proof_businesses": "ব্যবসা",
         "proof_messages_sent": "বার্তা পাঠানো হয়েছে",
@@ -1138,24 +833,7 @@
         "and": "and",
         "privacy_policy": "Privacy Policy"
     },
-    "password": {
-        "confirm": "নিশ্চিত করুন",
-        "email": "ইমেল",
-        "request": "অনুরোধ",
-        "store": "সংরক্ষণ",
-        "update": "আপডেট"
-    },
-    "verification": {
-        "send": "পাঠান"
-    },
-    "www": {
-        "example": {
-            "com": "com"
-        }
-    },
     "profile": {
-        "destroy": "মুছুন",
-        "update": "আপডেট",
         "edit": "প্রোফাইল",
         "update_profile": "প্রোফাইল তথ্য আপডেট করুন",
         "update_password": "পাসওয়ার্ড আপডেট করুন",
@@ -1199,8 +877,6 @@
         "two_factor_disable": "2FA নিষ্ক্রিয় করুন"
     },
     "plans": {
-        "name": "নাম",
-        "slug": "স্লাগ",
         "monthly_price_cents": "মাসিক মূল্য (সেন্ট)",
         "yearly_price_cents": "বার্ষিক মূল্য (সেন্ট)",
         "currency_code": "মুদ্রা কোড",
@@ -1270,7 +946,6 @@
         "ping": "পিং"
     },
     "contact": {
-        "store": "সংরক্ষণ",
         "created": "তৈরি হয়েছে",
         "tag_added": "ট্যাগ যোগ করা হয়েছে",
         "name": "নাম",
@@ -1468,9 +1143,6 @@
         "no_deliveries": "এখনো কোনো ডেলিভারি নেই।"
     },
     "reports": {
-        "exports": {
-            "contacts": "যোগাযোগ"
-        },
         "ai_title": "AI ব্যবহারের রিপোর্ট",
         "ai_subtitle": "টোকেন ব্যবহার, খরচ এবং লেটেন্সি বিশ্লেষণ",
         "tokens_per_day": "প্রতিদিনের টোকেন",
@@ -2513,11 +2185,9 @@
         "date_today": "Today"
     },
     "inbox_ui": {
-        "new_conversation": "নতুন কথোপকথন",
         "search_contact": "নাম, ফোন বা ইমেইল দিয়ে অনুসন্ধান করুন…",
         "no_channels": "কোনো সক্রিয় চ্যানেল অ্যাকাউন্ট নেই।",
         "select_channel": "কোন চ্যানেলে কথোপকথন শুরু করবেন তা নির্বাচন করুন:",
-        "contact_details": "পরিচিতির বিবরণ",
         "opening_message": "কথোপকথন খুললে পাঠানোর জন্য একটি বার্তা টাইপ করুন…"
     },
     "inbox": {
@@ -2867,9 +2537,6 @@
     },
     "context": {
         "key": "কী"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "contact_page": {
         "title": "আমাদের সাথে যোগাযোগ করুন",
@@ -3948,9 +3615,6 @@
         "templates_lang_tr": "তুর্কি",
         "templates_lang_zh_cn": "চীনা (সরলীকৃত)"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3966,8 +3630,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

@@ -40,13 +40,10 @@
         "soon": "Soon"
     },
     "nav": {
-        "home": "Home",
         "dashboard": "Dashboard",
-        "websites": "Websites",
         "workspaces": "Workspaces",
         "profile": "Profile",
         "admin": "Admin",
-        "components": "Components",
         "pricing": "Pricing",
         "logout": "Log out",
         "login": "Log in",
@@ -61,7 +58,6 @@
         "integrations": "Integrations",
         "about": "About",
         "faq": "FAQ",
-        "blog": "Blog",
         "contact": "Contact",
         "sign_out": "Sign Out",
         "light_mode": "Light mode",
@@ -159,9 +155,6 @@
         "description": "This page is displayed in right-to-left layout. Use the language switcher to switch to Arabic (العربية) and see the full app in RTL.",
         "ltrNote": "Switch back to English or Bangla for LTR."
     },
-    "sidebar": {
-        "menu": "Menu"
-    },
     "topbar": {
         "switch_theme": "Switch theme",
         "visit_website": "Visit Website",
@@ -170,67 +163,14 @@
         "create_workspace": "Create workspace",
         "manage_workspaces": "Manage workspaces",
         "language": "Language",
-        "currency": "Currency",
         "account": "Account"
     },
-    "theme": {
-        "update": "Update"
-    },
-    "currency": {
-        "update": "Update"
-    },
     "client": {
-        "profile": {
-            "edit": "Edit",
-            "2fa": {
-                "enable": "Enable",
-                "disable": "Disable"
-            },
-            "sessions": {
-                "destroy": "Destroy"
-            }
-        },
-        "tenants": {
-            "switch": "Switch",
-            "index": "Index",
-            "store": "Store"
-        },
         "dashboard": "Dashboard",
         "panel": "Client Panel",
         "pricing": "Pricing",
-        "websites": {
-            "pages": {
-                "index": "Index",
-                "store": "Store",
-                "update": "Update",
-                "create": "Create",
-                "edit": "Edit"
-            },
-            "index": "Index",
-            "store": "Store",
-            "create": "Create",
-            "domains": {
-                "store": "Store",
-                "verify": "Verify",
-                "index": "Index"
-            },
-            "templates": "Templates",
-            "publish": {
-                "store": "Store"
-            },
-            "export": {
-                "store": "Store"
-            }
-        },
-        "checkout": {
-            "store": "Store"
-        },
-        "pages": "Pages",
         "no_tenant": "No workspace",
         "create_workspace": "Create workspace",
-        "billing": {
-            "index": "Index"
-        },
         "audit_log": "Audit Log",
         "audit_log_subtitle": "Audit Log Subtitle",
         "filter_by_action": "Filter By Action",
@@ -254,9 +194,6 @@
         "managed_by_admin": "Managed by your organization admin",
         "upgrade_plan": "Upgrade Plan",
         "no_plan": "No active subscription",
-        "ai_credits": "Ai Credits",
-        "use_ai": "Use Ai",
-        "manage_websites": "Manage Websites",
         "quick_links": "Quick Links",
         "billing_plans": "Billing Plans",
         "settings_subtitle": "Preferences and organization",
@@ -274,7 +211,6 @@
         "save_settings": "Save settings",
         "cancel_subscription_confirm": "Are you sure you want to cancel your subscription?",
         "subscription_subtitle": "Your current plan and billing",
-        "ends": "Ends",
         "cancel_subscription": "Cancel subscription",
         "view_billing_history": "View billing history",
         "team_for": "Team for",
@@ -294,210 +230,36 @@
         "inactive": "Inactive",
         "save": "Save",
         "remove_member_confirm": "Remove",
-        "search": "Search",
-        "notifications": {
-            "index": "Index",
-            "read": "Read",
-            "destroy": "Destroy",
-            "recent": "Recent"
-        },
-        "webhooks": {
-            "index": "Index",
-            "update": "Update",
-            "store": "Store",
-            "destroy": "Destroy",
-            "test": "Test",
-            "deliveries": "Deliveries"
-        },
-        "media": {
-            "index": "Index",
-            "store": "Store",
-            "destroy": "Destroy"
-        },
-        "onboarding": {
-            "show": "Show",
-            "complete": "Complete"
-        },
         "team_members": "Team members",
         "manage_team": "Manage team",
         "manage_workspaces": "Manage workspaces",
         "change_plan": "Change Plan",
-        "coupon": {
-            "check": "Check"
-        },
-        "support": {
-            "store": "Store",
-            "index": "Index",
-            "create": "Create",
-            "show": "Show",
-            "reply": "Reply"
-        },
         "no_workspace": "No workspace",
         "contacts": {
-            "index": "Index",
-            "show": "Show",
-            "destroy": "Destroy",
-            "import": "Import",
-            "store": "Store",
-            "update": "Update",
-            "export": "Export",
-            "avatar": {
-                "upload": "Upload",
-                "delete": "Delete"
-            }
-        },
-        "segments": {
-            "index": "Index",
-            "store": "Store",
-            "destroy": "Destroy",
-            "contacts": {
-                "attach": "Attach",
-                "detach": "Detach"
-            }
+            "index": "Index"
         },
         "whatsapp": {
-            "templates": {
-                "index": "Index",
-                "store": "Store",
-                "sync": "Sync",
-                "create": "Create",
-                "destroy": "Destroy",
-                "edit": "Edit",
-                "update": "Update"
-            },
-            "widget": {
-                "index": "Index"
-            },
-            "widgets": {
-                "destroy": "Destroy",
-                "store": "Store",
-                "update": "Update",
-                "create": "Create",
-                "edit": "Edit"
-            },
             "setup": "Setup"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "Index"
-            }
-        },
         "inbox": {
-            "index": "Index",
-            "show": "Show",
-            "reply": "Reply",
-            "status": "Status",
-            "labels": {
-                "update": "Update",
-                "store": "Store",
-                "destroy": "Destroy",
-                "detach": "Detach",
-                "attach": "Attach"
-            },
-            "typing": "Typing",
-            "notes": {
-                "index": "Index",
-                "store": "Store"
-            },
-            "handover": "Handover",
-            "contacts": {
-                "search": "Search"
-            },
-            "start": "Start",
-            "templates": "Templates",
-            "assign": "Assign",
-            "setup": {
-                "destroy": "Destroy"
-            }
+            "index": "Index"
         },
         "ai": {
-            "providers": {
-                "index": "Index",
-                "update": "Update"
-            },
             "chatbots": {
-                "index": "Index",
-                "playground": "Playground",
-                "update": "Update",
-                "destroy": "Destroy",
-                "store": "Store"
-            },
-            "documents": {
-                "destroy": "Destroy",
-                "reindex": "Reindex"
+                "index": "Index"
             }
         },
         "social": {
             "accounts": {
-                "index": "Index",
-                "disconnect": "Disconnect",
-                "connect": "Connect"
+                "index": "Index"
             },
             "composer": "Composer",
-            "calendar": "Calendar",
-            "posts": {
-                "store": "Store",
-                "index": "Index",
-                "update": "Update",
-                "bulk": "Bulk",
-                "edit": "Edit",
-                "cancel": "Cancel",
-                "destroy": "Destroy"
-            }
-        },
-        "leads": {
-            "index": "Index",
-            "scrape": "Scrape",
-            "destroy": "Destroy"
-        },
-        "automations": {
-            "index": "Index",
-            "update": "Update",
-            "store": "Store",
-            "destroy": "Destroy",
-            "edit": "Edit",
-            "runs": "Runs",
-            "generate": "Generate",
-            "test": "Test"
+            "calendar": "Calendar"
         },
         "campaigns": {
-            "index": "Index",
-            "launch": "Launch",
-            "pause": "Pause",
-            "destroy": "Destroy",
-            "create": "Create",
-            "show": "Show",
-            "store": "Store",
-            "update": "Update",
-            "edit": "Edit"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "Index",
-                "show": "Show"
-            },
-            "ai": {
-                "index": "Index"
-            },
-            "inbox": {
-                "index": "Index"
-            },
-            "automations": {
-                "index": "Index"
-            },
-            "social": {
-                "index": "Index"
-            }
-        },
-        "push": {
-            "subscribe": "Subscribe",
-            "unsubscribe": "Unsubscribe"
+            "create": "Create"
         },
         "invite_by_email": "Invite by email",
-        "invitations": {
-            "store": "Store",
-            "destroy": "Destroy"
-        },
         "next_step": "Next step:",
         "go": "Go",
         "view_all": "View all",
@@ -536,45 +298,10 @@
         "ecommerce": {
             "stores": {
                 "test": "Test",
-                "sync": "Sync",
-                "index": "Index",
-                "destroy": "Destroy",
-                "store": "Store"
-            },
-            "orders": {
-                "index": "Index",
-                "show": "Show",
-                "refresh": "Refresh",
-                "fulfill": "Fulfill"
-            },
-            "products": {
-                "index": "Index",
-                "search": "Search"
-            },
-            "contacts": {
-                "orders": "Orders"
-            },
-            "oauth": {
-                "connect": "Connect"
+                "sync": "Sync"
             }
         },
-        "workspaces": "Workspaces",
-        "settings": {
-            "update": "Update",
-            "notifications": "Notifications",
-            "index": "Index"
-        },
-        "team": {
-            "store": "Store",
-            "update": "Update",
-            "destroy": "Destroy",
-            "index": "Index"
-        },
-        "subscription": {
-            "destroy": "Destroy",
-            "invoice": "Invoice",
-            "show": "Show"
-        }
+        "workspaces": "Workspaces"
     },
     "pagination": {
         "label": "Pagination",
@@ -588,9 +315,6 @@
         "page_num": "Page {{num}}",
         "page_of": "Page {{current}} of {{last}}",
         "showing": "Showing {{from}}–{{to}} of {{total}}"
-    },
-    "locale": {
-        "update": "Update"
     },
     "admin": {
         "nav": {
@@ -650,20 +374,12 @@
         "email": "Email",
         "languages": "Languages",
         "locales": {
-            "index": "Index",
-            "store": "Store",
-            "destroy": "Destroy",
-            "update": "Update"
+            "index": "Index"
         },
         "website_templates": "Website/Landing Pages",
         "roles_permissions": "Roles & Permissions",
         "ai_requests": "AI Requests",
-        "templates": "Templates",
         "audit_log": "Audit log",
-        "logout": "Logout",
-        "impersonation": {
-            "stop": "Stop"
-        },
         "user_id": "User ID",
         "all_statuses": "All statuses",
         "status_success": "Success",
@@ -671,7 +387,6 @@
         "status_failed": "Failed",
         "action": "Action",
         "admin_log_in": "Admin log in",
-        "login": "Login",
         "dashboard_overview": "Overview of your platform metrics.",
         "arpu": "ARPU",
         "this_period": "this period",
@@ -699,29 +414,14 @@
         "ai_requests_this_month": "AI requests (this month)",
         "ai_tokens_this_month": "AI tokens (this month)",
         "payments_this_month": "Payments this month",
-        "translations": {
-            "update": "Update"
-        },
         "view_subscriptions": "View subscriptions →",
-        "roles": {
-            "store": "Store",
-            "update": "Update",
-            "destroy": "Destroy"
-        },
-        "permissions": {
-            "store": "Store",
-            "update": "Update",
-            "destroy": "Destroy"
-        },
         "system_settings": "System settings",
         "view_payments": "View payments →",
         "add_client": "Add Client",
         "edit_client": "Edit Client",
         "delete_client": "Delete Client",
-        "manage_client_users": "Manage Client Users",
         "add_user": "Add User",
         "edit_user": "Edit User",
-        "delete_user": "Delete User",
         "assign_plan": "Assign Plan to Client",
         "edit_client_title": "Edit client",
         "manage_users_title": "Manage client users",
@@ -814,37 +514,24 @@
         "delete_user_confirm": "Are you sure you want to remove {{name}} ({{email}}) from this client?",
         "delete_client_confirm": "Are you sure you want to delete {{name}}? This will remove all client users and subscriptions.",
         "coupons": {
-            "index": "Index",
-            "update": "Update",
-            "store": "Store",
-            "destroy": "Destroy"
+            "index": "Index"
         },
         "tax_rates": "Tax Rates",
         "landing_page": "Site Content",
         "cms_pages": "CMS Pages",
         "cron_setup": "Cron Setup",
         "support": {
-            "index": "Index",
-            "show": "Show",
-            "reply": "Reply",
-            "status": "Status"
+            "index": "Index"
         },
         "queue": {
-            "index": "Index",
-            "retry": "Retry",
-            "flush": "Flush"
+            "index": "Index"
         },
         "clients_count": "Total clients",
         "users_count": "Total users",
         "integrations": {
-            "index": "Index",
-            "update": "Update",
-            "test": "Test",
-            "rotate": "Rotate",
-            "edit": "Edit"
+            "index": "Index"
         },
         "pusher_settings": "Pusher Settings",
-        "search": "Search",
         "admin_management_desc": "Manage admin users and their roles.",
         "total_admins": "Total Admins",
         "col_admin": "Admin",
@@ -934,24 +621,16 @@
         "secret_key_hint": "Server-side secret key — keep this private",
         "stripe_webhook_hint": "Webhook signing secret (whsec_…) from the Stripe dashboard",
         "webhook_hint": "Webhook secret used to verify incoming gateway events",
-        "clients": "Clients",
         "subscriptions": {
-            "index": "Index",
-            "store": "Store",
-            "export": "Export"
+            "index": "Index"
         },
         "payments": "Payments",
         "plans": "Plans",
         "currencies": {
-            "index": "Index",
-            "update": "Update"
+            "index": "Index"
         },
-        "admins": "Admins",
         "settings": {
             "index": "Index",
-            "general": {
-                "update": "Update"
-            },
             "logo": {
                 "upload": "Upload",
                 "delete": "Delete"
@@ -959,10 +638,6 @@
             "favicon": {
                 "upload": "Upload",
                 "delete": "Delete"
-            },
-            "update": "Update",
-            "firebase": {
-                "update": "Update"
             }
         },
         "ai": {
@@ -1027,8 +702,7 @@
         "impersonating": "Impersonating: {{name}}"
     },
     "head": {
-        "admin": "Admin",
-        "welcome": "Welcome"
+        "admin": "Admin"
     },
     "locales": {
         "add_language": "Add Language",
@@ -1049,7 +723,6 @@
         "saving": "Saving…",
         "title": "Languages",
         "languages_translations": "Languages & Translations",
-        "translations": "Translations",
         "translations_tab": "Translations",
         "languages_and_translations": "Languages & Translations",
         "flag": "Flag",
@@ -1081,13 +754,6 @@
         "verification_sent": "A new verification link has been sent to the email address you provided during registration.",
         "resend_verification": "Resend Verification Email",
         "log_out": "Log Out",
-        "verify_email": "Verify Email",
-        "invitations": {
-            "accept": "Accept"
-        },
-        "social": {
-            "redirect": "Redirect"
-        },
         "admin_panel_label": "Admin Panel",
         "welcome_to": "Welcome to",
         "admin_tagline": "Manage your platform with confidence",
@@ -1142,7 +808,6 @@
         "continue_with_google": "Continue with Google",
         "continue_with": "Continue with {{provider}}",
         "or_continue_with_email": "or continue with email",
-        "firebase": "Firebase",
         "trusted_by_count": "Trusted by 10,000+ businesses",
         "proof_businesses": "Businesses",
         "proof_messages_sent": "Messages sent",
@@ -1157,24 +822,7 @@
         "demo_role_admin": "Demo Role Admin",
         "demo_role_client": "Demo Role Client"
     },
-    "password": {
-        "confirm": "Confirm",
-        "email": "Email",
-        "request": "Request",
-        "store": "Store",
-        "update": "Update"
-    },
-    "verification": {
-        "send": "Send"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "Destroy",
-        "update": "Update",
         "edit": "Profile",
         "update_profile": "Update Profile Information",
         "update_password": "Update Password",
@@ -1218,8 +866,6 @@
         "two_factor_disable": "Disable 2FA"
     },
     "plans": {
-        "name": "Name",
-        "slug": "Slug",
         "monthly_price_cents": "Monthly price (cents)",
         "yearly_price_cents": "Yearly price (cents)",
         "currency_code": "Currency code",
@@ -1289,7 +935,6 @@
         "ping": "Ping"
     },
     "contact": {
-        "store": "Store",
         "created": "Created",
         "tag_added": "Tag Added",
         "name": "Name",
@@ -1487,9 +1132,6 @@
         "no_deliveries": "No deliveries yet."
     },
     "reports": {
-        "exports": {
-            "contacts": "Contacts"
-        },
         "ai_title": "AI Usage Report",
         "ai_subtitle": "Token consumption, cost, and latency analytics",
         "tokens_per_day": "Tokens per Day",
@@ -2607,11 +2249,9 @@
         "upload_failed_retry": "Upload failed. Please try again."
     },
     "inbox_ui": {
-        "new_conversation": "New Conversation",
         "search_contact": "Search by name, phone, or email…",
         "no_channels": "No active channel accounts.",
         "select_channel": "Select which channel to start the conversation on:",
-        "contact_details": "Contact Details",
         "opening_message": "Type a message to send when the conversation opens…"
     },
     "inbox": {
@@ -2902,9 +2542,6 @@
     },
     "context": {
         "key": "Key"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Automations",
@@ -3990,9 +3627,6 @@
         "finance_b3": "Fraud / security alerts",
         "finance_b4": "Account & loan updates"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -4002,9 +3636,6 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     },
     "smart_qr": {
         "batches_title": "QR Batches",

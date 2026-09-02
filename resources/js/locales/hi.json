@@ -32,13 +32,10 @@
         "settings": "Settings"
     },
     "nav": {
-        "home": "होम",
         "dashboard": "डैशबोर्ड",
-        "websites": "वेबसाइट",
         "workspaces": "कार्यक्षेत्र",
         "profile": "प्रोफ़ाइल",
         "admin": "एडमिन",
-        "components": "घटक",
         "pricing": "मूल्य निर्धारण",
         "logout": "लॉग आउट",
         "login": "लॉग इन",
@@ -51,7 +48,6 @@
         "features": "विशेषताएं",
         "use_cases": "उपयोग के मामले",
         "faq": "FAQ",
-        "blog": "ब्लॉग",
         "contact": "संपर्क",
         "sign_out": "साइन आउट",
         "light_mode": "लाइट मोड",
@@ -146,9 +142,6 @@
         "description": "यह पृष्ठ दाएं-से-बाएं लेआउट में प्रदर्शित है। पूरे ऐप को RTL में देखने के लिए भाषा स्विचर का उपयोग करें।",
         "ltrNote": "LTR के लिए अंग्रेजी या बंगाली पर वापस जाएं।"
     },
-    "sidebar": {
-        "menu": "मेनू"
-    },
     "topbar": {
         "switch_theme": "थीम बदलें",
         "visit_website": "वेबसाइट देखें",
@@ -157,62 +150,18 @@
         "create_workspace": "कार्यक्षेत्र बनाएं",
         "manage_workspaces": "कार्यक्षेत्र प्रबंधित करें",
         "language": "भाषा",
-        "currency": "मुद्रा",
         "account": "खाता"
-    },
-    "theme": {
-        "update": "अपडेट करें"
-    },
-    "currency": {
-        "update": "अपडेट करें"
     },
     "client": {
         "profile": {
-            "edit": "संपादित करें",
             "2fa": "2Fa",
             "sessions": "Sessions"
-        },
-        "tenants": {
-            "switch": "बदलें",
-            "index": "सूची",
-            "store": "सहेजें"
         },
         "dashboard": "डैशबोर्ड",
         "panel": "क्लाइंट पैनल",
         "pricing": "मूल्य निर्धारण",
-        "websites": {
-            "pages": {
-                "index": "सूची",
-                "store": "सहेजें",
-                "update": "अपडेट करें",
-                "create": "बनाएं",
-                "edit": "संपादित करें"
-            },
-            "index": "सूची",
-            "store": "सहेजें",
-            "create": "बनाएं",
-            "domains": {
-                "store": "सहेजें",
-                "verify": "सत्यापित करें",
-                "index": "सूची"
-            },
-            "templates": "टेम्पलेट",
-            "publish": {
-                "store": "सहेजें"
-            },
-            "export": {
-                "store": "सहेजें"
-            }
-        },
-        "checkout": {
-            "store": "सहेजें"
-        },
-        "pages": "पृष्ठ",
         "no_tenant": "कोई कार्यक्षेत्र नहीं",
         "create_workspace": "कार्यक्षेत्र बनाएं",
-        "billing": {
-            "index": "इंडेक्स"
-        },
         "audit_log": "ऑडिट लॉग",
         "audit_log_subtitle": "ऑडिट लॉग का विवरण",
         "filter_by_action": "क्रिया द्वारा फ़िल्टर करें",
@@ -236,9 +185,6 @@
         "managed_by_admin": "आपके संगठन के एडमिन द्वारा प्रबंधित",
         "upgrade_plan": "योजना अपग्रेड करें",
         "no_plan": "कोई सक्रिय सदस्यता नहीं",
-        "ai_credits": "AI क्रेडिट",
-        "use_ai": "AI का उपयोग करें",
-        "manage_websites": "वेबसाइट प्रबंधित करें",
         "quick_links": "त्वरित लिंक",
         "billing_plans": "बिलिंग योजनाएं",
         "settings_subtitle": "प्राथमिकताएँ और संगठन",
@@ -256,7 +202,6 @@
         "save_settings": "सेटिंग्स सहेजें",
         "cancel_subscription_confirm": "क्या आप वाकई अपनी सदस्यता रद्द करना चाहते हैं?",
         "subscription_subtitle": "आपका वर्तमान प्लान और बिलिंग",
-        "ends": "समाप्त होता है",
         "cancel_subscription": "सदस्यता रद्द करें",
         "view_billing_history": "बिलिंग इतिहास देखें",
         "team_for": "टीम",
@@ -276,207 +221,42 @@
         "inactive": "निष्क्रिय",
         "save": "सहेजें",
         "remove_member_confirm": "हटाएँ",
-        "search": "खोजें",
-        "notifications": {
-            "index": "सूची",
-            "read": "पढ़ा गया",
-            "destroy": "हटाएं",
-            "recent": "हाल का"
-        },
-        "webhooks": {
-            "index": "सूची",
-            "update": "अपडेट करें",
-            "store": "सहेजें",
-            "destroy": "हटाएं",
-            "test": "परीक्षण",
-            "deliveries": "डिलीवरी"
-        },
-        "media": {
-            "index": "सूची",
-            "store": "सहेजें",
-            "destroy": "हटाएं"
-        },
-        "onboarding": {
-            "show": "देखें",
-            "complete": "पूर्ण"
-        },
         "team_members": "टीम सदस्य",
         "manage_team": "टीम प्रबंधित करें",
         "manage_workspaces": "कार्यक्षेत्र प्रबंधित करें",
         "change_plan": "प्लान बदलें",
-        "coupon": {
-            "check": "जांचें"
-        },
-        "support": {
-            "store": "सहेजें",
-            "index": "सूची",
-            "create": "बनाएं",
-            "show": "देखें",
-            "reply": "जवाब दें"
-        },
         "no_workspace": "कोई कार्यक्षेत्र नहीं",
         "contacts": {
-            "index": "सूची",
-            "show": "देखें",
-            "destroy": "हटाएं",
-            "import": "आयात करें",
-            "store": "सहेजें",
-            "update": "अपडेट करें",
-            "export": "निर्यात",
-            "avatar": {
-                "upload": "अपलोड",
-                "delete": "हटाएं"
-            }
+            "index": "सूची"
         },
         "segments": {
-            "index": "सूची",
-            "store": "सहेजें",
-            "destroy": "हटाएं",
             "contacts": "Contacts"
         },
         "whatsapp": {
-            "templates": {
-                "index": "सूची",
-                "store": "सहेजें",
-                "sync": "सिंक करें",
-                "create": "बनाएं",
-                "destroy": "मिटाएँ",
-                "edit": "संपादित करें",
-                "update": "अपडेट करें"
-            },
-            "widget": {
-                "index": "सूची"
-            },
-            "widgets": {
-                "destroy": "हटाएं",
-                "store": "सहेजें",
-                "update": "अपडेट करें",
-                "create": "बनाएँ",
-                "edit": "संपादित करें"
-            },
             "setup": {
                 "destroy": "Destroy"
             }
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "सूची"
-            }
-        },
         "inbox": {
             "index": "सूची",
-            "show": "देखें",
-            "reply": "जवाब दें",
-            "status": "स्थिति",
-            "labels": {
-                "update": "अपडेट करें",
-                "store": "सहेजें",
-                "destroy": "हटाएं",
-                "detach": "अलग करें",
-                "attach": "जोड़ें"
-            },
-            "typing": "टाइप कर रहे हैं",
-            "notes": {
-                "index": "सूची",
-                "store": "सहेजें"
-            },
-            "handover": "हैंडओवर",
-            "contacts": {
-                "search": "खोजें"
-            },
-            "start": "शुरू करें",
-            "templates": "टेम्पलेट",
-            "assign": "सौंपें",
             "setup": "Setup"
         },
         "ai": {
-            "providers": {
-                "index": "सूची",
-                "update": "अपडेट करें"
-            },
             "chatbots": {
-                "index": "सूची",
-                "playground": "प्लेग्राउंड",
-                "update": "अपडेट करें",
-                "destroy": "हटाएं",
-                "store": "सहेजें"
-            },
-            "documents": {
-                "destroy": "हटाएं",
-                "reindex": "पुनः अनुक्रमित करें"
+                "index": "सूची"
             }
         },
         "social": {
             "accounts": {
-                "index": "सूची",
-                "disconnect": "डिस्कनेक्ट करें",
-                "connect": "कनेक्ट करें"
+                "index": "सूची"
             },
             "composer": "कम्पोज़र",
-            "calendar": "कैलेंडर",
-            "posts": {
-                "store": "सहेजें",
-                "index": "इंडेक्स",
-                "update": "अपडेट करें",
-                "bulk": "बल्क",
-                "edit": "संपादित करें",
-                "cancel": "रद्द करें",
-                "destroy": "मिटाएँ"
-            }
-        },
-        "leads": {
-            "index": "सूची",
-            "scrape": "स्क्रेप करें",
-            "destroy": "हटाएं"
-        },
-        "automations": {
-            "index": "सूची",
-            "update": "अपडेट करें",
-            "store": "सहेजें",
-            "destroy": "हटाएं",
-            "edit": "संपादित करें",
-            "runs": "रन",
-            "generate": "Generate",
-            "test": "Test"
+            "calendar": "कैलेंडर"
         },
         "campaigns": {
-            "index": "सूची",
-            "launch": "लॉन्च करें",
-            "pause": "रोकें",
-            "destroy": "हटाएं",
-            "create": "बनाएं",
-            "show": "देखें",
-            "store": "सहेजें",
-            "update": "अपडेट करें",
-            "edit": "संपादित करें"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "सूची",
-                "show": "देखें"
-            },
-            "ai": {
-                "index": "सूची"
-            },
-            "inbox": {
-                "index": "सूची"
-            },
-            "automations": {
-                "index": "सूची"
-            },
-            "social": {
-                "index": "सूची"
-            }
-        },
-        "push": {
-            "subscribe": "सदस्यता लें",
-            "unsubscribe": "सदस्यता रद्द करें"
+            "create": "बनाएं"
         },
         "invite_by_email": "ईमेल द्वारा आमंत्रित करें",
-        "invitations": {
-            "store": "सहेजें",
-            "destroy": "हटाएं"
-        },
         "next_step": "अगला चरण:",
         "go": "जाएँ",
         "view_all": "सभी देखें",
@@ -491,48 +271,13 @@
         "ecommerce": {
             "stores": {
                 "test": "टेस्ट",
-                "sync": "सिंक",
-                "index": "इंडेक्स",
-                "destroy": "मिटाएँ",
-                "store": "स्टोर"
-            },
-            "orders": {
-                "index": "इंडेक्स",
-                "show": "दिखाएँ",
-                "refresh": "रिफ्रेश करें",
-                "fulfill": "पूर्ण करें"
-            },
-            "products": {
-                "index": "इंडेक्स",
-                "search": "खोजें"
-            },
-            "contacts": {
-                "orders": "ऑर्डर"
-            },
-            "oauth": {
-                "connect": "कनेक्ट करें"
+                "sync": "सिंक"
             }
         },
         "workspaces": {
             "switch": "Switch",
             "index": "Index",
             "store": "Store"
-        },
-        "settings": {
-            "update": "अपडेट करें",
-            "notifications": "सूचनाएँ",
-            "index": "Index"
-        },
-        "team": {
-            "store": "स्टोर",
-            "update": "अपडेट करें",
-            "destroy": "मिटाएँ",
-            "index": "Index"
-        },
-        "subscription": {
-            "destroy": "मिटाएँ",
-            "invoice": "इनवॉइस",
-            "show": "Show"
         },
         "kpi_messages_sent": "Messages sent",
         "kpi_messages_received": "Messages received",
@@ -571,9 +316,6 @@
         "page_num": "पृष्ठ {{num}}",
         "page_of": "पृष्ठ {{current}} / {{last}}",
         "showing": "{{from}}–{{to}} दिखा रहे हैं, कुल {{total}}"
-    },
-    "locale": {
-        "update": "अपडेट करें"
     },
     "admin": {
         "nav": {
@@ -617,20 +359,12 @@
         "email": "ईमेल",
         "languages": "भाषाएं",
         "locales": {
-            "index": "सूची",
-            "store": "सहेजें",
-            "destroy": "हटाएं",
-            "update": "अपडेट करें"
+            "index": "सूची"
         },
         "website_templates": "वेबसाइट/लैंडिंग पृष्ठ",
         "roles_permissions": "भूमिकाएं और अनुमतियां",
         "ai_requests": "AI अनुरोध",
-        "templates": "टेम्पलेट",
         "audit_log": "ऑडिट लॉग",
-        "logout": "लॉग आउट",
-        "impersonation": {
-            "stop": "रोकें"
-        },
         "user_id": "उपयोगकर्ता ID",
         "all_statuses": "सभी स्थितियाँ",
         "status_success": "सफल",
@@ -638,7 +372,6 @@
         "status_failed": "विफल",
         "action": "क्रिया",
         "admin_log_in": "एडमिन लॉग इन",
-        "login": "लॉगिन",
         "dashboard_overview": "आपके प्लेटफ़ॉर्म मेट्रिक्स का अवलोकन।",
         "quick_links": "त्वरित लिंक",
         "mrr": "मासिक आवर्ती राजस्व",
@@ -646,29 +379,14 @@
         "ai_requests_this_month": "AI अनुरोध (इस महीने)",
         "ai_tokens_this_month": "AI टोकन (इस महीने)",
         "payments_this_month": "इस महीने के भुगतान",
-        "translations": {
-            "update": "अपडेट करें"
-        },
         "view_subscriptions": "सदस्यताएं देखें →",
-        "roles": {
-            "store": "सहेजें",
-            "update": "अपडेट करें",
-            "destroy": "हटाएं"
-        },
-        "permissions": {
-            "store": "सहेजें",
-            "update": "अपडेट करें",
-            "destroy": "हटाएं"
-        },
         "system_settings": "सिस्टम सेटिंग",
         "view_payments": "भुगतान देखें →",
         "add_client": "क्लाइंट जोड़ें",
         "edit_client": "क्लाइंट संपादित करें",
         "delete_client": "क्लाइंट हटाएं",
-        "manage_client_users": "क्लाइंट उपयोगकर्ता प्रबंधित करें",
         "add_user": "उपयोगकर्ता जोड़ें",
         "edit_user": "उपयोगकर्ता संपादित करें",
-        "delete_user": "उपयोगकर्ता हटाएं",
         "assign_plan": "क्लाइंट को योजना सौंपें",
         "edit_client_title": "क्लाइंट संपादित करें",
         "manage_users_title": "क्लाइंट उपयोगकर्ता प्रबंधित करें",
@@ -761,37 +479,24 @@
         "delete_user_confirm": "क्या आप वाकई {{name}} ({{email}}) को इस क्लाइंट से हटाना चाहते हैं?",
         "delete_client_confirm": "क्या आप वाकई {{name}} को हटाना चाहते हैं? यह सभी क्लाइंट उपयोगकर्ताओं और सदस्यताओं को हटा देगा।",
         "coupons": {
-            "index": "कूपन सूची",
-            "update": "अपडेट करें",
-            "store": "सहेजें",
-            "destroy": "हटाएं"
+            "index": "कूपन सूची"
         },
         "tax_rates": "कर दरें",
         "landing_page": "लैंडिंग पृष्ठ",
         "cms_pages": "CMS पृष्ठ",
         "cron_setup": "क्रॉन सेटअप",
         "support": {
-            "index": "सहायता सूची",
-            "show": "देखें",
-            "reply": "उत्तर दें",
-            "status": "स्थिति"
+            "index": "सहायता सूची"
         },
         "queue": {
-            "index": "कतार सूची",
-            "retry": "पुनः प्रयास",
-            "flush": "साफ़ करें"
+            "index": "कतार सूची"
         },
         "clients_count": "कुल क्लाइंट",
         "users_count": "कुल उपयोगकर्ता",
         "integrations": {
-            "index": "एकीकरण सूची",
-            "update": "अपडेट करें",
-            "test": "परीक्षण",
-            "rotate": "घुमाएं",
-            "edit": "संपादित करें"
+            "index": "एकीकरण सूची"
         },
         "pusher_settings": "Pusher सेटिंग",
-        "search": "खोजें",
         "admin_management_desc": "एडमिन उपयोगकर्ताओं और उनकी भूमिकाओं का प्रबंधन करें।",
         "total_admins": "कुल एडमिन",
         "col_admin": "एडमिन",
@@ -1008,8 +713,7 @@
         "impersonating": "प्रतिरूपण: {{name}}"
     },
     "head": {
-        "admin": "एडमिन",
-        "welcome": "स्वागत है"
+        "admin": "एडमिन"
     },
     "locales": {
         "add_language": "भाषा जोड़ें",
@@ -1030,7 +734,6 @@
         "saving": "सहेजा जा रहा है…",
         "title": "भाषाएं",
         "languages_translations": "भाषाएं और अनुवाद",
-        "translations": "अनुवाद",
         "translations_tab": "अनुवाद",
         "languages_and_translations": "भाषाएँ और अनुवाद",
         "flag": "ध्वज",
@@ -1062,13 +765,6 @@
         "verification_sent": "पंजीकरण के दौरान दिए गए ईमेल पते पर एक नया सत्यापन लिंक भेजा गया है।",
         "resend_verification": "सत्यापन ईमेल फिर से भेजें",
         "log_out": "लॉग आउट",
-        "verify_email": "ईमेल सत्यापित करें",
-        "invitations": {
-            "accept": "स्वीकार करें"
-        },
-        "social": {
-            "redirect": "पुनर्निर्देशित"
-        },
         "admin_panel_label": "एडमिन पैनल",
         "welcome_to": "स्वागत है",
         "admin_tagline": "अपने प्लेटफ़ॉर्म को आत्मविश्वास के साथ प्रबंधित करें",
@@ -1119,7 +815,6 @@
         "continue_with_google": "Google से जारी रखें",
         "continue_with": "{{provider}} से जारी रखें",
         "or_continue_with_email": "या ईमेल से जारी रखें",
-        "firebase": "Firebase",
         "trusted_by_count": "10,000+ व्यवसायों का भरोसा",
         "proof_businesses": "व्यवसाय",
         "proof_messages_sent": "भेजे गए संदेश",
@@ -1138,24 +833,7 @@
         "and": "and",
         "privacy_policy": "Privacy Policy"
     },
-    "password": {
-        "confirm": "पुष्टि करें",
-        "email": "ईमेल",
-        "request": "अनुरोध",
-        "store": "सहेजें",
-        "update": "अपडेट करें"
-    },
-    "verification": {
-        "send": "भेजें"
-    },
-    "www": {
-        "example": {
-            "com": "com"
-        }
-    },
     "profile": {
-        "destroy": "हटाएं",
-        "update": "अपडेट करें",
         "edit": "प्रोफ़ाइल",
         "update_profile": "प्रोफ़ाइल जानकारी अपडेट करें",
         "update_password": "पासवर्ड अपडेट करें",
@@ -1199,8 +877,6 @@
         "two_factor_disable": "2FA अक्षम करें"
     },
     "plans": {
-        "name": "नाम",
-        "slug": "स्लग",
         "monthly_price_cents": "मासिक मूल्य (सेंट)",
         "yearly_price_cents": "वार्षिक मूल्य (सेंट)",
         "currency_code": "मुद्रा कोड",
@@ -1270,7 +946,6 @@
         "ping": "पिंग"
     },
     "contact": {
-        "store": "सहेजें",
         "created": "बनाया गया",
         "tag_added": "टैग जोड़ा गया",
         "name": "नाम",
@@ -1468,9 +1143,6 @@
         "no_deliveries": "अभी तक कोई डिलीवरी नहीं।"
     },
     "reports": {
-        "exports": {
-            "contacts": "संपर्क"
-        },
         "ai_title": "AI उपयोग रिपोर्ट",
         "ai_subtitle": "टोकन उपभोग, लागत और विलंबता विश्लेषण",
         "tokens_per_day": "प्रतिदिन टोकन",
@@ -2513,11 +2185,9 @@
         "date_today": "Today"
     },
     "inbox_ui": {
-        "new_conversation": "नई बातचीत",
         "search_contact": "नाम, फ़ोन या ईमेल से खोजें…",
         "no_channels": "कोई सक्रिय चैनल खाता नहीं।",
         "select_channel": "बातचीत शुरू करने के लिए चैनल चुनें:",
-        "contact_details": "संपर्क विवरण",
         "opening_message": "बातचीत खुलने पर भेजने के लिए संदेश टाइप करें…"
     },
     "inbox": {
@@ -2867,9 +2537,6 @@
     },
     "context": {
         "key": "की"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "email_editor": {
         "tab_templates": "टेम्पलेट",
@@ -3948,9 +3615,6 @@
         },
         "tone_${tone}": "Tone ${Tone}"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3966,8 +3630,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

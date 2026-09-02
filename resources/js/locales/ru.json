@@ -38,13 +38,10 @@
         "settings": "Настройки"
     },
     "nav": {
-        "home": "Главная",
         "dashboard": "Панель управления",
-        "websites": "Сайты",
         "workspaces": "Рабочие пространства",
         "profile": "Профиль",
         "admin": "Администрирование",
-        "components": "Компоненты",
         "pricing": "Тарифы",
         "logout": "Выйти",
         "login": "Войти",
@@ -59,7 +56,6 @@
         "integrations": "Интеграции",
         "about": "О нас",
         "faq": "FAQ",
-        "blog": "Блог",
         "contact": "Связаться с нами",
         "sign_out": "Выйти",
         "light_mode": "Светлая тема",
@@ -152,9 +148,6 @@
         "description": "Эта страница отображается в режиме справа налево. Используйте переключатель языка, чтобы выбрать арабский (العربية) и увидеть всё приложение в режиме RTL.",
         "ltrNote": "Переключитесь обратно на английский или бенгальский, чтобы вернуться к режиму слева направо."
     },
-    "sidebar": {
-        "menu": "Меню"
-    },
     "topbar": {
         "switch_theme": "Сменить тему",
         "visit_website": "Перейти на сайт",
@@ -163,67 +156,14 @@
         "create_workspace": "Создать рабочее пространство",
         "manage_workspaces": "Управление рабочими пространствами",
         "language": "Язык",
-        "currency": "Валюта",
         "account": "Аккаунт"
     },
-    "theme": {
-        "update": "Обновить"
-    },
-    "currency": {
-        "update": "Обновить"
-    },
     "client": {
-        "profile": {
-            "edit": "Редактирование",
-            "2fa": {
-                "enable": "Включить",
-                "disable": "Отключить"
-            },
-            "sessions": {
-                "destroy": "Завершение"
-            }
-        },
-        "tenants": {
-            "switch": "Переключение",
-            "index": "Список",
-            "store": "Создание"
-        },
         "dashboard": "Панель управления",
         "panel": "Панель клиента",
         "pricing": "Тарифы",
-        "websites": {
-            "pages": {
-                "index": "Список",
-                "store": "Создание",
-                "update": "Обновление",
-                "create": "Создание",
-                "edit": "Редактирование"
-            },
-            "index": "Список",
-            "store": "Создание",
-            "create": "Создание",
-            "domains": {
-                "store": "Создание",
-                "verify": "Проверка",
-                "index": "Список"
-            },
-            "templates": "Шаблоны",
-            "publish": {
-                "store": "Публикация"
-            },
-            "export": {
-                "store": "Экспорт"
-            }
-        },
-        "checkout": {
-            "store": "Оформление"
-        },
-        "pages": "Страницы",
         "no_tenant": "Нет рабочего пространства",
         "create_workspace": "Создать рабочее пространство",
-        "billing": {
-            "index": "Список"
-        },
         "audit_log": "Журнал действий",
         "audit_log_subtitle": "Подзаголовок журнала действий",
         "filter_by_action": "Фильтр по действию",
@@ -247,9 +187,6 @@
         "managed_by_admin": "Управляется администратором вашей организации",
         "upgrade_plan": "Улучшить тариф",
         "no_plan": "Нет активной подписки",
-        "ai_credits": "Кредиты ИИ",
-        "use_ai": "Использовать ИИ",
-        "manage_websites": "Управление сайтами",
         "quick_links": "Быстрые ссылки",
         "billing_plans": "Тарифные планы",
         "settings_subtitle": "Предпочтения и организация",
@@ -267,7 +204,6 @@
         "save_settings": "Сохранить настройки",
         "cancel_subscription_confirm": "Вы уверены, что хотите отменить подписку?",
         "subscription_subtitle": "Ваш текущий тариф и оплата",
-        "ends": "Заканчивается",
         "cancel_subscription": "Отменить подписку",
         "view_billing_history": "Смотреть историю платежей",
         "team_for": "Команда для",
@@ -287,210 +223,36 @@
         "inactive": "Неактивен",
         "save": "Сохранить",
         "remove_member_confirm": "Удалить",
-        "search": "Поиск",
-        "notifications": {
-            "index": "Список",
-            "read": "Прочитано",
-            "destroy": "Удаление",
-            "recent": "Недавние"
-        },
-        "webhooks": {
-            "index": "Список",
-            "update": "Обновление",
-            "store": "Создание",
-            "destroy": "Удаление",
-            "test": "Тест",
-            "deliveries": "Доставки"
-        },
-        "media": {
-            "index": "Список",
-            "store": "Загрузка",
-            "destroy": "Удаление"
-        },
-        "onboarding": {
-            "show": "Просмотр",
-            "complete": "Завершение"
-        },
         "team_members": "Участники команды",
         "manage_team": "Управление командой",
         "manage_workspaces": "Управление рабочими пространствами",
         "change_plan": "Сменить тариф",
-        "coupon": {
-            "check": "Проверка"
-        },
-        "support": {
-            "store": "Создание",
-            "index": "Список",
-            "create": "Создание",
-            "show": "Просмотр",
-            "reply": "Ответ"
-        },
         "no_workspace": "Нет рабочего пространства",
         "contacts": {
-            "index": "Список",
-            "show": "Просмотр",
-            "destroy": "Удаление",
-            "import": "Импорт",
-            "store": "Создание",
-            "update": "Обновление",
-            "export": "Экспорт",
-            "avatar": {
-                "upload": "Загрузка",
-                "delete": "Удаление"
-            }
-        },
-        "segments": {
-            "index": "Список",
-            "store": "Создание",
-            "destroy": "Удаление",
-            "contacts": {
-                "attach": "Добавление",
-                "detach": "Исключение"
-            }
+            "index": "Список"
         },
         "whatsapp": {
-            "templates": {
-                "index": "Список",
-                "store": "Создание",
-                "sync": "Синхронизация",
-                "create": "Создание",
-                "destroy": "Удаление",
-                "edit": "Редактирование",
-                "update": "Обновление"
-            },
-            "widget": {
-                "index": "Список"
-            },
-            "widgets": {
-                "destroy": "Удаление",
-                "store": "Создание",
-                "update": "Обновление",
-                "create": "Создание",
-                "edit": "Редактирование"
-            },
             "setup": "Настройка"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "Список"
-            }
-        },
         "inbox": {
-            "index": "Список",
-            "show": "Просмотр",
-            "reply": "Ответ",
-            "status": "Статус",
-            "labels": {
-                "update": "Обновление",
-                "store": "Создание",
-                "destroy": "Удаление",
-                "detach": "Снятие",
-                "attach": "Добавление"
-            },
-            "typing": "Набор текста",
-            "notes": {
-                "index": "Список",
-                "store": "Создание"
-            },
-            "handover": "Передача",
-            "contacts": {
-                "search": "Поиск"
-            },
-            "start": "Начало",
-            "templates": "Шаблоны",
-            "assign": "Назначение",
-            "setup": {
-                "destroy": "Удаление"
-            }
+            "index": "Список"
         },
         "ai": {
-            "providers": {
-                "index": "Список",
-                "update": "Обновление"
-            },
             "chatbots": {
-                "index": "Список",
-                "playground": "Песочница",
-                "update": "Обновление",
-                "destroy": "Удаление",
-                "store": "Создание"
-            },
-            "documents": {
-                "destroy": "Удаление",
-                "reindex": "Переиндексация"
+                "index": "Список"
             }
         },
         "social": {
             "accounts": {
-                "index": "Список",
-                "disconnect": "Отключение",
-                "connect": "Подключение"
+                "index": "Список"
             },
             "composer": "Редактор",
-            "calendar": "Календарь",
-            "posts": {
-                "store": "Создание",
-                "index": "Список",
-                "update": "Обновление",
-                "bulk": "Массовые действия",
-                "edit": "Редактирование",
-                "cancel": "Отмена",
-                "destroy": "Удаление"
-            }
-        },
-        "leads": {
-            "index": "Список",
-            "scrape": "Сбор",
-            "destroy": "Удаление"
-        },
-        "automations": {
-            "index": "Список",
-            "update": "Обновление",
-            "store": "Создание",
-            "destroy": "Удаление",
-            "edit": "Редактирование",
-            "runs": "Запуски",
-            "generate": "Генерация",
-            "test": "Тест"
+            "calendar": "Календарь"
         },
         "campaigns": {
-            "index": "Список",
-            "launch": "Запуск",
-            "pause": "Пауза",
-            "destroy": "Удаление",
-            "create": "Создание",
-            "show": "Просмотр",
-            "store": "Создание",
-            "update": "Обновление",
-            "edit": "Редактирование"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "Список",
-                "show": "Просмотр"
-            },
-            "ai": {
-                "index": "Список"
-            },
-            "inbox": {
-                "index": "Список"
-            },
-            "automations": {
-                "index": "Список"
-            },
-            "social": {
-                "index": "Список"
-            }
-        },
-        "push": {
-            "subscribe": "Подписка",
-            "unsubscribe": "Отписка"
+            "create": "Создание"
         },
         "invite_by_email": "Пригласить по email",
-        "invitations": {
-            "store": "Создание",
-            "destroy": "Удаление"
-        },
         "next_step": "Следующий шаг:",
         "go": "Перейти",
         "view_all": "Смотреть все",
@@ -529,45 +291,10 @@
         "ecommerce": {
             "stores": {
                 "test": "Тест",
-                "sync": "Синхронизация",
-                "index": "Список",
-                "destroy": "Удаление",
-                "store": "Создание"
-            },
-            "orders": {
-                "index": "Список",
-                "show": "Просмотр",
-                "refresh": "Обновление",
-                "fulfill": "Выполнение"
-            },
-            "products": {
-                "index": "Список",
-                "search": "Поиск"
-            },
-            "contacts": {
-                "orders": "Заказы"
-            },
-            "oauth": {
-                "connect": "Подключение"
+                "sync": "Синхронизация"
             }
         },
-        "workspaces": "Рабочие пространства",
-        "settings": {
-            "update": "Обновление",
-            "notifications": "Уведомления",
-            "index": "Список"
-        },
-        "team": {
-            "store": "Создание",
-            "update": "Обновление",
-            "destroy": "Удаление",
-            "index": "Список"
-        },
-        "subscription": {
-            "destroy": "Отмена",
-            "invoice": "Счёт",
-            "show": "Просмотр"
-        }
+        "workspaces": "Рабочие пространства"
     },
     "pagination": {
         "label": "Пагинация",
@@ -581,9 +308,6 @@
         "page_num": "Страница {{num}}",
         "page_of": "Страница {{current}} из {{last}}",
         "showing": "Показано {{from}}–{{to}} из {{total}}"
-    },
-    "locale": {
-        "update": "Обновить"
     },
     "admin": {
         "nav": {
@@ -638,20 +362,12 @@
         "email": "Email",
         "languages": "Языки",
         "locales": {
-            "index": "Список",
-            "store": "Создать",
-            "destroy": "Удалить",
-            "update": "Обновить"
+            "index": "Список"
         },
         "website_templates": "Сайты/лендинги",
         "roles_permissions": "Роли и права",
         "ai_requests": "Запросы к ИИ",
-        "templates": "Шаблоны",
         "audit_log": "Журнал аудита",
-        "logout": "Выйти",
-        "impersonation": {
-            "stop": "Остановить"
-        },
         "user_id": "ID пользователя",
         "all_statuses": "Все статусы",
         "status_success": "Успешно",
@@ -659,7 +375,6 @@
         "status_failed": "Ошибка",
         "action": "Действие",
         "admin_log_in": "Вход для администратора",
-        "login": "Войти",
         "dashboard_overview": "Обзор метрик вашей платформы.",
         "arpu": "ARPU",
         "this_period": "за этот период",
@@ -687,29 +402,14 @@
         "ai_requests_this_month": "Запросы к ИИ (за месяц)",
         "ai_tokens_this_month": "Токены ИИ (за месяц)",
         "payments_this_month": "Платежи за месяц",
-        "translations": {
-            "update": "Обновить"
-        },
         "view_subscriptions": "Смотреть подписки →",
-        "roles": {
-            "store": "Создать",
-            "update": "Обновить",
-            "destroy": "Удалить"
-        },
-        "permissions": {
-            "store": "Создать",
-            "update": "Обновить",
-            "destroy": "Удалить"
-        },
         "system_settings": "Системные настройки",
         "view_payments": "Смотреть платежи →",
         "add_client": "Добавить клиента",
         "edit_client": "Редактировать клиента",
         "delete_client": "Удалить клиента",
-        "manage_client_users": "Управление пользователями клиента",
         "add_user": "Добавить пользователя",
         "edit_user": "Редактировать пользователя",
-        "delete_user": "Удалить пользователя",
         "assign_plan": "Назначить тариф клиенту",
         "edit_client_title": "Редактирование клиента",
         "manage_users_title": "Управление пользователями клиента",
@@ -802,37 +502,24 @@
         "delete_user_confirm": "Вы уверены, что хотите удалить {{name}} ({{email}}) у этого клиента?",
         "delete_client_confirm": "Вы уверены, что хотите удалить {{name}}? Будут удалены все пользователи и подписки клиента.",
         "coupons": {
-            "index": "Список",
-            "update": "Обновить",
-            "store": "Создать",
-            "destroy": "Удалить"
+            "index": "Список"
         },
         "tax_rates": "Налоговые ставки",
         "landing_page": "Контент сайта",
         "cms_pages": "Страницы CMS",
         "cron_setup": "Настройка Cron",
         "support": {
-            "index": "Список",
-            "show": "Просмотр",
-            "reply": "Ответить",
-            "status": "Статус"
+            "index": "Список"
         },
         "queue": {
-            "index": "Список",
-            "retry": "Повторить",
-            "flush": "Очистить"
+            "index": "Список"
         },
         "clients_count": "Всего клиентов",
         "users_count": "Всего пользователей",
         "integrations": {
-            "index": "Список",
-            "update": "Обновить",
-            "test": "Проверить",
-            "rotate": "Сменить",
-            "edit": "Редактировать"
+            "index": "Список"
         },
         "pusher_settings": "Настройки Pusher",
-        "search": "Поиск",
         "admin_management_desc": "Управляйте администраторами и их ролями.",
         "total_admins": "Всего администраторов",
         "col_admin": "Администратор",
@@ -922,24 +609,16 @@
         "secret_key_hint": "Серверный секретный ключ — не разглашайте его",
         "stripe_webhook_hint": "Секрет подписи Webhook (whsec_…) из панели Stripe",
         "webhook_hint": "Секрет Webhook для проверки входящих событий шлюза",
-        "clients": "Клиенты",
         "subscriptions": {
-            "index": "Список",
-            "store": "Создать",
-            "export": "Экспорт"
+            "index": "Список"
         },
         "payments": "Платежи",
         "plans": "Тарифы",
         "currencies": {
-            "index": "Список",
-            "update": "Обновить"
+            "index": "Список"
         },
-        "admins": "Администраторы",
         "settings": {
             "index": "Список",
-            "general": {
-                "update": "Обновить"
-            },
             "logo": {
                 "upload": "Загрузить",
                 "delete": "Удалить"
@@ -947,10 +626,6 @@
             "favicon": {
                 "upload": "Загрузить",
                 "delete": "Удалить"
-            },
-            "update": "Обновить",
-            "firebase": {
-                "update": "Обновить"
             }
         },
         "ai": {
@@ -1015,8 +690,7 @@
         "impersonating": "Вход от имени: {{name}}"
     },
     "head": {
-        "admin": "Админ",
-        "welcome": "Добро пожаловать"
+        "admin": "Админ"
     },
     "locales": {
         "add_language": "Добавить язык",
@@ -1037,7 +711,6 @@
         "saving": "Сохранение…",
         "title": "Языки",
         "languages_translations": "Языки и переводы",
-        "translations": "Переводы",
         "translations_tab": "Переводы",
         "languages_and_translations": "Языки и переводы",
         "flag": "Флаг",
@@ -1069,13 +742,6 @@
         "verification_sent": "Новая ссылка для подтверждения отправлена на адрес электронной почты, указанный при регистрации.",
         "resend_verification": "Отправить письмо ещё раз",
         "log_out": "Выйти",
-        "verify_email": "Подтвердить email",
-        "invitations": {
-            "accept": "Принять"
-        },
-        "social": {
-            "redirect": "Перенаправление"
-        },
         "admin_panel_label": "Панель администратора",
         "welcome_to": "Добро пожаловать в",
         "admin_tagline": "Управляйте платформой с уверенностью",
@@ -1130,7 +796,6 @@
         "continue_with_google": "Продолжить с Google",
         "continue_with": "Продолжить с {{provider}}",
         "or_continue_with_email": "или продолжить по email",
-        "firebase": "Firebase",
         "trusted_by_count": "Нам доверяют более 10 000 компаний",
         "proof_businesses": "Компаний",
         "proof_messages_sent": "Сообщений отправлено",
@@ -1145,24 +810,7 @@
         "demo_role_admin": "Демо-роль: администратор",
         "demo_role_client": "Демо-роль: клиент"
     },
-    "password": {
-        "confirm": "Подтвердить",
-        "email": "Email",
-        "request": "Запросить",
-        "store": "Сохранить",
-        "update": "Обновить"
-    },
-    "verification": {
-        "send": "Отправить"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "Удалить",
-        "update": "Обновить",
         "edit": "Профиль",
         "update_profile": "Обновить информацию профиля",
         "update_password": "Обновить пароль",
@@ -1206,8 +854,6 @@
         "two_factor_disable": "Отключить 2FA"
     },
     "plans": {
-        "name": "Название",
-        "slug": "Слаг",
         "monthly_price_cents": "Цена за месяц (в центах)",
         "yearly_price_cents": "Цена за год (в центах)",
         "currency_code": "Код валюты",
@@ -1277,7 +923,6 @@
         "ping": "Пинг"
     },
     "contact": {
-        "store": "Сохранить",
         "created": "Создан",
         "tag_added": "Тег добавлен",
         "name": "Имя",
@@ -1475,9 +1120,6 @@
         "no_deliveries": "Пока нет доставок."
     },
     "reports": {
-        "exports": {
-            "contacts": "Контакты"
-        },
         "ai_title": "Отчёт об использовании ИИ",
         "ai_subtitle": "Аналитика расхода токенов, стоимости и задержек",
         "tokens_per_day": "Токены по дням",
@@ -2586,11 +2228,9 @@
         "upload_failed_retry": "Не удалось загрузить. Пожалуйста, попробуйте ещё раз."
     },
     "inbox_ui": {
-        "new_conversation": "Новый диалог",
         "search_contact": "Поиск по имени, телефону или email…",
         "no_channels": "Нет активных аккаунтов каналов.",
         "select_channel": "Выберите канал, в котором начать диалог:",
-        "contact_details": "Данные контакта",
         "opening_message": "Введите сообщение, которое будет отправлено при открытии диалога…"
     },
     "inbox": {
@@ -2874,9 +2514,6 @@
     },
     "context": {
         "key": "Ключ"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Автоматизации",
@@ -3962,9 +3599,6 @@
         "finance_b3": "Предупреждения о мошенничестве и безопасности",
         "finance_b4": "Обновления по счетам и кредитам"
     },
-    "invoice": {
-        "pdf": "PDF"
-    },
     "example": {
         "com": "Com"
     },
@@ -3974,8 +3608,5 @@
     "integrations_page": {
         "cta_title": "Заголовок CTA",
         "cta_subtitle": "Подзаголовок CTA"
-    },
-    "install": {
-        "run": "Запустить"
     }
 }
