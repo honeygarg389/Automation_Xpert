@@ -75,16 +75,67 @@ class TranslationKeyScanner
                 $keys[] = trim($key);
             }
         }
-        // useTranslation then t('...') - same pattern as t('...')
-        // Nested keys in JSON: "common.save" - we also want to support keys with dots
-        // Keys that look like "group.key"
-        if (preg_match_all('/[\'"`]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)[\'"`]\s*(?:\)|,|\s)/u', $content, $m)) {
+        // ⚠️ THE CONTEXT-FREE PATTERN — the root cause of BUG-037, kept because
+        // deleting it loses real keys, and narrowed instead.
+        //
+        // It exists for keys referenced INDIRECTLY, which the anchored patterns
+        // above cannot see — e.g. `{ labelKey: 'email_editor.tab_templates' }`
+        // in a table that is later fed to t(). Measured: 602 such keys have no
+        // literal t('…') call anywhere, so removing this pattern would silently
+        // stop translating them.
+        //
+        // ⚠️ Its failure is that it cannot tell a translation key from a ROUTE
+        // NAME — both are dotted lowercase strings. `route('client.inbox.setup')`
+        // was harvested as a key, humanised to "Setup" by keyToDefaultEnglish(),
+        // and then destroyed the real `client.inbox.setup.*` subtree.
+        //
+        // ⚠️ ROUTING CALLS ARE STRIPPED BEFORE MATCHING, not filtered after.
+        // Filtering the RESULT by "is this string also a route name" is wrong:
+        // measured, 154 strings in this codebase are legitimately BOTH a route
+        // name and a translation key, so a result filter deletes real keys.
+        // Removing the routing CALL removes only that occurrence, leaving any
+        // genuine t('client.pricing') elsewhere still discoverable.
+        //
+        // ⚠️ THE WRAPPER LIST IS NOT A COMPLETE DEFENCE and is not treated as
+        // one. `safeRoute()` already defeats a `route(`-only filter, and the
+        // next wrapper will defeat this list too. That is precisely why
+        // I18nFileService::unflatten() refuses to overwrite populated nodes:
+        // this narrows the input, that one makes the damage impossible.
+        $scannable = preg_replace(
+            '/\b(?:safeRoute|route)\s*\(\s*[\'"`][^\'"`]*[\'"`]/u',
+            'route(',
+            $content
+        ) ?? $content;
+
+        if (preg_match_all('/[\'"`]([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)[\'"`]\s*(?:\)|,|\s)/u', $scannable, $m)) {
             foreach ($m[1] as $key) {
-                if (Str::contains($key, '.') && strlen($key) > 2 && strlen($key) < 120) {
-                    $keys[] = trim($key);
+                $key = trim($key);
+                if (! Str::contains($key, '.') || strlen($key) <= 2 || strlen($key) >= 120) {
+                    continue;
                 }
+                if ($this->looksLikeFilename($key)) {
+                    continue;
+                }
+                $keys[] = $key;
             }
         }
+    }
+
+    /**
+     * ⚠️ `brand.png`, `Codes.jsx`, `x.zip` were all being harvested as
+     * translation keys and written into the shipped dictionary as "Png",
+     * "Jsx", "Zip". A filename is not a key in any locale.
+     */
+    private function looksLikeFilename(string $key): bool
+    {
+        static $ext = [
+            'png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp',
+            'zip', 'pdf', 'csv', 'xlsx', 'json', 'xml', 'txt', 'md',
+            'js', 'jsx', 'ts', 'tsx', 'css', 'scss', 'html', 'php',
+            'mp4', 'mp3', 'wav', 'woff', 'woff2', 'ttf', 'otf',
+        ];
+
+        return in_array(strtolower(substr($key, (int) strrpos($key, '.') + 1)), $ext, true);
     }
 
     private function extractKeysFromBlade(string $content, array &$keys): void

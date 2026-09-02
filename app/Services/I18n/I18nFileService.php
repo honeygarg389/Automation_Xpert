@@ -4,6 +4,7 @@ namespace App\Services\I18n;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Read/write translations from resources/js/locales/{code}.json.
@@ -58,22 +59,91 @@ class I18nFileService
      * Unflatten dot keys to nested array.
      * ["common.save" => "Save"] => ["common" => ["save" => "Save"]]
      */
-    public static function unflatten(array $flat): array
+    /**
+     * ⚠️ NON-DESTRUCTIVE BY CONTRACT. This function used to silently destroy
+     * data, in BOTH directions, and it is what turned a sloppy key scanner
+     * (BUG-037) into permanent loss in files that ship in the repo:
+     *
+     *   CASE A  an incoming SCALAR lands on an existing populated OBJECT
+     *           `client.profile.2fa` = "2Fa" arrives while `client.profile.2fa.*`
+     *           already holds real strings -> the whole subtree was replaced by
+     *           one humanised word.
+     *
+     *   CASE B  an incoming key needs an OBJECT where a leaf STRING already sits
+     *           `admin.clients.index` arrives while `admin.clients` is a string
+     *           -> the string was replaced by `[]` and the translation was gone.
+     *
+     * Both are now REFUSED: the existing value wins and the incoming key is
+     * skipped. Conflicts are reported through $conflicts rather than thrown.
+     *
+     * ⚠️ SKIP, NOT THROW — deliberately, and the reason is the caller list.
+     * `InstallerService::seedCore()` runs this on a FRESH INSTALL before an
+     * administrator account exists. Throwing would convert silent data loss
+     * into a failed installation, which is a worse outcome for the same fault,
+     * and nobody would be present to read the exception. Skipping keeps the
+     * dictionary that ships in the repo intact — the correct data is the one
+     * already on disk, never the scanner's `Str::title()` guess — and leaves the
+     * install to complete. The interactive callers (the admin Translations
+     * screen, `i18n:scan`) get the same safety and can surface $conflicts to a
+     * human who can act on it.
+     *
+     * @param  array<string, mixed>  $flat
+     * @param  list<string>|null  $conflicts  populated with the keys that were skipped
+     * @return array<string, mixed>
+     */
+    public static function unflatten(array $flat, ?array &$conflicts = null): array
     {
+        $conflicts = [];
         $out = [];
+
         foreach ($flat as $key => $value) {
-            $parts = explode('.', $key);
+            $parts = explode('.', (string) $key);
+            $last = count($parts) - 1;
+
+            // Probe the path first, then write only if it is clear. Missing
+            // parents ARE created during the probe, which is safe: a freshly
+            // created parent is an empty array, so the next segment can never
+            // collide with a pre-existing leaf. A refusal therefore cannot
+            // leave a half-built branch behind.
+            $ref = &$out;
+            $blocked = false;
+            foreach ($parts as $i => $part) {
+                if ($i === $last) {
+                    // CASE A — refuse to flatten an existing populated node.
+                    if (isset($ref[$part]) && is_array($ref[$part])) {
+                        $blocked = true;
+                    }
+                    break;
+                }
+
+                if (array_key_exists($part, $ref) && ! is_array($ref[$part])) {
+                    // CASE B — refuse to bury an existing leaf string.
+                    $blocked = true;
+                    break;
+                }
+
+                if (! array_key_exists($part, $ref)) {
+                    $ref[$part] = [];
+                }
+                $ref = &$ref[$part];
+            }
+            unset($ref);
+
+            if ($blocked) {
+                $conflicts[] = (string) $key;
+
+                continue;
+            }
+
             $ref = &$out;
             foreach ($parts as $i => $part) {
-                if ($i === count($parts) - 1) {
+                if ($i === $last) {
                     $ref[$part] = $value;
                 } else {
-                    if (! isset($ref[$part]) || ! is_array($ref[$part])) {
-                        $ref[$part] = [];
-                    }
                     $ref = &$ref[$part];
                 }
             }
+            unset($ref);
         }
 
         return $out;
@@ -119,7 +189,22 @@ class I18nFileService
         if (! File::isDirectory($dir)) {
             File::makeDirectory($dir, 0755, true);
         }
-        $nested = self::unflatten($flat);
+        // ⚠️ Conflicts are LOGGED, not swallowed. unflatten() now refuses to
+        // destroy, but a refusal that nobody can see is how BUG-037 survived
+        // three weeks: the damage was silent in both directions. This is the
+        // only place that writes a locale file, so it is the one place where a
+        // skipped key can still be reported for every caller — the installer,
+        // the admin Translations screen and `i18n:scan` alike.
+        $nested = self::unflatten($flat, $conflicts);
+
+        if ($conflicts !== []) {
+            Log::warning('i18n: refused to write '.count($conflicts).' colliding translation key(s); existing values kept.', [
+                'locale' => $code,
+                'keys' => array_slice($conflicts, 0, 50),
+                'total' => count($conflicts),
+            ]);
+        }
+
         $json = json_encode($nested, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
 
         $written = File::put($path, $json);
