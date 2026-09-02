@@ -38,13 +38,10 @@
         "settings": "Pengaturan"
     },
     "nav": {
-        "home": "Beranda",
         "dashboard": "Dasbor",
-        "websites": "Situs Web",
         "workspaces": "Ruang Kerja",
         "profile": "Profil",
         "admin": "Admin",
-        "components": "Komponen",
         "pricing": "Harga",
         "logout": "Keluar",
         "login": "Masuk",
@@ -59,7 +56,6 @@
         "integrations": "Integrasi",
         "about": "Tentang",
         "faq": "FAQ",
-        "blog": "Blog",
         "contact": "Kontak",
         "sign_out": "Keluar",
         "light_mode": "Mode terang",
@@ -152,9 +148,6 @@
         "description": "Halaman ini ditampilkan dalam tata letak kanan-ke-kiri. Gunakan pengalih bahasa untuk beralih ke bahasa Arab (العربية) dan melihat seluruh aplikasi dalam RTL.",
         "ltrNote": "Kembali ke bahasa Inggris atau Bangla untuk LTR."
     },
-    "sidebar": {
-        "menu": "Menu"
-    },
     "topbar": {
         "switch_theme": "Ganti tema",
         "visit_website": "Kunjungi Situs Web",
@@ -163,67 +156,14 @@
         "create_workspace": "Buat ruang kerja",
         "manage_workspaces": "Kelola ruang kerja",
         "language": "Bahasa",
-        "currency": "Mata Uang",
         "account": "Akun"
     },
-    "theme": {
-        "update": "Perbarui"
-    },
-    "currency": {
-        "update": "Perbarui"
-    },
     "client": {
-        "profile": {
-            "edit": "Edit",
-            "2fa": {
-                "enable": "Aktifkan",
-                "disable": "Nonaktifkan"
-            },
-            "sessions": {
-                "destroy": "Hapus"
-            }
-        },
-        "tenants": {
-            "switch": "Beralih",
-            "index": "Indeks",
-            "store": "Simpan"
-        },
         "dashboard": "Dasbor",
         "panel": "Panel Klien",
         "pricing": "Harga",
-        "websites": {
-            "pages": {
-                "index": "Indeks",
-                "store": "Simpan",
-                "update": "Perbarui",
-                "create": "Buat",
-                "edit": "Edit"
-            },
-            "index": "Indeks",
-            "store": "Simpan",
-            "create": "Buat",
-            "domains": {
-                "store": "Simpan",
-                "verify": "Verifikasi",
-                "index": "Indeks"
-            },
-            "templates": "Template",
-            "publish": {
-                "store": "Simpan"
-            },
-            "export": {
-                "store": "Simpan"
-            }
-        },
-        "checkout": {
-            "store": "Simpan"
-        },
-        "pages": "Halaman",
         "no_tenant": "Tidak ada ruang kerja",
         "create_workspace": "Buat ruang kerja",
-        "billing": {
-            "index": "Indeks"
-        },
         "audit_log": "Log Audit",
         "audit_log_subtitle": "Subjudul Log Audit",
         "filter_by_action": "Filter Berdasarkan Tindakan",
@@ -247,9 +187,6 @@
         "managed_by_admin": "Dikelola oleh admin organisasi Anda",
         "upgrade_plan": "Tingkatkan Paket",
         "no_plan": "Tidak ada langganan aktif",
-        "ai_credits": "Kredit AI",
-        "use_ai": "Gunakan AI",
-        "manage_websites": "Kelola Situs Web",
         "quick_links": "Tautan Cepat",
         "billing_plans": "Paket Tagihan",
         "settings_subtitle": "Preferensi dan organisasi",
@@ -267,7 +204,6 @@
         "save_settings": "Simpan pengaturan",
         "cancel_subscription_confirm": "Apakah Anda yakin ingin membatalkan langganan Anda?",
         "subscription_subtitle": "Paket dan tagihan Anda saat ini",
-        "ends": "Berakhir",
         "cancel_subscription": "Batalkan langganan",
         "view_billing_history": "Lihat riwayat tagihan",
         "team_for": "Tim untuk",
@@ -287,210 +223,36 @@
         "inactive": "Nonaktif",
         "save": "Simpan",
         "remove_member_confirm": "Hapus",
-        "search": "Cari",
-        "notifications": {
-            "index": "Indeks",
-            "read": "Baca",
-            "destroy": "Hapus",
-            "recent": "Terbaru"
-        },
-        "webhooks": {
-            "index": "Indeks",
-            "update": "Perbarui",
-            "store": "Simpan",
-            "destroy": "Hapus",
-            "test": "Uji",
-            "deliveries": "Pengiriman"
-        },
-        "media": {
-            "index": "Indeks",
-            "store": "Simpan",
-            "destroy": "Hapus"
-        },
-        "onboarding": {
-            "show": "Tampilkan",
-            "complete": "Selesai"
-        },
         "team_members": "Anggota tim",
         "manage_team": "Kelola tim",
         "manage_workspaces": "Kelola ruang kerja",
         "change_plan": "Ganti Paket",
-        "coupon": {
-            "check": "Periksa"
-        },
-        "support": {
-            "store": "Simpan",
-            "index": "Indeks",
-            "create": "Buat",
-            "show": "Tampilkan",
-            "reply": "Balas"
-        },
         "no_workspace": "Tidak ada ruang kerja",
         "contacts": {
-            "index": "Indeks",
-            "show": "Tampilkan",
-            "destroy": "Hapus",
-            "import": "Impor",
-            "store": "Simpan",
-            "update": "Perbarui",
-            "export": "Ekspor",
-            "avatar": {
-                "upload": "Unggah",
-                "delete": "Hapus"
-            }
-        },
-        "segments": {
-            "index": "Indeks",
-            "store": "Simpan",
-            "destroy": "Hapus",
-            "contacts": {
-                "attach": "Tautkan",
-                "detach": "Lepaskan"
-            }
+            "index": "Indeks"
         },
         "whatsapp": {
-            "templates": {
-                "index": "Indeks",
-                "store": "Simpan",
-                "sync": "Sinkronkan",
-                "create": "Buat",
-                "destroy": "Hapus",
-                "edit": "Edit",
-                "update": "Perbarui"
-            },
-            "widget": {
-                "index": "Indeks"
-            },
-            "widgets": {
-                "destroy": "Hapus",
-                "store": "Simpan",
-                "update": "Perbarui",
-                "create": "Buat",
-                "edit": "Edit"
-            },
             "setup": "Pengaturan"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "Indeks"
-            }
-        },
         "inbox": {
-            "index": "Indeks",
-            "show": "Tampilkan",
-            "reply": "Balas",
-            "status": "Status",
-            "labels": {
-                "update": "Perbarui",
-                "store": "Simpan",
-                "destroy": "Hapus",
-                "detach": "Lepaskan",
-                "attach": "Tautkan"
-            },
-            "typing": "Mengetik",
-            "notes": {
-                "index": "Indeks",
-                "store": "Simpan"
-            },
-            "handover": "Alih tangan",
-            "contacts": {
-                "search": "Cari"
-            },
-            "start": "Mulai",
-            "templates": "Template",
-            "assign": "Tugaskan",
-            "setup": {
-                "destroy": "Hapus"
-            }
+            "index": "Indeks"
         },
         "ai": {
-            "providers": {
-                "index": "Indeks",
-                "update": "Perbarui"
-            },
             "chatbots": {
-                "index": "Indeks",
-                "playground": "Playground",
-                "update": "Perbarui",
-                "destroy": "Hapus",
-                "store": "Simpan"
-            },
-            "documents": {
-                "destroy": "Hapus",
-                "reindex": "Indeks ulang"
+                "index": "Indeks"
             }
         },
         "social": {
             "accounts": {
-                "index": "Indeks",
-                "disconnect": "Putuskan",
-                "connect": "Hubungkan"
+                "index": "Indeks"
             },
             "composer": "Komposer",
-            "calendar": "Kalender",
-            "posts": {
-                "store": "Simpan",
-                "index": "Indeks",
-                "update": "Perbarui",
-                "bulk": "Massal",
-                "edit": "Edit",
-                "cancel": "Batal",
-                "destroy": "Hapus"
-            }
-        },
-        "leads": {
-            "index": "Indeks",
-            "scrape": "Scrape",
-            "destroy": "Hapus"
-        },
-        "automations": {
-            "index": "Indeks",
-            "update": "Perbarui",
-            "store": "Simpan",
-            "destroy": "Hapus",
-            "edit": "Edit",
-            "runs": "Eksekusi",
-            "generate": "Hasilkan",
-            "test": "Uji"
+            "calendar": "Kalender"
         },
         "campaigns": {
-            "index": "Indeks",
-            "launch": "Luncurkan",
-            "pause": "Jeda",
-            "destroy": "Hapus",
-            "create": "Buat",
-            "show": "Tampilkan",
-            "store": "Simpan",
-            "update": "Perbarui",
-            "edit": "Edit"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "Indeks",
-                "show": "Tampilkan"
-            },
-            "ai": {
-                "index": "Indeks"
-            },
-            "inbox": {
-                "index": "Indeks"
-            },
-            "automations": {
-                "index": "Indeks"
-            },
-            "social": {
-                "index": "Indeks"
-            }
-        },
-        "push": {
-            "subscribe": "Berlangganan",
-            "unsubscribe": "Berhenti berlangganan"
+            "create": "Buat"
         },
         "invite_by_email": "Undang lewat email",
-        "invitations": {
-            "store": "Simpan",
-            "destroy": "Hapus"
-        },
         "next_step": "Langkah berikutnya:",
         "go": "Buka",
         "view_all": "Lihat semua",
@@ -529,45 +291,10 @@
         "ecommerce": {
             "stores": {
                 "test": "Uji",
-                "sync": "Sinkronkan",
-                "index": "Indeks",
-                "destroy": "Hapus",
-                "store": "Simpan"
-            },
-            "orders": {
-                "index": "Indeks",
-                "show": "Tampilkan",
-                "refresh": "Segarkan",
-                "fulfill": "Penuhi"
-            },
-            "products": {
-                "index": "Indeks",
-                "search": "Cari"
-            },
-            "contacts": {
-                "orders": "Pesanan"
-            },
-            "oauth": {
-                "connect": "Hubungkan"
+                "sync": "Sinkronkan"
             }
         },
-        "workspaces": "Ruang Kerja",
-        "settings": {
-            "update": "Perbarui",
-            "notifications": "Notifikasi",
-            "index": "Indeks"
-        },
-        "team": {
-            "store": "Simpan",
-            "update": "Perbarui",
-            "destroy": "Hapus",
-            "index": "Indeks"
-        },
-        "subscription": {
-            "destroy": "Hapus",
-            "invoice": "Faktur",
-            "show": "Tampilkan"
-        }
+        "workspaces": "Ruang Kerja"
     },
     "pagination": {
         "label": "Paginasi",
@@ -581,9 +308,6 @@
         "page_num": "Halaman {{num}}",
         "page_of": "Halaman {{current}} dari {{last}}",
         "showing": "Menampilkan {{from}}–{{to}} dari {{total}}"
-    },
-    "locale": {
-        "update": "Perbarui"
     },
     "admin": {
         "nav": {
@@ -638,20 +362,12 @@
         "email": "Email",
         "languages": "Bahasa",
         "locales": {
-            "index": "Indeks",
-            "store": "Simpan",
-            "destroy": "Hapus",
-            "update": "Perbarui"
+            "index": "Indeks"
         },
         "website_templates": "Situs Web/Halaman Landing",
         "roles_permissions": "Peran & Izin",
         "ai_requests": "Permintaan AI",
-        "templates": "Template",
         "audit_log": "Log audit",
-        "logout": "Keluar",
-        "impersonation": {
-            "stop": "Berhenti"
-        },
         "user_id": "ID Pengguna",
         "all_statuses": "Semua status",
         "status_success": "Berhasil",
@@ -659,7 +375,6 @@
         "status_failed": "Gagal",
         "action": "Tindakan",
         "admin_log_in": "Login admin",
-        "login": "Masuk",
         "dashboard_overview": "Ringkasan metrik platform Anda.",
         "arpu": "ARPU",
         "this_period": "periode ini",
@@ -687,29 +402,14 @@
         "ai_requests_this_month": "Permintaan AI (bulan ini)",
         "ai_tokens_this_month": "Token AI (bulan ini)",
         "payments_this_month": "Pembayaran bulan ini",
-        "translations": {
-            "update": "Perbarui"
-        },
         "view_subscriptions": "Lihat langganan →",
-        "roles": {
-            "store": "Simpan",
-            "update": "Perbarui",
-            "destroy": "Hapus"
-        },
-        "permissions": {
-            "store": "Simpan",
-            "update": "Perbarui",
-            "destroy": "Hapus"
-        },
         "system_settings": "Pengaturan sistem",
         "view_payments": "Lihat pembayaran →",
         "add_client": "Tambah Klien",
         "edit_client": "Edit Klien",
         "delete_client": "Hapus Klien",
-        "manage_client_users": "Kelola Pengguna Klien",
         "add_user": "Tambah Pengguna",
         "edit_user": "Edit Pengguna",
-        "delete_user": "Hapus Pengguna",
         "assign_plan": "Tetapkan Paket ke Klien",
         "edit_client_title": "Edit klien",
         "manage_users_title": "Kelola pengguna klien",
@@ -802,37 +502,24 @@
         "delete_user_confirm": "Apakah Anda yakin ingin menghapus {{name}} ({{email}}) dari klien ini?",
         "delete_client_confirm": "Apakah Anda yakin ingin menghapus {{name}}? Ini akan menghapus semua pengguna dan langganan klien.",
         "coupons": {
-            "index": "Indeks",
-            "update": "Perbarui",
-            "store": "Simpan",
-            "destroy": "Hapus"
+            "index": "Indeks"
         },
         "tax_rates": "Tarif Pajak",
         "landing_page": "Konten Situs",
         "cms_pages": "Halaman CMS",
         "cron_setup": "Pengaturan Cron",
         "support": {
-            "index": "Indeks",
-            "show": "Tampilkan",
-            "reply": "Balas",
-            "status": "Status"
+            "index": "Indeks"
         },
         "queue": {
-            "index": "Indeks",
-            "retry": "Coba Lagi",
-            "flush": "Bersihkan"
+            "index": "Indeks"
         },
         "clients_count": "Total klien",
         "users_count": "Total pengguna",
         "integrations": {
-            "index": "Indeks",
-            "update": "Perbarui",
-            "test": "Uji",
-            "rotate": "Rotasi",
-            "edit": "Edit"
+            "index": "Indeks"
         },
         "pusher_settings": "Pengaturan Pusher",
-        "search": "Cari",
         "admin_management_desc": "Kelola pengguna admin dan peran mereka.",
         "total_admins": "Total Admin",
         "col_admin": "Admin",
@@ -922,24 +609,16 @@
         "secret_key_hint": "Secret key sisi server — jaga kerahasiaannya",
         "stripe_webhook_hint": "Secret penandatanganan webhook (whsec_…) dari dasbor Stripe",
         "webhook_hint": "Secret webhook yang digunakan untuk memverifikasi event gateway masuk",
-        "clients": "Klien",
         "subscriptions": {
-            "index": "Indeks",
-            "store": "Simpan",
-            "export": "Ekspor"
+            "index": "Indeks"
         },
         "payments": "Pembayaran",
         "plans": "Paket",
         "currencies": {
-            "index": "Indeks",
-            "update": "Perbarui"
+            "index": "Indeks"
         },
-        "admins": "Admin",
         "settings": {
             "index": "Indeks",
-            "general": {
-                "update": "Perbarui"
-            },
             "logo": {
                 "upload": "Unggah",
                 "delete": "Hapus"
@@ -947,10 +626,6 @@
             "favicon": {
                 "upload": "Unggah",
                 "delete": "Hapus"
-            },
-            "update": "Perbarui",
-            "firebase": {
-                "update": "Perbarui"
             }
         },
         "ai": {
@@ -1015,8 +690,7 @@
         "impersonating": "Menyamar sebagai: {{name}}"
     },
     "head": {
-        "admin": "Admin",
-        "welcome": "Selamat Datang"
+        "admin": "Admin"
     },
     "locales": {
         "add_language": "Tambah Bahasa",
@@ -1037,7 +711,6 @@
         "saving": "Menyimpan…",
         "title": "Bahasa",
         "languages_translations": "Bahasa & Terjemahan",
-        "translations": "Terjemahan",
         "translations_tab": "Terjemahan",
         "languages_and_translations": "Bahasa & Terjemahan",
         "flag": "Bendera",
@@ -1069,13 +742,6 @@
         "verification_sent": "Tautan verifikasi baru telah dikirim ke alamat email yang Anda berikan saat pendaftaran.",
         "resend_verification": "Kirim Ulang Email Verifikasi",
         "log_out": "Keluar",
-        "verify_email": "Verifikasi Email",
-        "invitations": {
-            "accept": "Terima"
-        },
-        "social": {
-            "redirect": "Alihkan"
-        },
         "admin_panel_label": "Panel Admin",
         "welcome_to": "Selamat datang di",
         "admin_tagline": "Kelola platform Anda dengan percaya diri",
@@ -1130,7 +796,6 @@
         "continue_with_google": "Lanjutkan dengan Google",
         "continue_with": "Lanjutkan dengan {{provider}}",
         "or_continue_with_email": "atau lanjutkan dengan email",
-        "firebase": "Firebase",
         "trusted_by_count": "Dipercaya oleh 10.000+ bisnis",
         "proof_businesses": "Bisnis",
         "proof_messages_sent": "Pesan terkirim",
@@ -1145,24 +810,7 @@
         "demo_role_admin": "Peran Demo Admin",
         "demo_role_client": "Peran Demo Klien"
     },
-    "password": {
-        "confirm": "Konfirmasi",
-        "email": "Email",
-        "request": "Minta",
-        "store": "Simpan",
-        "update": "Perbarui"
-    },
-    "verification": {
-        "send": "Kirim"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "Hapus",
-        "update": "Perbarui",
         "edit": "Profil",
         "update_profile": "Perbarui Informasi Profil",
         "update_password": "Perbarui Kata Sandi",
@@ -1206,8 +854,6 @@
         "two_factor_disable": "Nonaktifkan 2FA"
     },
     "plans": {
-        "name": "Nama",
-        "slug": "Slug",
         "monthly_price_cents": "Harga bulanan (sen)",
         "yearly_price_cents": "Harga tahunan (sen)",
         "currency_code": "Kode mata uang",
@@ -1277,7 +923,6 @@
         "ping": "Ping"
     },
     "contact": {
-        "store": "Simpan",
         "created": "Dibuat",
         "tag_added": "Tag Ditambahkan",
         "name": "Nama",
@@ -1475,9 +1120,6 @@
         "no_deliveries": "Belum ada pengiriman."
     },
     "reports": {
-        "exports": {
-            "contacts": "Kontak"
-        },
         "ai_title": "Laporan Penggunaan AI",
         "ai_subtitle": "Analitik konsumsi token, biaya, dan latensi",
         "tokens_per_day": "Token per Hari",
@@ -2586,11 +2228,9 @@
         "upload_failed_retry": "Upload failed. Please try again."
     },
     "inbox_ui": {
-        "new_conversation": "New Conversation",
         "search_contact": "Search by name, phone, or email…",
         "no_channels": "No active channel accounts.",
         "select_channel": "Select which channel to start the conversation on:",
-        "contact_details": "Contact Details",
         "opening_message": "Type a message to send when the conversation opens…"
     },
     "inbox": {
@@ -2874,9 +2514,6 @@
     },
     "context": {
         "key": "Key"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Automations",
@@ -3962,9 +3599,6 @@
         "finance_b3": "Fraud / security alerts",
         "finance_b4": "Account & loan updates"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3974,8 +3608,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

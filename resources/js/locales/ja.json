@@ -38,13 +38,10 @@
         "settings": "設定"
     },
     "nav": {
-        "home": "ホーム",
         "dashboard": "ダッシュボード",
-        "websites": "ウェブサイト",
         "workspaces": "ワークスペース",
         "profile": "プロフィール",
         "admin": "管理者",
-        "components": "コンポーネント",
         "pricing": "料金プラン",
         "logout": "ログアウト",
         "login": "ログイン",
@@ -59,7 +56,6 @@
         "integrations": "連携",
         "about": "会社概要",
         "faq": "よくある質問",
-        "blog": "ブログ",
         "contact": "お問い合わせ",
         "sign_out": "サインアウト",
         "light_mode": "ライトモード",
@@ -152,9 +148,6 @@
         "description": "このページは右から左のレイアウトで表示されています。言語切替でアラビア語（العربية）に切り替えると、アプリ全体をRTLで確認できます。",
         "ltrNote": "LTRに戻すには英語またはベンガル語に切り替えてください。"
     },
-    "sidebar": {
-        "menu": "メニュー"
-    },
     "topbar": {
         "switch_theme": "テーマを切り替え",
         "visit_website": "ウェブサイトを見る",
@@ -163,67 +156,14 @@
         "create_workspace": "ワークスペースを作成",
         "manage_workspaces": "ワークスペースを管理",
         "language": "言語",
-        "currency": "通貨",
         "account": "アカウント"
     },
-    "theme": {
-        "update": "更新"
-    },
-    "currency": {
-        "update": "更新"
-    },
     "client": {
-        "profile": {
-            "edit": "編集",
-            "2fa": {
-                "enable": "有効化",
-                "disable": "無効化"
-            },
-            "sessions": {
-                "destroy": "破棄"
-            }
-        },
-        "tenants": {
-            "switch": "切り替え",
-            "index": "一覧",
-            "store": "保存"
-        },
         "dashboard": "ダッシュボード",
         "panel": "クライアントパネル",
         "pricing": "料金プラン",
-        "websites": {
-            "pages": {
-                "index": "一覧",
-                "store": "保存",
-                "update": "更新",
-                "create": "作成",
-                "edit": "編集"
-            },
-            "index": "一覧",
-            "store": "保存",
-            "create": "作成",
-            "domains": {
-                "store": "保存",
-                "verify": "確認",
-                "index": "一覧"
-            },
-            "templates": "テンプレート",
-            "publish": {
-                "store": "保存"
-            },
-            "export": {
-                "store": "保存"
-            }
-        },
-        "checkout": {
-            "store": "保存"
-        },
-        "pages": "ページ",
         "no_tenant": "ワークスペースがありません",
         "create_workspace": "ワークスペースを作成",
-        "billing": {
-            "index": "一覧"
-        },
         "audit_log": "監査ログ",
         "audit_log_subtitle": "監査ログのサブタイトル",
         "filter_by_action": "操作で絞り込み",
@@ -247,9 +187,6 @@
         "managed_by_admin": "組織の管理者によって管理されています",
         "upgrade_plan": "プランをアップグレード",
         "no_plan": "有効なサブスクリプションがありません",
-        "ai_credits": "AIクレジット",
-        "use_ai": "AIを使う",
-        "manage_websites": "ウェブサイトを管理",
         "quick_links": "クイックリンク",
         "billing_plans": "請求プラン",
         "settings_subtitle": "環境設定と組織情報",
@@ -267,7 +204,6 @@
         "save_settings": "設定を保存",
         "cancel_subscription_confirm": "サブスクリプションを解約してもよろしいですか？",
         "subscription_subtitle": "現在のプランと請求情報",
-        "ends": "終了日",
         "cancel_subscription": "サブスクリプションを解約",
         "view_billing_history": "請求履歴を見る",
         "team_for": "チーム：",
@@ -287,210 +223,36 @@
         "inactive": "無効",
         "save": "保存",
         "remove_member_confirm": "削除",
-        "search": "検索",
-        "notifications": {
-            "index": "一覧",
-            "read": "既読",
-            "destroy": "削除",
-            "recent": "最近"
-        },
-        "webhooks": {
-            "index": "一覧",
-            "update": "更新",
-            "store": "保存",
-            "destroy": "削除",
-            "test": "テスト",
-            "deliveries": "配信"
-        },
-        "media": {
-            "index": "一覧",
-            "store": "保存",
-            "destroy": "削除"
-        },
-        "onboarding": {
-            "show": "表示",
-            "complete": "完了"
-        },
         "team_members": "チームメンバー",
         "manage_team": "チームを管理",
         "manage_workspaces": "ワークスペースを管理",
         "change_plan": "プランを変更",
-        "coupon": {
-            "check": "確認"
-        },
-        "support": {
-            "store": "保存",
-            "index": "一覧",
-            "create": "作成",
-            "show": "表示",
-            "reply": "返信"
-        },
         "no_workspace": "ワークスペースがありません",
         "contacts": {
-            "index": "一覧",
-            "show": "表示",
-            "destroy": "削除",
-            "import": "インポート",
-            "store": "保存",
-            "update": "更新",
-            "export": "エクスポート",
-            "avatar": {
-                "upload": "アップロード",
-                "delete": "削除"
-            }
-        },
-        "segments": {
-            "index": "一覧",
-            "store": "保存",
-            "destroy": "削除",
-            "contacts": {
-                "attach": "追加",
-                "detach": "解除"
-            }
+            "index": "一覧"
         },
         "whatsapp": {
-            "templates": {
-                "index": "一覧",
-                "store": "保存",
-                "sync": "同期",
-                "create": "作成",
-                "destroy": "削除",
-                "edit": "編集",
-                "update": "更新"
-            },
-            "widget": {
-                "index": "一覧"
-            },
-            "widgets": {
-                "destroy": "削除",
-                "store": "保存",
-                "update": "更新",
-                "create": "作成",
-                "edit": "編集"
-            },
             "setup": "セットアップ"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "一覧"
-            }
-        },
         "inbox": {
-            "index": "一覧",
-            "show": "表示",
-            "reply": "返信",
-            "status": "ステータス",
-            "labels": {
-                "update": "更新",
-                "store": "保存",
-                "destroy": "削除",
-                "detach": "解除",
-                "attach": "追加"
-            },
-            "typing": "入力中",
-            "notes": {
-                "index": "一覧",
-                "store": "保存"
-            },
-            "handover": "引き継ぎ",
-            "contacts": {
-                "search": "検索"
-            },
-            "start": "開始",
-            "templates": "テンプレート",
-            "assign": "割り当て",
-            "setup": {
-                "destroy": "削除"
-            }
+            "index": "一覧"
         },
         "ai": {
-            "providers": {
-                "index": "一覧",
-                "update": "更新"
-            },
             "chatbots": {
-                "index": "一覧",
-                "playground": "プレイグラウンド",
-                "update": "更新",
-                "destroy": "削除",
-                "store": "保存"
-            },
-            "documents": {
-                "destroy": "削除",
-                "reindex": "再インデックス"
+                "index": "一覧"
             }
         },
         "social": {
             "accounts": {
-                "index": "一覧",
-                "disconnect": "接続解除",
-                "connect": "接続"
+                "index": "一覧"
             },
             "composer": "投稿作成",
-            "calendar": "カレンダー",
-            "posts": {
-                "store": "保存",
-                "index": "一覧",
-                "update": "更新",
-                "bulk": "一括",
-                "edit": "編集",
-                "cancel": "キャンセル",
-                "destroy": "削除"
-            }
-        },
-        "leads": {
-            "index": "一覧",
-            "scrape": "スクレイプ",
-            "destroy": "削除"
-        },
-        "automations": {
-            "index": "一覧",
-            "update": "更新",
-            "store": "保存",
-            "destroy": "削除",
-            "edit": "編集",
-            "runs": "実行履歴",
-            "generate": "生成",
-            "test": "テスト"
+            "calendar": "カレンダー"
         },
         "campaigns": {
-            "index": "一覧",
-            "launch": "開始",
-            "pause": "一時停止",
-            "destroy": "削除",
-            "create": "作成",
-            "show": "表示",
-            "store": "保存",
-            "update": "更新",
-            "edit": "編集"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "一覧",
-                "show": "表示"
-            },
-            "ai": {
-                "index": "一覧"
-            },
-            "inbox": {
-                "index": "一覧"
-            },
-            "automations": {
-                "index": "一覧"
-            },
-            "social": {
-                "index": "一覧"
-            }
-        },
-        "push": {
-            "subscribe": "購読",
-            "unsubscribe": "購読解除"
+            "create": "作成"
         },
         "invite_by_email": "メールで招待",
-        "invitations": {
-            "store": "保存",
-            "destroy": "削除"
-        },
         "next_step": "次のステップ：",
         "go": "進む",
         "view_all": "すべて見る",
@@ -529,45 +291,10 @@
         "ecommerce": {
             "stores": {
                 "test": "テスト",
-                "sync": "同期",
-                "index": "一覧",
-                "destroy": "削除",
-                "store": "保存"
-            },
-            "orders": {
-                "index": "一覧",
-                "show": "表示",
-                "refresh": "更新",
-                "fulfill": "発送処理"
-            },
-            "products": {
-                "index": "一覧",
-                "search": "検索"
-            },
-            "contacts": {
-                "orders": "注文"
-            },
-            "oauth": {
-                "connect": "接続"
+                "sync": "同期"
             }
         },
-        "workspaces": "ワークスペース",
-        "settings": {
-            "update": "更新",
-            "notifications": "通知",
-            "index": "一覧"
-        },
-        "team": {
-            "store": "保存",
-            "update": "更新",
-            "destroy": "削除",
-            "index": "一覧"
-        },
-        "subscription": {
-            "destroy": "削除",
-            "invoice": "請求書",
-            "show": "表示"
-        }
+        "workspaces": "ワークスペース"
     },
     "pagination": {
         "label": "ページネーション",
@@ -581,9 +308,6 @@
         "page_num": "ページ {{num}}",
         "page_of": "{{last}}ページ中{{current}}ページ",
         "showing": "{{total}}件中{{from}}–{{to}}件を表示"
-    },
-    "locale": {
-        "update": "更新"
     },
     "admin": {
         "nav": {
@@ -638,20 +362,12 @@
         "email": "メールアドレス",
         "languages": "言語",
         "locales": {
-            "index": "一覧",
-            "store": "保存",
-            "destroy": "削除",
-            "update": "更新"
+            "index": "一覧"
         },
         "website_templates": "ウェブサイト/ランディングページ",
         "roles_permissions": "役割と権限",
         "ai_requests": "AIリクエスト",
-        "templates": "テンプレート",
         "audit_log": "監査ログ",
-        "logout": "ログアウト",
-        "impersonation": {
-            "stop": "停止"
-        },
         "user_id": "ユーザーID",
         "all_statuses": "すべてのステータス",
         "status_success": "成功",
@@ -659,7 +375,6 @@
         "status_failed": "失敗",
         "action": "操作",
         "admin_log_in": "管理者ログイン",
-        "login": "ログイン",
         "dashboard_overview": "プラットフォーム指標の概要です。",
         "arpu": "ARPU",
         "this_period": "この期間",
@@ -687,29 +402,14 @@
         "ai_requests_this_month": "AIリクエスト（今月）",
         "ai_tokens_this_month": "AIトークン（今月）",
         "payments_this_month": "今月の支払い",
-        "translations": {
-            "update": "更新"
-        },
         "view_subscriptions": "サブスクリプションを見る →",
-        "roles": {
-            "store": "保存",
-            "update": "更新",
-            "destroy": "削除"
-        },
-        "permissions": {
-            "store": "保存",
-            "update": "更新",
-            "destroy": "削除"
-        },
         "system_settings": "システム設定",
         "view_payments": "支払いを見る →",
         "add_client": "クライアントを追加",
         "edit_client": "クライアントを編集",
         "delete_client": "クライアントを削除",
-        "manage_client_users": "クライアントユーザーを管理",
         "add_user": "ユーザーを追加",
         "edit_user": "ユーザーを編集",
-        "delete_user": "ユーザーを削除",
         "assign_plan": "クライアントにプランを割り当て",
         "edit_client_title": "クライアントを編集",
         "manage_users_title": "クライアントユーザーを管理",
@@ -802,37 +502,24 @@
         "delete_user_confirm": "{{name}}（{{email}}）をこのクライアントから削除してもよろしいですか？",
         "delete_client_confirm": "{{name}}を削除してもよろしいですか？クライアントのユーザーとサブスクリプションもすべて削除されます。",
         "coupons": {
-            "index": "一覧",
-            "update": "更新",
-            "store": "保存",
-            "destroy": "削除"
+            "index": "一覧"
         },
         "tax_rates": "税率",
         "landing_page": "サイトコンテンツ",
         "cms_pages": "CMSページ",
         "cron_setup": "Cron設定",
         "support": {
-            "index": "一覧",
-            "show": "表示",
-            "reply": "返信",
-            "status": "ステータス"
+            "index": "一覧"
         },
         "queue": {
-            "index": "一覧",
-            "retry": "再試行",
-            "flush": "クリア"
+            "index": "一覧"
         },
         "clients_count": "クライアント総数",
         "users_count": "ユーザー総数",
         "integrations": {
-            "index": "一覧",
-            "update": "更新",
-            "test": "テスト",
-            "rotate": "ローテーション",
-            "edit": "編集"
+            "index": "一覧"
         },
         "pusher_settings": "Pusher設定",
-        "search": "検索",
         "admin_management_desc": "管理者ユーザーとその役割を管理します。",
         "total_admins": "管理者総数",
         "col_admin": "管理者",
@@ -922,24 +609,16 @@
         "secret_key_hint": "サーバーサイドのシークレットキー — 厳重に管理してください",
         "stripe_webhook_hint": "Stripeダッシュボードで確認できるWebhook署名シークレット（whsec_…）",
         "webhook_hint": "受信したゲートウェイイベントの検証に使用するWebhookシークレット",
-        "clients": "クライアント",
         "subscriptions": {
-            "index": "一覧",
-            "store": "保存",
-            "export": "エクスポート"
+            "index": "一覧"
         },
         "payments": "支払い",
         "plans": "プラン",
         "currencies": {
-            "index": "一覧",
-            "update": "更新"
+            "index": "一覧"
         },
-        "admins": "管理者",
         "settings": {
             "index": "一覧",
-            "general": {
-                "update": "更新"
-            },
             "logo": {
                 "upload": "アップロード",
                 "delete": "削除"
@@ -947,10 +626,6 @@
             "favicon": {
                 "upload": "アップロード",
                 "delete": "削除"
-            },
-            "update": "更新",
-            "firebase": {
-                "update": "更新"
             }
         },
         "ai": {
@@ -1015,8 +690,7 @@
         "impersonating": "代理ログイン中：{{name}}"
     },
     "head": {
-        "admin": "管理",
-        "welcome": "ようこそ"
+        "admin": "管理"
     },
     "locales": {
         "add_language": "言語を追加",
@@ -1037,7 +711,6 @@
         "saving": "保存中…",
         "title": "言語",
         "languages_translations": "言語と翻訳",
-        "translations": "翻訳",
         "translations_tab": "翻訳",
         "languages_and_translations": "言語と翻訳",
         "flag": "国旗",
@@ -1069,13 +742,6 @@
         "verification_sent": "登録時に入力されたメールアドレスに新しい確認リンクを送信しました。",
         "resend_verification": "確認メールを再送",
         "log_out": "ログアウト",
-        "verify_email": "メールアドレスを確認",
-        "invitations": {
-            "accept": "承諾"
-        },
-        "social": {
-            "redirect": "リダイレクト"
-        },
         "admin_panel_label": "管理者パネル",
         "welcome_to": "ようこそ",
         "admin_tagline": "プラットフォームを安心して管理",
@@ -1130,7 +796,6 @@
         "continue_with_google": "Googleで続行",
         "continue_with": "{{provider}}で続行",
         "or_continue_with_email": "またはメールアドレスで続行",
-        "firebase": "Firebase",
         "trusted_by_count": "10,000社以上の企業が利用",
         "proof_businesses": "企業",
         "proof_messages_sent": "送信メッセージ数",
@@ -1145,24 +810,7 @@
         "demo_role_admin": "デモ管理者ロール",
         "demo_role_client": "デモクライアントロール"
     },
-    "password": {
-        "confirm": "確認",
-        "email": "メール",
-        "request": "リクエスト",
-        "store": "保存",
-        "update": "更新"
-    },
-    "verification": {
-        "send": "送信"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "削除",
-        "update": "更新",
         "edit": "プロフィール",
         "update_profile": "プロフィール情報を更新",
         "update_password": "パスワードを更新",
@@ -1206,8 +854,6 @@
         "two_factor_disable": "2FAを無効化"
     },
     "plans": {
-        "name": "名前",
-        "slug": "スラッグ",
         "monthly_price_cents": "月額料金（セント）",
         "yearly_price_cents": "年額料金（セント）",
         "currency_code": "通貨コード",
@@ -1277,7 +923,6 @@
         "ping": "Ping"
     },
     "contact": {
-        "store": "保存",
         "created": "作成済み",
         "tag_added": "タグ追加済み",
         "name": "名前",
@@ -1475,9 +1120,6 @@
         "no_deliveries": "配信はまだありません。"
     },
     "reports": {
-        "exports": {
-            "contacts": "連絡先"
-        },
         "ai_title": "AI利用レポート",
         "ai_subtitle": "トークン消費、コスト、レイテンシの分析",
         "tokens_per_day": "日別トークン数",
@@ -2586,11 +2228,9 @@
         "upload_failed_retry": "Upload failed. Please try again."
     },
     "inbox_ui": {
-        "new_conversation": "New Conversation",
         "search_contact": "Search by name, phone, or email…",
         "no_channels": "No active channel accounts.",
         "select_channel": "Select which channel to start the conversation on:",
-        "contact_details": "Contact Details",
         "opening_message": "Type a message to send when the conversation opens…"
     },
     "inbox": {
@@ -2874,9 +2514,6 @@
     },
     "context": {
         "key": "Key"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Automations",
@@ -3962,9 +3599,6 @@
         "finance_b3": "Fraud / security alerts",
         "finance_b4": "Account & loan updates"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3974,8 +3608,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

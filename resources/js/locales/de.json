@@ -38,13 +38,10 @@
         "settings": "Einstellungen"
     },
     "nav": {
-        "home": "Startseite",
         "dashboard": "Dashboard",
-        "websites": "Websites",
         "workspaces": "Arbeitsbereiche",
         "profile": "Profil",
         "admin": "Admin",
-        "components": "Komponenten",
         "pricing": "Preise",
         "logout": "Abmelden",
         "login": "Anmelden",
@@ -59,7 +56,6 @@
         "integrations": "Integrationen",
         "about": "Über uns",
         "faq": "FAQ",
-        "blog": "Blog",
         "contact": "Kontakt",
         "sign_out": "Abmelden",
         "light_mode": "Heller Modus",
@@ -152,9 +148,6 @@
         "description": "Diese Seite wird im Rechts-nach-links-Layout angezeigt. Verwenden Sie den Sprachumschalter, um zu Arabisch (العربية) zu wechseln und die gesamte App in RTL zu sehen.",
         "ltrNote": "Wechseln Sie zurück zu Englisch oder Bengalisch für LTR."
     },
-    "sidebar": {
-        "menu": "Menü"
-    },
     "topbar": {
         "switch_theme": "Design wechseln",
         "visit_website": "Website besuchen",
@@ -163,67 +156,14 @@
         "create_workspace": "Arbeitsbereich erstellen",
         "manage_workspaces": "Arbeitsbereiche verwalten",
         "language": "Sprache",
-        "currency": "Währung",
         "account": "Konto"
     },
-    "theme": {
-        "update": "Aktualisieren"
-    },
-    "currency": {
-        "update": "Aktualisieren"
-    },
     "client": {
-        "profile": {
-            "edit": "Bearbeiten",
-            "2fa": {
-                "enable": "Aktivieren",
-                "disable": "Deaktivieren"
-            },
-            "sessions": {
-                "destroy": "Beenden"
-            }
-        },
-        "tenants": {
-            "switch": "Wechseln",
-            "index": "Übersicht",
-            "store": "Speichern"
-        },
         "dashboard": "Dashboard",
         "panel": "Kundenbereich",
         "pricing": "Preise",
-        "websites": {
-            "pages": {
-                "index": "Übersicht",
-                "store": "Speichern",
-                "update": "Aktualisieren",
-                "create": "Erstellen",
-                "edit": "Bearbeiten"
-            },
-            "index": "Übersicht",
-            "store": "Speichern",
-            "create": "Erstellen",
-            "domains": {
-                "store": "Speichern",
-                "verify": "Verifizieren",
-                "index": "Übersicht"
-            },
-            "templates": "Vorlagen",
-            "publish": {
-                "store": "Speichern"
-            },
-            "export": {
-                "store": "Speichern"
-            }
-        },
-        "checkout": {
-            "store": "Speichern"
-        },
-        "pages": "Seiten",
         "no_tenant": "Kein Arbeitsbereich",
         "create_workspace": "Arbeitsbereich erstellen",
-        "billing": {
-            "index": "Übersicht"
-        },
         "audit_log": "Audit-Log",
         "audit_log_subtitle": "Audit-Log-Untertitel",
         "filter_by_action": "Nach Aktion filtern",
@@ -247,9 +187,6 @@
         "managed_by_admin": "Wird vom Administrator Ihrer Organisation verwaltet",
         "upgrade_plan": "Tarif upgraden",
         "no_plan": "Kein aktives Abonnement",
-        "ai_credits": "KI-Guthaben",
-        "use_ai": "KI verwenden",
-        "manage_websites": "Websites verwalten",
         "quick_links": "Schnellzugriff",
         "billing_plans": "Abrechnungstarife",
         "settings_subtitle": "Einstellungen und Organisation",
@@ -267,7 +204,6 @@
         "save_settings": "Einstellungen speichern",
         "cancel_subscription_confirm": "Möchten Sie Ihr Abonnement wirklich kündigen?",
         "subscription_subtitle": "Ihr aktueller Tarif und Ihre Abrechnung",
-        "ends": "Endet am",
         "cancel_subscription": "Abonnement kündigen",
         "view_billing_history": "Abrechnungsverlauf anzeigen",
         "team_for": "Team für",
@@ -287,210 +223,36 @@
         "inactive": "Inaktiv",
         "save": "Speichern",
         "remove_member_confirm": "Entfernen",
-        "search": "Suchen",
-        "notifications": {
-            "index": "Übersicht",
-            "read": "Gelesen",
-            "destroy": "Löschen",
-            "recent": "Neueste"
-        },
-        "webhooks": {
-            "index": "Übersicht",
-            "update": "Aktualisieren",
-            "store": "Speichern",
-            "destroy": "Löschen",
-            "test": "Testen",
-            "deliveries": "Zustellungen"
-        },
-        "media": {
-            "index": "Übersicht",
-            "store": "Speichern",
-            "destroy": "Löschen"
-        },
-        "onboarding": {
-            "show": "Anzeigen",
-            "complete": "Abschließen"
-        },
         "team_members": "Teammitglieder",
         "manage_team": "Team verwalten",
         "manage_workspaces": "Arbeitsbereiche verwalten",
         "change_plan": "Tarif wechseln",
-        "coupon": {
-            "check": "Prüfen"
-        },
-        "support": {
-            "store": "Speichern",
-            "index": "Übersicht",
-            "create": "Erstellen",
-            "show": "Anzeigen",
-            "reply": "Antworten"
-        },
         "no_workspace": "Kein Arbeitsbereich",
         "contacts": {
-            "index": "Übersicht",
-            "show": "Anzeigen",
-            "destroy": "Löschen",
-            "import": "Importieren",
-            "store": "Speichern",
-            "update": "Aktualisieren",
-            "export": "Exportieren",
-            "avatar": {
-                "upload": "Hochladen",
-                "delete": "Löschen"
-            }
-        },
-        "segments": {
-            "index": "Übersicht",
-            "store": "Speichern",
-            "destroy": "Löschen",
-            "contacts": {
-                "attach": "Zuweisen",
-                "detach": "Entfernen"
-            }
+            "index": "Übersicht"
         },
         "whatsapp": {
-            "templates": {
-                "index": "Übersicht",
-                "store": "Speichern",
-                "sync": "Synchronisieren",
-                "create": "Erstellen",
-                "destroy": "Löschen",
-                "edit": "Bearbeiten",
-                "update": "Aktualisieren"
-            },
-            "widget": {
-                "index": "Übersicht"
-            },
-            "widgets": {
-                "destroy": "Löschen",
-                "store": "Speichern",
-                "update": "Aktualisieren",
-                "create": "Erstellen",
-                "edit": "Bearbeiten"
-            },
             "setup": "Einrichtung"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "Übersicht"
-            }
-        },
         "inbox": {
-            "index": "Übersicht",
-            "show": "Anzeigen",
-            "reply": "Antworten",
-            "status": "Status",
-            "labels": {
-                "update": "Aktualisieren",
-                "store": "Speichern",
-                "destroy": "Löschen",
-                "detach": "Entfernen",
-                "attach": "Zuweisen"
-            },
-            "typing": "Tippt",
-            "notes": {
-                "index": "Übersicht",
-                "store": "Speichern"
-            },
-            "handover": "Übergabe",
-            "contacts": {
-                "search": "Suchen"
-            },
-            "start": "Starten",
-            "templates": "Vorlagen",
-            "assign": "Zuweisen",
-            "setup": {
-                "destroy": "Löschen"
-            }
+            "index": "Übersicht"
         },
         "ai": {
-            "providers": {
-                "index": "Übersicht",
-                "update": "Aktualisieren"
-            },
             "chatbots": {
-                "index": "Übersicht",
-                "playground": "Playground",
-                "update": "Aktualisieren",
-                "destroy": "Löschen",
-                "store": "Speichern"
-            },
-            "documents": {
-                "destroy": "Löschen",
-                "reindex": "Neu indexieren"
+                "index": "Übersicht"
             }
         },
         "social": {
             "accounts": {
-                "index": "Übersicht",
-                "disconnect": "Trennen",
-                "connect": "Verbinden"
+                "index": "Übersicht"
             },
             "composer": "Editor",
-            "calendar": "Kalender",
-            "posts": {
-                "store": "Speichern",
-                "index": "Übersicht",
-                "update": "Aktualisieren",
-                "bulk": "Massenaktion",
-                "edit": "Bearbeiten",
-                "cancel": "Abbrechen",
-                "destroy": "Löschen"
-            }
-        },
-        "leads": {
-            "index": "Übersicht",
-            "scrape": "Scrapen",
-            "destroy": "Löschen"
-        },
-        "automations": {
-            "index": "Übersicht",
-            "update": "Aktualisieren",
-            "store": "Speichern",
-            "destroy": "Löschen",
-            "edit": "Bearbeiten",
-            "runs": "Ausführungen",
-            "generate": "Generieren",
-            "test": "Testen"
+            "calendar": "Kalender"
         },
         "campaigns": {
-            "index": "Übersicht",
-            "launch": "Starten",
-            "pause": "Pausieren",
-            "destroy": "Löschen",
-            "create": "Erstellen",
-            "show": "Anzeigen",
-            "store": "Speichern",
-            "update": "Aktualisieren",
-            "edit": "Bearbeiten"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "Übersicht",
-                "show": "Anzeigen"
-            },
-            "ai": {
-                "index": "Übersicht"
-            },
-            "inbox": {
-                "index": "Übersicht"
-            },
-            "automations": {
-                "index": "Übersicht"
-            },
-            "social": {
-                "index": "Übersicht"
-            }
-        },
-        "push": {
-            "subscribe": "Abonnieren",
-            "unsubscribe": "Abbestellen"
+            "create": "Erstellen"
         },
         "invite_by_email": "Per E-Mail einladen",
-        "invitations": {
-            "store": "Speichern",
-            "destroy": "Löschen"
-        },
         "next_step": "Nächster Schritt:",
         "go": "Los",
         "view_all": "Alle anzeigen",
@@ -529,45 +291,10 @@
         "ecommerce": {
             "stores": {
                 "test": "Testen",
-                "sync": "Synchronisieren",
-                "index": "Übersicht",
-                "destroy": "Löschen",
-                "store": "Speichern"
-            },
-            "orders": {
-                "index": "Übersicht",
-                "show": "Anzeigen",
-                "refresh": "Aktualisieren",
-                "fulfill": "Ausführen"
-            },
-            "products": {
-                "index": "Übersicht",
-                "search": "Suchen"
-            },
-            "contacts": {
-                "orders": "Bestellungen"
-            },
-            "oauth": {
-                "connect": "Verbinden"
+                "sync": "Synchronisieren"
             }
         },
-        "workspaces": "Arbeitsbereiche",
-        "settings": {
-            "update": "Aktualisieren",
-            "notifications": "Benachrichtigungen",
-            "index": "Übersicht"
-        },
-        "team": {
-            "store": "Speichern",
-            "update": "Aktualisieren",
-            "destroy": "Löschen",
-            "index": "Übersicht"
-        },
-        "subscription": {
-            "destroy": "Kündigen",
-            "invoice": "Rechnung",
-            "show": "Anzeigen"
-        }
+        "workspaces": "Arbeitsbereiche"
     },
     "pagination": {
         "label": "Seitennummerierung",
@@ -581,9 +308,6 @@
         "page_num": "Seite {{num}}",
         "page_of": "Seite {{current}} von {{last}}",
         "showing": "Zeige {{from}}–{{to}} von {{total}}"
-    },
-    "locale": {
-        "update": "Aktualisieren"
     },
     "admin": {
         "nav": {
@@ -638,20 +362,12 @@
         "email": "E-Mail",
         "languages": "Sprachen",
         "locales": {
-            "index": "Übersicht",
-            "store": "Speichern",
-            "destroy": "Löschen",
-            "update": "Aktualisieren"
+            "index": "Übersicht"
         },
         "website_templates": "Website/Landingpages",
         "roles_permissions": "Rollen & Berechtigungen",
         "ai_requests": "KI-Anfragen",
-        "templates": "Vorlagen",
         "audit_log": "Audit-Log",
-        "logout": "Abmelden",
-        "impersonation": {
-            "stop": "Beenden"
-        },
         "user_id": "Benutzer-ID",
         "all_statuses": "Alle Status",
         "status_success": "Erfolgreich",
@@ -659,7 +375,6 @@
         "status_failed": "Fehlgeschlagen",
         "action": "Aktion",
         "admin_log_in": "Admin-Anmeldung",
-        "login": "Anmelden",
         "dashboard_overview": "Überblick über Ihre Plattform-Kennzahlen.",
         "arpu": "ARPU",
         "this_period": "in diesem Zeitraum",
@@ -687,29 +402,14 @@
         "ai_requests_this_month": "KI-Anfragen (dieser Monat)",
         "ai_tokens_this_month": "KI-Tokens (dieser Monat)",
         "payments_this_month": "Zahlungen in diesem Monat",
-        "translations": {
-            "update": "Aktualisieren"
-        },
         "view_subscriptions": "Abonnements anzeigen →",
-        "roles": {
-            "store": "Speichern",
-            "update": "Aktualisieren",
-            "destroy": "Löschen"
-        },
-        "permissions": {
-            "store": "Speichern",
-            "update": "Aktualisieren",
-            "destroy": "Löschen"
-        },
         "system_settings": "Systemeinstellungen",
         "view_payments": "Zahlungen anzeigen →",
         "add_client": "Kunde hinzufügen",
         "edit_client": "Kunde bearbeiten",
         "delete_client": "Kunde löschen",
-        "manage_client_users": "Kundenbenutzer verwalten",
         "add_user": "Benutzer hinzufügen",
         "edit_user": "Benutzer bearbeiten",
-        "delete_user": "Benutzer löschen",
         "assign_plan": "Tarif einem Kunden zuweisen",
         "edit_client_title": "Kunde bearbeiten",
         "manage_users_title": "Kundenbenutzer verwalten",
@@ -802,37 +502,24 @@
         "delete_user_confirm": "Möchten Sie {{name}} ({{email}}) wirklich von diesem Kunden entfernen?",
         "delete_client_confirm": "Möchten Sie {{name}} wirklich löschen? Dadurch werden alle Kundenbenutzer und Abonnements entfernt.",
         "coupons": {
-            "index": "Übersicht",
-            "update": "Aktualisieren",
-            "store": "Speichern",
-            "destroy": "Löschen"
+            "index": "Übersicht"
         },
         "tax_rates": "Steuersätze",
         "landing_page": "Website-Inhalte",
         "cms_pages": "CMS-Seiten",
         "cron_setup": "Cron-Einrichtung",
         "support": {
-            "index": "Übersicht",
-            "show": "Anzeigen",
-            "reply": "Antworten",
-            "status": "Status"
+            "index": "Übersicht"
         },
         "queue": {
-            "index": "Übersicht",
-            "retry": "Wiederholen",
-            "flush": "Leeren"
+            "index": "Übersicht"
         },
         "clients_count": "Kunden gesamt",
         "users_count": "Benutzer gesamt",
         "integrations": {
-            "index": "Übersicht",
-            "update": "Aktualisieren",
-            "test": "Testen",
-            "rotate": "Rotieren",
-            "edit": "Bearbeiten"
+            "index": "Übersicht"
         },
         "pusher_settings": "Pusher-Einstellungen",
-        "search": "Suchen",
         "admin_management_desc": "Verwalten Sie Admin-Benutzer und deren Rollen.",
         "total_admins": "Administratoren gesamt",
         "col_admin": "Administrator",
@@ -922,24 +609,16 @@
         "secret_key_hint": "Serverseitiger geheimer Schlüssel — behandeln Sie ihn vertraulich",
         "stripe_webhook_hint": "Webhook-Signatur-Secret (whsec_…) aus dem Stripe-Dashboard",
         "webhook_hint": "Webhook-Secret zur Verifizierung eingehender Gateway-Ereignisse",
-        "clients": "Kunden",
         "subscriptions": {
-            "index": "Übersicht",
-            "store": "Speichern",
-            "export": "Exportieren"
+            "index": "Übersicht"
         },
         "payments": "Zahlungen",
         "plans": "Tarife",
         "currencies": {
-            "index": "Übersicht",
-            "update": "Aktualisieren"
+            "index": "Übersicht"
         },
-        "admins": "Administratoren",
         "settings": {
             "index": "Übersicht",
-            "general": {
-                "update": "Aktualisieren"
-            },
             "logo": {
                 "upload": "Hochladen",
                 "delete": "Löschen"
@@ -947,10 +626,6 @@
             "favicon": {
                 "upload": "Hochladen",
                 "delete": "Löschen"
-            },
-            "update": "Aktualisieren",
-            "firebase": {
-                "update": "Aktualisieren"
             }
         },
         "ai": {
@@ -1015,8 +690,7 @@
         "impersonating": "Angemeldet als: {{name}}"
     },
     "head": {
-        "admin": "Admin",
-        "welcome": "Willkommen"
+        "admin": "Admin"
     },
     "locales": {
         "add_language": "Sprache hinzufügen",
@@ -1037,7 +711,6 @@
         "saving": "Wird gespeichert…",
         "title": "Sprachen",
         "languages_translations": "Sprachen & Übersetzungen",
-        "translations": "Übersetzungen",
         "translations_tab": "Übersetzungen",
         "languages_and_translations": "Sprachen & Übersetzungen",
         "flag": "Flagge",
@@ -1069,13 +742,6 @@
         "verification_sent": "Ein neuer Verifizierungslink wurde an die E-Mail-Adresse gesendet, die Sie bei der Registrierung angegeben haben.",
         "resend_verification": "Verifizierungs-E-Mail erneut senden",
         "log_out": "Abmelden",
-        "verify_email": "E-Mail verifizieren",
-        "invitations": {
-            "accept": "Annehmen"
-        },
-        "social": {
-            "redirect": "Weiterleiten"
-        },
         "admin_panel_label": "Admin-Bereich",
         "welcome_to": "Willkommen bei",
         "admin_tagline": "Verwalten Sie Ihre Plattform mit Zuversicht",
@@ -1130,7 +796,6 @@
         "continue_with_google": "Mit Google fortfahren",
         "continue_with": "Mit {{provider}} fortfahren",
         "or_continue_with_email": "oder mit E-Mail fortfahren",
-        "firebase": "Firebase",
         "trusted_by_count": "Von über 10.000 Unternehmen genutzt",
         "proof_businesses": "Unternehmen",
         "proof_messages_sent": "Gesendete Nachrichten",
@@ -1145,24 +810,7 @@
         "demo_role_admin": "Demo-Rolle: Admin",
         "demo_role_client": "Demo-Rolle: Kunde"
     },
-    "password": {
-        "confirm": "Bestätigen",
-        "email": "E-Mail",
-        "request": "Anfordern",
-        "store": "Speichern",
-        "update": "Aktualisieren"
-    },
-    "verification": {
-        "send": "Senden"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "Löschen",
-        "update": "Aktualisieren",
         "edit": "Profil",
         "update_profile": "Profilinformationen aktualisieren",
         "update_password": "Passwort aktualisieren",
@@ -1206,8 +854,6 @@
         "two_factor_disable": "2FA deaktivieren"
     },
     "plans": {
-        "name": "Name",
-        "slug": "Slug",
         "monthly_price_cents": "Monatspreis (Cent)",
         "yearly_price_cents": "Jahrespreis (Cent)",
         "currency_code": "Währungscode",
@@ -1277,7 +923,6 @@
         "ping": "Ping"
     },
     "contact": {
-        "store": "Speichern",
         "created": "Erstellt",
         "tag_added": "Tag hinzugefügt",
         "name": "Name",
@@ -1475,9 +1120,6 @@
         "no_deliveries": "Noch keine Zustellungen."
     },
     "reports": {
-        "exports": {
-            "contacts": "Kontakte"
-        },
         "ai_title": "KI-Nutzungsbericht",
         "ai_subtitle": "Analysen zu Token-Verbrauch, Kosten und Latenz",
         "tokens_per_day": "Tokens pro Tag",
@@ -2586,11 +2228,9 @@
         "upload_failed_retry": "Upload failed. Please try again."
     },
     "inbox_ui": {
-        "new_conversation": "New Conversation",
         "search_contact": "Search by name, phone, or email…",
         "no_channels": "No active channel accounts.",
         "select_channel": "Select which channel to start the conversation on:",
-        "contact_details": "Contact Details",
         "opening_message": "Type a message to send when the conversation opens…"
     },
     "inbox": {
@@ -2874,9 +2514,6 @@
     },
     "context": {
         "key": "Key"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Automations",
@@ -3962,9 +3599,6 @@
         "finance_b3": "Fraud / security alerts",
         "finance_b4": "Account & loan updates"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3974,8 +3608,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

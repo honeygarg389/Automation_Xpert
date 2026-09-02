@@ -38,13 +38,10 @@
         "settings": "Ayarlar"
     },
     "nav": {
-        "home": "Ana Sayfa",
         "dashboard": "Kontrol Paneli",
-        "websites": "Web Siteleri",
         "workspaces": "Çalışma Alanları",
         "profile": "Profil",
         "admin": "Yönetici",
-        "components": "Bileşenler",
         "pricing": "Fiyatlandırma",
         "logout": "Çıkış yap",
         "login": "Giriş yap",
@@ -59,7 +56,6 @@
         "integrations": "Entegrasyonlar",
         "about": "Hakkımızda",
         "faq": "SSS",
-        "blog": "Blog",
         "contact": "İletişim",
         "sign_out": "Çıkış Yap",
         "light_mode": "Açık mod",
@@ -152,9 +148,6 @@
         "description": "Bu sayfa sağdan sola düzende görüntülenmektedir. Dil değiştiriciyi kullanarak Arapçaya (العربية) geçin ve tüm uygulamayı RTL olarak görün.",
         "ltrNote": "LTR için İngilizce veya Bengalce diline geri dönün."
     },
-    "sidebar": {
-        "menu": "Menü"
-    },
     "topbar": {
         "switch_theme": "Temayı değiştir",
         "visit_website": "Web Sitesini Ziyaret Et",
@@ -163,67 +156,14 @@
         "create_workspace": "Çalışma alanı oluştur",
         "manage_workspaces": "Çalışma alanlarını yönet",
         "language": "Dil",
-        "currency": "Para Birimi",
         "account": "Hesap"
     },
-    "theme": {
-        "update": "Güncelle"
-    },
-    "currency": {
-        "update": "Güncelle"
-    },
     "client": {
-        "profile": {
-            "edit": "Düzenle",
-            "2fa": {
-                "enable": "Etkinleştir",
-                "disable": "Devre Dışı Bırak"
-            },
-            "sessions": {
-                "destroy": "Sonlandır"
-            }
-        },
-        "tenants": {
-            "switch": "Geçiş Yap",
-            "index": "Dizin",
-            "store": "Kaydet"
-        },
         "dashboard": "Kontrol Paneli",
         "panel": "Müşteri Paneli",
         "pricing": "Fiyatlandırma",
-        "websites": {
-            "pages": {
-                "index": "Dizin",
-                "store": "Kaydet",
-                "update": "Güncelle",
-                "create": "Oluştur",
-                "edit": "Düzenle"
-            },
-            "index": "Dizin",
-            "store": "Kaydet",
-            "create": "Oluştur",
-            "domains": {
-                "store": "Kaydet",
-                "verify": "Doğrula",
-                "index": "Dizin"
-            },
-            "templates": "Şablonlar",
-            "publish": {
-                "store": "Kaydet"
-            },
-            "export": {
-                "store": "Kaydet"
-            }
-        },
-        "checkout": {
-            "store": "Kaydet"
-        },
-        "pages": "Sayfalar",
         "no_tenant": "Çalışma alanı yok",
         "create_workspace": "Çalışma alanı oluştur",
-        "billing": {
-            "index": "Dizin"
-        },
         "audit_log": "Denetim Günlüğü",
         "audit_log_subtitle": "Denetim Günlüğü Alt Başlığı",
         "filter_by_action": "İşleme Göre Filtrele",
@@ -247,9 +187,6 @@
         "managed_by_admin": "Kuruluş yöneticiniz tarafından yönetiliyor",
         "upgrade_plan": "Planı Yükselt",
         "no_plan": "Aktif abonelik yok",
-        "ai_credits": "AI Kredileri",
-        "use_ai": "AI Kullan",
-        "manage_websites": "Web Sitelerini Yönet",
         "quick_links": "Hızlı Bağlantılar",
         "billing_plans": "Fatura Planları",
         "settings_subtitle": "Tercihler ve kuruluş",
@@ -267,7 +204,6 @@
         "save_settings": "Ayarları kaydet",
         "cancel_subscription_confirm": "Aboneliğinizi iptal etmek istediğinizden emin misiniz?",
         "subscription_subtitle": "Mevcut planınız ve faturalandırma",
-        "ends": "Bitiş",
         "cancel_subscription": "Aboneliği iptal et",
         "view_billing_history": "Fatura geçmişini görüntüle",
         "team_for": "Ekip:",
@@ -287,210 +223,36 @@
         "inactive": "Pasif",
         "save": "Kaydet",
         "remove_member_confirm": "Kaldır",
-        "search": "Ara",
-        "notifications": {
-            "index": "Dizin",
-            "read": "Okundu",
-            "destroy": "Sil",
-            "recent": "Son"
-        },
-        "webhooks": {
-            "index": "Dizin",
-            "update": "Güncelle",
-            "store": "Kaydet",
-            "destroy": "Sil",
-            "test": "Test",
-            "deliveries": "Teslimatlar"
-        },
-        "media": {
-            "index": "Dizin",
-            "store": "Kaydet",
-            "destroy": "Sil"
-        },
-        "onboarding": {
-            "show": "Görüntüle",
-            "complete": "Tamamla"
-        },
         "team_members": "Ekip üyeleri",
         "manage_team": "Ekibi yönet",
         "manage_workspaces": "Çalışma alanlarını yönet",
         "change_plan": "Planı Değiştir",
-        "coupon": {
-            "check": "Kontrol Et"
-        },
-        "support": {
-            "store": "Kaydet",
-            "index": "Dizin",
-            "create": "Oluştur",
-            "show": "Görüntüle",
-            "reply": "Yanıtla"
-        },
         "no_workspace": "Çalışma alanı yok",
         "contacts": {
-            "index": "Dizin",
-            "show": "Görüntüle",
-            "destroy": "Sil",
-            "import": "İçe Aktar",
-            "store": "Kaydet",
-            "update": "Güncelle",
-            "export": "Dışa Aktar",
-            "avatar": {
-                "upload": "Yükle",
-                "delete": "Sil"
-            }
-        },
-        "segments": {
-            "index": "Dizin",
-            "store": "Kaydet",
-            "destroy": "Sil",
-            "contacts": {
-                "attach": "Ekle",
-                "detach": "Çıkar"
-            }
+            "index": "Dizin"
         },
         "whatsapp": {
-            "templates": {
-                "index": "Dizin",
-                "store": "Kaydet",
-                "sync": "Senkronize Et",
-                "create": "Oluştur",
-                "destroy": "Sil",
-                "edit": "Düzenle",
-                "update": "Güncelle"
-            },
-            "widget": {
-                "index": "Dizin"
-            },
-            "widgets": {
-                "destroy": "Sil",
-                "store": "Kaydet",
-                "update": "Güncelle",
-                "create": "Oluştur",
-                "edit": "Düzenle"
-            },
             "setup": "Kurulum"
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "Dizin"
-            }
-        },
         "inbox": {
-            "index": "Dizin",
-            "show": "Görüntüle",
-            "reply": "Yanıtla",
-            "status": "Durum",
-            "labels": {
-                "update": "Güncelle",
-                "store": "Kaydet",
-                "destroy": "Sil",
-                "detach": "Çıkar",
-                "attach": "Ekle"
-            },
-            "typing": "Yazıyor",
-            "notes": {
-                "index": "Dizin",
-                "store": "Kaydet"
-            },
-            "handover": "Devir",
-            "contacts": {
-                "search": "Ara"
-            },
-            "start": "Başlat",
-            "templates": "Şablonlar",
-            "assign": "Ata",
-            "setup": {
-                "destroy": "Sil"
-            }
+            "index": "Dizin"
         },
         "ai": {
-            "providers": {
-                "index": "Dizin",
-                "update": "Güncelle"
-            },
             "chatbots": {
-                "index": "Dizin",
-                "playground": "Deneme Alanı",
-                "update": "Güncelle",
-                "destroy": "Sil",
-                "store": "Kaydet"
-            },
-            "documents": {
-                "destroy": "Sil",
-                "reindex": "Yeniden İndeksle"
+                "index": "Dizin"
             }
         },
         "social": {
             "accounts": {
-                "index": "Dizin",
-                "disconnect": "Bağlantıyı Kes",
-                "connect": "Bağlan"
+                "index": "Dizin"
             },
             "composer": "Oluşturucu",
-            "calendar": "Takvim",
-            "posts": {
-                "store": "Kaydet",
-                "index": "Dizin",
-                "update": "Güncelle",
-                "bulk": "Toplu",
-                "edit": "Düzenle",
-                "cancel": "İptal",
-                "destroy": "Sil"
-            }
-        },
-        "leads": {
-            "index": "Dizin",
-            "scrape": "Topla",
-            "destroy": "Sil"
-        },
-        "automations": {
-            "index": "Dizin",
-            "update": "Güncelle",
-            "store": "Kaydet",
-            "destroy": "Sil",
-            "edit": "Düzenle",
-            "runs": "Çalıştırmalar",
-            "generate": "Oluştur",
-            "test": "Test"
+            "calendar": "Takvim"
         },
         "campaigns": {
-            "index": "Dizin",
-            "launch": "Başlat",
-            "pause": "Duraklat",
-            "destroy": "Sil",
-            "create": "Oluştur",
-            "show": "Görüntüle",
-            "store": "Kaydet",
-            "update": "Güncelle",
-            "edit": "Düzenle"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "Dizin",
-                "show": "Görüntüle"
-            },
-            "ai": {
-                "index": "Dizin"
-            },
-            "inbox": {
-                "index": "Dizin"
-            },
-            "automations": {
-                "index": "Dizin"
-            },
-            "social": {
-                "index": "Dizin"
-            }
-        },
-        "push": {
-            "subscribe": "Abone Ol",
-            "unsubscribe": "Abonelikten Çık"
+            "create": "Oluştur"
         },
         "invite_by_email": "E-posta ile davet et",
-        "invitations": {
-            "store": "Kaydet",
-            "destroy": "Sil"
-        },
         "next_step": "Sonraki adım:",
         "go": "Git",
         "view_all": "Tümünü görüntüle",
@@ -529,45 +291,10 @@
         "ecommerce": {
             "stores": {
                 "test": "Test",
-                "sync": "Senkronize Et",
-                "index": "Dizin",
-                "destroy": "Sil",
-                "store": "Kaydet"
-            },
-            "orders": {
-                "index": "Dizin",
-                "show": "Görüntüle",
-                "refresh": "Yenile",
-                "fulfill": "Tamamla"
-            },
-            "products": {
-                "index": "Dizin",
-                "search": "Ara"
-            },
-            "contacts": {
-                "orders": "Siparişler"
-            },
-            "oauth": {
-                "connect": "Bağlan"
+                "sync": "Senkronize Et"
             }
         },
-        "workspaces": "Çalışma Alanları",
-        "settings": {
-            "update": "Güncelle",
-            "notifications": "Bildirimler",
-            "index": "Dizin"
-        },
-        "team": {
-            "store": "Kaydet",
-            "update": "Güncelle",
-            "destroy": "Sil",
-            "index": "Dizin"
-        },
-        "subscription": {
-            "destroy": "Sil",
-            "invoice": "Fatura",
-            "show": "Görüntüle"
-        }
+        "workspaces": "Çalışma Alanları"
     },
     "pagination": {
         "label": "Sayfalandırma",
@@ -581,9 +308,6 @@
         "page_num": "Sayfa {{num}}",
         "page_of": "Sayfa {{current}} / {{last}}",
         "showing": "{{total}} kayıttan {{from}}–{{to}} arası gösteriliyor"
-    },
-    "locale": {
-        "update": "Güncelle"
     },
     "admin": {
         "nav": {
@@ -638,20 +362,12 @@
         "email": "E-posta",
         "languages": "Diller",
         "locales": {
-            "index": "Dizin",
-            "store": "Kaydet",
-            "destroy": "Sil",
-            "update": "Güncelle"
+            "index": "Dizin"
         },
         "website_templates": "Web Sitesi/Açılış Sayfaları",
         "roles_permissions": "Roller ve İzinler",
         "ai_requests": "AI İstekleri",
-        "templates": "Şablonlar",
         "audit_log": "Denetim günlüğü",
-        "logout": "Çıkış",
-        "impersonation": {
-            "stop": "Durdur"
-        },
         "user_id": "Kullanıcı ID",
         "all_statuses": "Tüm durumlar",
         "status_success": "Başarılı",
@@ -659,7 +375,6 @@
         "status_failed": "Başarısız",
         "action": "İşlem",
         "admin_log_in": "Yönetici girişi",
-        "login": "Giriş",
         "dashboard_overview": "Platform metriklerinize genel bakış.",
         "arpu": "ARPU",
         "this_period": "bu dönem",
@@ -687,29 +402,14 @@
         "ai_requests_this_month": "AI istekleri (bu ay)",
         "ai_tokens_this_month": "AI token'ları (bu ay)",
         "payments_this_month": "Bu ayki ödemeler",
-        "translations": {
-            "update": "Güncelle"
-        },
         "view_subscriptions": "Abonelikleri görüntüle →",
-        "roles": {
-            "store": "Kaydet",
-            "update": "Güncelle",
-            "destroy": "Sil"
-        },
-        "permissions": {
-            "store": "Kaydet",
-            "update": "Güncelle",
-            "destroy": "Sil"
-        },
         "system_settings": "Sistem ayarları",
         "view_payments": "Ödemeleri görüntüle →",
         "add_client": "Müşteri Ekle",
         "edit_client": "Müşteriyi Düzenle",
         "delete_client": "Müşteriyi Sil",
-        "manage_client_users": "Müşteri Kullanıcılarını Yönet",
         "add_user": "Kullanıcı Ekle",
         "edit_user": "Kullanıcıyı Düzenle",
-        "delete_user": "Kullanıcıyı Sil",
         "assign_plan": "Müşteriye Plan Ata",
         "edit_client_title": "Müşteriyi düzenle",
         "manage_users_title": "Müşteri kullanıcılarını yönet",
@@ -802,37 +502,24 @@
         "delete_user_confirm": "{{name}} ({{email}}) kullanıcısını bu müşteriden kaldırmak istediğinizden emin misiniz?",
         "delete_client_confirm": "{{name}} müşterisini silmek istediğinizden emin misiniz? Bu işlem tüm müşteri kullanıcılarını ve abonelikleri kaldıracaktır.",
         "coupons": {
-            "index": "Dizin",
-            "update": "Güncelle",
-            "store": "Kaydet",
-            "destroy": "Sil"
+            "index": "Dizin"
         },
         "tax_rates": "Vergi Oranları",
         "landing_page": "Site İçeriği",
         "cms_pages": "CMS Sayfaları",
         "cron_setup": "Cron Kurulumu",
         "support": {
-            "index": "Dizin",
-            "show": "Görüntüle",
-            "reply": "Yanıtla",
-            "status": "Durum"
+            "index": "Dizin"
         },
         "queue": {
-            "index": "Dizin",
-            "retry": "Yeniden Dene",
-            "flush": "Temizle"
+            "index": "Dizin"
         },
         "clients_count": "Toplam müşteri",
         "users_count": "Toplam kullanıcı",
         "integrations": {
-            "index": "Dizin",
-            "update": "Güncelle",
-            "test": "Test",
-            "rotate": "Yenile",
-            "edit": "Düzenle"
+            "index": "Dizin"
         },
         "pusher_settings": "Pusher Ayarları",
-        "search": "Ara",
         "admin_management_desc": "Yönetici kullanıcılarını ve rollerini yönetin.",
         "total_admins": "Toplam Yönetici",
         "col_admin": "Yönetici",
@@ -922,24 +609,16 @@
         "secret_key_hint": "Sunucu tarafı gizli anahtar — gizli tutun",
         "stripe_webhook_hint": "Stripe panelinden webhook imzalama anahtarı (whsec_…)",
         "webhook_hint": "Gelen ağ geçidi olaylarını doğrulamak için kullanılan webhook gizli anahtarı",
-        "clients": "Müşteriler",
         "subscriptions": {
-            "index": "Dizin",
-            "store": "Kaydet",
-            "export": "Dışa Aktar"
+            "index": "Dizin"
         },
         "payments": "Ödemeler",
         "plans": "Planlar",
         "currencies": {
-            "index": "Dizin",
-            "update": "Güncelle"
+            "index": "Dizin"
         },
-        "admins": "Yöneticiler",
         "settings": {
             "index": "Dizin",
-            "general": {
-                "update": "Güncelle"
-            },
             "logo": {
                 "upload": "Yükle",
                 "delete": "Sil"
@@ -947,10 +626,6 @@
             "favicon": {
                 "upload": "Yükle",
                 "delete": "Sil"
-            },
-            "update": "Güncelle",
-            "firebase": {
-                "update": "Güncelle"
             }
         },
         "ai": {
@@ -1015,8 +690,7 @@
         "impersonating": "Impersonating: {{name}}"
     },
     "head": {
-        "admin": "Admin",
-        "welcome": "Welcome"
+        "admin": "Admin"
     },
     "locales": {
         "add_language": "Add Language",
@@ -1037,7 +711,6 @@
         "saving": "Saving…",
         "title": "Languages",
         "languages_translations": "Languages & Translations",
-        "translations": "Translations",
         "translations_tab": "Translations",
         "languages_and_translations": "Languages & Translations",
         "flag": "Flag",
@@ -1069,13 +742,6 @@
         "verification_sent": "A new verification link has been sent to the email address you provided during registration.",
         "resend_verification": "Resend Verification Email",
         "log_out": "Log Out",
-        "verify_email": "Verify Email",
-        "invitations": {
-            "accept": "Accept"
-        },
-        "social": {
-            "redirect": "Redirect"
-        },
         "admin_panel_label": "Admin Panel",
         "welcome_to": "Welcome to",
         "admin_tagline": "Manage your platform with confidence",
@@ -1130,7 +796,6 @@
         "continue_with_google": "Continue with Google",
         "continue_with": "Continue with {{provider}}",
         "or_continue_with_email": "or continue with email",
-        "firebase": "Firebase",
         "trusted_by_count": "Trusted by 10,000+ businesses",
         "proof_businesses": "Businesses",
         "proof_messages_sent": "Messages sent",
@@ -1145,24 +810,7 @@
         "demo_role_admin": "Demo Role Admin",
         "demo_role_client": "Demo Role Client"
     },
-    "password": {
-        "confirm": "Confirm",
-        "email": "Email",
-        "request": "Request",
-        "store": "Store",
-        "update": "Update"
-    },
-    "verification": {
-        "send": "Send"
-    },
-    "www": {
-        "example": {
-            "com": "Com"
-        }
-    },
     "profile": {
-        "destroy": "Destroy",
-        "update": "Update",
         "edit": "Profile",
         "update_profile": "Update Profile Information",
         "update_password": "Update Password",
@@ -1206,8 +854,6 @@
         "two_factor_disable": "Disable 2FA"
     },
     "plans": {
-        "name": "Name",
-        "slug": "Slug",
         "monthly_price_cents": "Monthly price (cents)",
         "yearly_price_cents": "Yearly price (cents)",
         "currency_code": "Currency code",
@@ -1277,7 +923,6 @@
         "ping": "Ping"
     },
     "contact": {
-        "store": "Store",
         "created": "Created",
         "tag_added": "Tag Added",
         "name": "Name",
@@ -1475,9 +1120,6 @@
         "no_deliveries": "No deliveries yet."
     },
     "reports": {
-        "exports": {
-            "contacts": "Contacts"
-        },
         "ai_title": "AI Usage Report",
         "ai_subtitle": "Token consumption, cost, and latency analytics",
         "tokens_per_day": "Tokens per Day",
@@ -2586,11 +2228,9 @@
         "upload_failed_retry": "Upload failed. Please try again."
     },
     "inbox_ui": {
-        "new_conversation": "New Conversation",
         "search_contact": "Search by name, phone, or email…",
         "no_channels": "No active channel accounts.",
         "select_channel": "Select which channel to start the conversation on:",
-        "contact_details": "Contact Details",
         "opening_message": "Type a message to send when the conversation opens…"
     },
     "inbox": {
@@ -2874,9 +2514,6 @@
     },
     "context": {
         "key": "Key"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "automation": {
         "title": "Automations",
@@ -3962,9 +3599,6 @@
         "finance_b3": "Fraud / security alerts",
         "finance_b4": "Account & loan updates"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3974,8 +3608,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }

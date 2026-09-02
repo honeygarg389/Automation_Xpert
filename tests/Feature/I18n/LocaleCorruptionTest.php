@@ -201,37 +201,67 @@ class LocaleCorruptionTest extends TestCase
     }
 
     /**
-     * ⚠️ The four subtrees measured as destroyed, driven through the real
-     * dictionary rather than a fixture, so this fails if any of them loses a
-     * child again.
+     * ⚠️ THE FOUR HISTORICAL VICTIMS, ON A SYNTHETIC FIXTURE — deliberately NOT
+     * the live dictionary.
+     *
+     * This test used to read en.json and poison whatever children it found
+     * there. That made it silently self-defeating: once the junk keys were
+     * deleted from en.json (2026-09-03) the four victims had no children left,
+     * the loop body never ran, and PHPUnit reported it Risky — a test asserting
+     * nothing while still counting as green. A test whose subject is "corrupt
+     * data" must not depend on corrupt data still being present.
+     *
+     * The fixture below reproduces both collision directions in one pass:
+     * Case A for each of the four victims (a scalar landing on a populated
+     * node) and one Case B (an object burying a leaf string).
      */
     #[Test]
-    public function the_four_known_victims_keep_every_child(): void
+    public function the_four_known_collision_shapes_are_all_refused(): void
     {
-        $flat = app(I18nFileService::class)->getFlatDictionary('en');
+        $flat = [];
 
-        $poisoned = $flat;
-        foreach (self::VICTIMS as $v) {
-            $poisoned[$v] = 'Guess';
+        // Real children, one or two per victim, mirroring the shapes measured
+        // when the destruction was first reproduced.
+        foreach (self::VICTIMS as $i => $victim) {
+            $flat[$victim.'.alpha'] = 'Alpha '.$i;
+            $flat[$victim.'.beta'] = 'Beta '.$i;
         }
 
-        $out = I18nFileService::unflatten($poisoned, $conflicts);
-
+        // CASE A — the humanised scalar the scanner would have produced.
         foreach (self::VICTIMS as $victim) {
-            $children = array_filter(array_keys($flat), fn ($k) => str_starts_with($k, $victim.'.'));
-            if ($children === []) {
-                continue;
-            }
+            $flat[$victim] = 'Guess';
+        }
 
-            foreach ($children as $child) {
+        // CASE B — a leaf string that a later key wants to bury under an object.
+        $flat['admin.clients'] = 'Clients';
+        $flat['admin.clients.index'] = 'Index';
+
+        $out = I18nFileService::unflatten($flat, $conflicts);
+
+        $checked = 0;
+        foreach (self::VICTIMS as $victim) {
+            foreach (['alpha', 'beta'] as $child) {
                 $node = $out;
-                foreach (explode('.', $child) as $part) {
+                foreach (explode('.', $victim.'.'.$child) as $part) {
                     $node = $node[$part] ?? null;
                 }
-                $this->assertIsString($node, "`{$child}` was destroyed by `{$victim}`.");
+                $this->assertIsString($node, "`{$victim}.{$child}` was destroyed by `{$victim}`.");
+                $checked++;
             }
 
-            $this->assertContains($victim, $conflicts);
+            $this->assertContains($victim, $conflicts,
+                "The refusal of `{$victim}` was not reported.");
         }
+
+        // ⚠️ Guards against this test quietly becoming a no-op again: if the
+        // fixture ever stops producing children, this fails rather than passing
+        // with nothing asserted.
+        $this->assertSame(8, $checked, 'The fixture stopped exercising the victims.');
+
+        $this->assertSame('Clients', $out['admin']['clients'],
+            'Case B: the existing leaf was buried under an object.');
+        $this->assertContains('admin.clients.index', $conflicts);
+        $this->assertCount(count(self::VICTIMS) + 1, $conflicts,
+            'Exactly the five colliding keys should have been refused.');
     }
 }

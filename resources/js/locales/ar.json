@@ -32,13 +32,10 @@
         "settings": "Settings"
     },
     "nav": {
-        "home": "الرئيسية",
         "dashboard": "لوحة التحكم",
-        "websites": "المواقع",
         "workspaces": "مساحات العمل",
         "profile": "الملف الشخصي",
         "admin": "الإدارة",
-        "components": "المكونات",
         "pricing": "الأسعار",
         "logout": "تسجيل الخروج",
         "login": "تسجيل الدخول",
@@ -51,7 +48,6 @@
         "features": "الميزات",
         "use_cases": "حالات الاستخدام",
         "faq": "الأسئلة الشائعة",
-        "blog": "المدونة",
         "contact": "التواصل",
         "sign_out": "تسجيل الخروج",
         "light_mode": "الوضع الفاتح",
@@ -146,9 +142,6 @@
         "description": "هذه الصفحة معروضة بتخطيط من اليمين إلى اليسار. استخدم مبدل اللغة لرؤية التطبيق بالكامل في RTL.",
         "ltrNote": "ارجع إلى الإنجليزية أو البنغالية لـ LTR."
     },
-    "sidebar": {
-        "menu": "القائمة"
-    },
     "topbar": {
         "switch_theme": "تبديل المظهر",
         "visit_website": "زيارة الموقع",
@@ -157,62 +150,18 @@
         "create_workspace": "إنشاء مساحة عمل",
         "manage_workspaces": "إدارة مساحات العمل",
         "language": "اللغة",
-        "currency": "العملة",
         "account": "الحساب"
-    },
-    "theme": {
-        "update": "تحديث"
-    },
-    "currency": {
-        "update": "تحديث"
     },
     "client": {
         "profile": {
-            "edit": "تعديل",
             "2fa": "2Fa",
             "sessions": "Sessions"
-        },
-        "tenants": {
-            "switch": "تبديل",
-            "index": "القائمة",
-            "store": "حفظ"
         },
         "dashboard": "لوحة التحكم",
         "panel": "لوحة العميل",
         "pricing": "الأسعار",
-        "websites": {
-            "pages": {
-                "index": "القائمة",
-                "store": "حفظ",
-                "update": "تحديث",
-                "create": "إنشاء",
-                "edit": "تعديل"
-            },
-            "index": "القائمة",
-            "store": "حفظ",
-            "create": "إنشاء",
-            "domains": {
-                "store": "حفظ",
-                "verify": "تحقق",
-                "index": "القائمة"
-            },
-            "templates": "القوالب",
-            "publish": {
-                "store": "حفظ"
-            },
-            "export": {
-                "store": "حفظ"
-            }
-        },
-        "checkout": {
-            "store": "حفظ"
-        },
-        "pages": "الصفحات",
         "no_tenant": "لا توجد مساحة عمل",
         "create_workspace": "إنشاء مساحة عمل",
-        "billing": {
-            "index": "الفهرس"
-        },
         "audit_log": "سجل المراجعة",
         "audit_log_subtitle": "تفاصيل سجل المراجعة",
         "filter_by_action": "تصفية حسب الإجراء",
@@ -236,9 +185,6 @@
         "managed_by_admin": "تتم إدارته بواسطة مسؤول مؤسستك",
         "upgrade_plan": "ترقية الخطة",
         "no_plan": "لا يوجد اشتراك نشط",
-        "ai_credits": "رصيد الذكاء الاصطناعي",
-        "use_ai": "استخدام الذكاء الاصطناعي",
-        "manage_websites": "إدارة المواقع",
         "quick_links": "روابط سريعة",
         "billing_plans": "خطط الفواتير",
         "settings_subtitle": "التفضيلات والمؤسسة",
@@ -256,7 +202,6 @@
         "save_settings": "حفظ الإعدادات",
         "cancel_subscription_confirm": "هل أنت متأكد من رغبتك في إلغاء اشتراكك؟",
         "subscription_subtitle": "خطتك الحالية والفوترة",
-        "ends": "ينتهي",
         "cancel_subscription": "إلغاء الاشتراك",
         "view_billing_history": "عرض سجل الفوترة",
         "team_for": "فريق",
@@ -276,207 +221,42 @@
         "inactive": "غير نشط",
         "save": "حفظ",
         "remove_member_confirm": "إزالة",
-        "search": "بحث",
-        "notifications": {
-            "index": "القائمة",
-            "read": "مقروء",
-            "destroy": "حذف",
-            "recent": "الأخيرة"
-        },
-        "webhooks": {
-            "index": "القائمة",
-            "update": "تحديث",
-            "store": "حفظ",
-            "destroy": "حذف",
-            "test": "اختبار",
-            "deliveries": "التسليمات"
-        },
-        "media": {
-            "index": "القائمة",
-            "store": "حفظ",
-            "destroy": "حذف"
-        },
-        "onboarding": {
-            "show": "عرض",
-            "complete": "إكمال"
-        },
         "team_members": "أعضاء الفريق",
         "manage_team": "إدارة الفريق",
         "manage_workspaces": "إدارة مساحات العمل",
         "change_plan": "تغيير الخطة",
-        "coupon": {
-            "check": "تحقق"
-        },
-        "support": {
-            "store": "حفظ",
-            "index": "القائمة",
-            "create": "إنشاء",
-            "show": "عرض",
-            "reply": "رد"
-        },
         "no_workspace": "لا توجد مساحة عمل",
         "contacts": {
-            "index": "قائمة جهات الاتصال",
-            "show": "عرض",
-            "destroy": "حذف",
-            "import": "استيراد",
-            "store": "حفظ",
-            "update": "تحديث",
-            "export": "تصدير",
-            "avatar": {
-                "upload": "رفع",
-                "delete": "حذف"
-            }
+            "index": "قائمة جهات الاتصال"
         },
         "segments": {
-            "index": "القائمة",
-            "store": "حفظ",
-            "destroy": "حذف",
             "contacts": "Contacts"
         },
         "whatsapp": {
-            "templates": {
-                "index": "القائمة",
-                "store": "حفظ",
-                "sync": "مزامنة",
-                "create": "إنشاء",
-                "destroy": "حذف",
-                "edit": "تعديل",
-                "update": "تحديث"
-            },
-            "widget": {
-                "index": "القائمة"
-            },
-            "widgets": {
-                "destroy": "حذف",
-                "store": "حفظ",
-                "update": "تحديث",
-                "create": "إنشاء",
-                "edit": "تعديل"
-            },
             "setup": {
                 "destroy": "Destroy"
             }
         },
-        "broadcasts": {
-            "campaigns": {
-                "index": "القائمة"
-            }
-        },
         "inbox": {
             "index": "القائمة",
-            "show": "عرض",
-            "reply": "رد",
-            "status": "الحالة",
-            "labels": {
-                "update": "تحديث",
-                "store": "حفظ",
-                "destroy": "حذف",
-                "detach": "فصل",
-                "attach": "إرفاق"
-            },
-            "typing": "يكتب",
-            "notes": {
-                "index": "القائمة",
-                "store": "حفظ"
-            },
-            "handover": "تسليم",
-            "contacts": {
-                "search": "بحث"
-            },
-            "start": "بدء",
-            "templates": "القوالب",
-            "assign": "تعيين",
             "setup": "Setup"
         },
         "ai": {
-            "providers": {
-                "index": "القائمة",
-                "update": "تحديث"
-            },
             "chatbots": {
-                "index": "القائمة",
-                "playground": "ملعب التجربة",
-                "update": "تحديث",
-                "destroy": "حذف",
-                "store": "حفظ"
-            },
-            "documents": {
-                "destroy": "حذف",
-                "reindex": "إعادة فهرسة"
+                "index": "القائمة"
             }
         },
         "social": {
             "accounts": {
-                "index": "القائمة",
-                "disconnect": "قطع الاتصال",
-                "connect": "اتصال"
+                "index": "القائمة"
             },
             "composer": "المحرر",
-            "calendar": "التقويم",
-            "posts": {
-                "store": "حفظ",
-                "index": "الفهرس",
-                "update": "تحديث",
-                "bulk": "مجمّع",
-                "edit": "تعديل",
-                "cancel": "إلغاء",
-                "destroy": "حذف"
-            }
-        },
-        "leads": {
-            "index": "القائمة",
-            "scrape": "استخراج",
-            "destroy": "حذف"
-        },
-        "automations": {
-            "index": "القائمة",
-            "update": "تحديث",
-            "store": "حفظ",
-            "destroy": "حذف",
-            "edit": "تعديل",
-            "runs": "تشغيلات",
-            "generate": "Generate",
-            "test": "Test"
+            "calendar": "التقويم"
         },
         "campaigns": {
-            "index": "القائمة",
-            "launch": "إطلاق",
-            "pause": "إيقاف مؤقت",
-            "destroy": "حذف",
-            "create": "إنشاء",
-            "show": "عرض",
-            "store": "حفظ",
-            "update": "تحديث",
-            "edit": "تعديل"
-        },
-        "reports": {
-            "campaigns": {
-                "index": "القائمة",
-                "show": "عرض"
-            },
-            "ai": {
-                "index": "القائمة"
-            },
-            "inbox": {
-                "index": "القائمة"
-            },
-            "automations": {
-                "index": "القائمة"
-            },
-            "social": {
-                "index": "القائمة"
-            }
-        },
-        "push": {
-            "subscribe": "اشتراك",
-            "unsubscribe": "إلغاء الاشتراك"
+            "create": "إنشاء"
         },
         "invite_by_email": "دعوة عبر البريد الإلكتروني",
-        "invitations": {
-            "store": "حفظ",
-            "destroy": "حذف"
-        },
         "next_step": "الخطوة التالية:",
         "go": "انتقال",
         "view_all": "عرض الكل",
@@ -491,48 +271,13 @@
         "ecommerce": {
             "stores": {
                 "test": "اختبار",
-                "sync": "مزامنة",
-                "index": "الفهرس",
-                "destroy": "حذف",
-                "store": "متجر"
-            },
-            "orders": {
-                "index": "الفهرس",
-                "show": "عرض",
-                "refresh": "تحديث",
-                "fulfill": "تنفيذ"
-            },
-            "products": {
-                "index": "الفهرس",
-                "search": "بحث"
-            },
-            "contacts": {
-                "orders": "الطلبات"
-            },
-            "oauth": {
-                "connect": "اتصال"
+                "sync": "مزامنة"
             }
         },
         "workspaces": {
             "switch": "Switch",
             "index": "Index",
             "store": "Store"
-        },
-        "settings": {
-            "update": "تحديث",
-            "notifications": "الإشعارات",
-            "index": "Index"
-        },
-        "team": {
-            "store": "متجر",
-            "update": "تحديث",
-            "destroy": "حذف",
-            "index": "Index"
-        },
-        "subscription": {
-            "destroy": "حذف",
-            "invoice": "الفاتورة",
-            "show": "Show"
         },
         "kpi_messages_sent": "Messages sent",
         "kpi_messages_received": "Messages received",
@@ -571,9 +316,6 @@
         "page_num": "الصفحة {{num}}",
         "page_of": "الصفحة {{current}} من {{last}}",
         "showing": "عرض {{from}}–{{to}} من {{total}}"
-    },
-    "locale": {
-        "update": "تحديث"
     },
     "admin": {
         "nav": {
@@ -617,20 +359,12 @@
         "email": "البريد الإلكتروني",
         "languages": "اللغات",
         "locales": {
-            "index": "القائمة",
-            "store": "حفظ",
-            "destroy": "حذف",
-            "update": "تحديث"
+            "index": "القائمة"
         },
         "website_templates": "المواقع/صفحات الهبوط",
         "roles_permissions": "الأدوار والصلاحيات",
         "ai_requests": "طلبات الذكاء الاصطناعي",
-        "templates": "القوالب",
         "audit_log": "سجل المراجعة",
-        "logout": "تسجيل الخروج",
-        "impersonation": {
-            "stop": "إيقاف"
-        },
         "user_id": "معرف المستخدم",
         "all_statuses": "كل الحالات",
         "status_success": "ناجح",
@@ -638,7 +372,6 @@
         "status_failed": "فاشل",
         "action": "الإجراء",
         "admin_log_in": "تسجيل دخول المشرف",
-        "login": "تسجيل الدخول",
         "dashboard_overview": "نظرة عامة على مقاييس المنصة.",
         "quick_links": "روابط سريعة",
         "mrr": "الإيراد الشهري المتكرر",
@@ -646,29 +379,14 @@
         "ai_requests_this_month": "طلبات الذكاء الاصطناعي (هذا الشهر)",
         "ai_tokens_this_month": "رموز الذكاء الاصطناعي (هذا الشهر)",
         "payments_this_month": "مدفوعات هذا الشهر",
-        "translations": {
-            "update": "تحديث"
-        },
         "view_subscriptions": "عرض الاشتراكات →",
-        "roles": {
-            "store": "حفظ",
-            "update": "تحديث",
-            "destroy": "حذف"
-        },
-        "permissions": {
-            "store": "حفظ",
-            "update": "تحديث",
-            "destroy": "حذف"
-        },
         "system_settings": "إعدادات النظام",
         "view_payments": "عرض المدفوعات ←",
         "add_client": "إضافة عميل",
         "edit_client": "تعديل العميل",
         "delete_client": "حذف العميل",
-        "manage_client_users": "إدارة مستخدمي العميل",
         "add_user": "إضافة مستخدم",
         "edit_user": "تعديل المستخدم",
-        "delete_user": "حذف المستخدم",
         "assign_plan": "تعيين خطة للعميل",
         "edit_client_title": "تعديل العميل",
         "manage_users_title": "إدارة مستخدمي العميل",
@@ -761,37 +479,24 @@
         "delete_user_confirm": "هل أنت متأكد من إزالة {{name}} ({{email}}) من هذا العميل؟",
         "delete_client_confirm": "هل أنت متأكد من حذف {{name}}؟ سيؤدي هذا إلى إزالة جميع مستخدمي العميل والاشتراكات.",
         "coupons": {
-            "index": "قائمة القسائم",
-            "update": "تحديث",
-            "store": "حفظ",
-            "destroy": "حذف"
+            "index": "قائمة القسائم"
         },
         "tax_rates": "معدلات الضريبة",
         "landing_page": "صفحة الهبوط",
         "cms_pages": "صفحات CMS",
         "cron_setup": "إعداد Cron",
         "support": {
-            "index": "قائمة الدعم",
-            "show": "عرض",
-            "reply": "رد",
-            "status": "الحالة"
+            "index": "قائمة الدعم"
         },
         "queue": {
-            "index": "قائمة الانتظار",
-            "retry": "إعادة المحاولة",
-            "flush": "مسح"
+            "index": "قائمة الانتظار"
         },
         "clients_count": "إجمالي العملاء",
         "users_count": "إجمالي المستخدمين",
         "integrations": {
-            "index": "قائمة التكاملات",
-            "update": "تحديث",
-            "test": "اختبار",
-            "rotate": "تدوير",
-            "edit": "تعديل"
+            "index": "قائمة التكاملات"
         },
         "pusher_settings": "إعدادات Pusher",
-        "search": "بحث",
         "admin_management_desc": "إدارة مستخدمي الإدارة وأدوارهم.",
         "total_admins": "إجمالي المديرين",
         "col_admin": "المدير",
@@ -1008,8 +713,7 @@
         "impersonating": "انتحال شخصية: {{name}}"
     },
     "head": {
-        "admin": "المشرف",
-        "welcome": "مرحباً"
+        "admin": "المشرف"
     },
     "locales": {
         "add_language": "إضافة لغة",
@@ -1030,7 +734,6 @@
         "saving": "جاري الحفظ…",
         "title": "اللغات",
         "languages_translations": "اللغات والترجمات",
-        "translations": "الترجمات",
         "translations_tab": "الترجمات",
         "languages_and_translations": "اللغات والترجمات",
         "flag": "العلم",
@@ -1062,13 +765,6 @@
         "verification_sent": "تم إرسال رابط تحقق جديد إلى عنوان البريد الإلكتروني الذي قدمته أثناء التسجيل.",
         "resend_verification": "إعادة إرسال بريد التحقق",
         "log_out": "تسجيل الخروج",
-        "verify_email": "التحقق من البريد الإلكتروني",
-        "invitations": {
-            "accept": "قبول"
-        },
-        "social": {
-            "redirect": "إعادة توجيه"
-        },
         "admin_panel_label": "لوحة الإدارة",
         "welcome_to": "مرحبًا بك في",
         "admin_tagline": "أدر منصتك بثقة",
@@ -1119,7 +815,6 @@
         "continue_with_google": "متابعة مع Google",
         "continue_with": "متابعة مع {{provider}}",
         "or_continue_with_email": "أو تابع بالبريد الإلكتروني",
-        "firebase": "Firebase",
         "trusted_by_count": "موثوق به من قِبل أكثر من 10,000 شركة",
         "proof_businesses": "الشركات",
         "proof_messages_sent": "الرسائل المُرسلة",
@@ -1138,24 +833,7 @@
         "and": "and",
         "privacy_policy": "Privacy Policy"
     },
-    "password": {
-        "confirm": "تأكيد",
-        "email": "البريد الإلكتروني",
-        "request": "طلب",
-        "store": "حفظ",
-        "update": "تحديث"
-    },
-    "verification": {
-        "send": "إرسال"
-    },
-    "www": {
-        "example": {
-            "com": "com"
-        }
-    },
     "profile": {
-        "destroy": "حذف",
-        "update": "تحديث",
         "edit": "الملف الشخصي",
         "update_profile": "تحديث معلومات الملف الشخصي",
         "update_password": "تحديث كلمة المرور",
@@ -1199,8 +877,6 @@
         "two_factor_disable": "تعطيل 2FA"
     },
     "plans": {
-        "name": "الاسم",
-        "slug": "المعرف",
         "monthly_price_cents": "السعر الشهري (سنت)",
         "yearly_price_cents": "السعر السنوي (سنت)",
         "currency_code": "رمز العملة",
@@ -1270,7 +946,6 @@
         "ping": "اختبار"
     },
     "contact": {
-        "store": "حفظ",
         "created": "تم الإنشاء",
         "tag_added": "تمت إضافة الوسم",
         "name": "الاسم",
@@ -1468,9 +1143,6 @@
         "no_deliveries": "لا توجد عمليات تسليم بعد."
     },
     "reports": {
-        "exports": {
-            "contacts": "جهات الاتصال"
-        },
         "ai_title": "تقرير استخدام الذكاء الاصطناعي",
         "ai_subtitle": "تحليلات استهلاك الرموز والتكلفة وزمن الاستجابة",
         "tokens_per_day": "الرموز يوميًا",
@@ -2513,11 +2185,9 @@
         "date_today": "Today"
     },
     "inbox_ui": {
-        "new_conversation": "محادثة جديدة",
         "search_contact": "البحث بالاسم أو الهاتف أو البريد الإلكتروني…",
         "no_channels": "لا توجد حسابات قنوات نشطة.",
         "select_channel": "اختر القناة التي تريد بدء المحادثة عليها:",
-        "contact_details": "تفاصيل جهة الاتصال",
         "opening_message": "اكتب رسالة لإرسالها عند فتح المحادثة…"
     },
     "inbox": {
@@ -2867,9 +2537,6 @@
     },
     "context": {
         "key": "المفتاح"
-    },
-    "All rights reserved": {
-        "": ""
     },
     "whatsapp": {
         "setup_title": "إعداد WhatsApp",
@@ -3948,9 +3615,6 @@
         "finance_b3": "تنبيهات الاحتيال / الأمان",
         "finance_b4": "تحديثات الحساب والقروض"
     },
-    "invoice": {
-        "pdf": "Pdf"
-    },
     "example": {
         "com": "Com"
     },
@@ -3966,8 +3630,5 @@
     "integrations_page": {
         "cta_title": "Cta Title",
         "cta_subtitle": "Cta Subtitle"
-    },
-    "install": {
-        "run": "Run"
     }
 }
