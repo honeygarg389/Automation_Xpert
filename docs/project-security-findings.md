@@ -20,7 +20,7 @@
 |---|---|---|---|---|
 | SEC-001 | Critical | Data destruction | Test suite targets the live database and drops all tables | Confirmed |
 | SEC-002 | Critical | Dependency | 3 critical + 13 high npm advisories, 5 high Composer advisories | Confirmed |
-| SEC-003 | High | Credential exposure | `db:backup` leaks DB password to process list; unescaped shell interpolation | Confirmed |
+| ~~SEC-003~~ | High | Credential exposure | `db:backup` leaks DB password to process list; unescaped shell interpolation | ✅ **FIXED 2026-08-07** |
 | SEC-004 | High | Stored XSS | SVG accepted for logo/favicon upload and served from public storage | Confirmed |
 | SEC-005 | High | Tenant isolation | No model-level scoping; isolation is manual in every query | Confirmed (systemic) |
 | SEC-006 | High | Token lifetime | Sanctum tokens never expire (`expiration = null`) | Confirmed |
@@ -113,7 +113,12 @@ Composer highs: `laravel/framework`, `symfony/http-kernel`, `symfony/mime`, `web
 - **Severity:** **High**
 - **File:** `app/Console/Commands/DbBackupCommand.php` lines 35–40
 - **Component:** `DbBackupCommand::handle()`
-- **Status:** **Confirmed**
+- **Status:** ✅ **FIXED 2026-08-07** — re-verified 2026-09-02 by reading the current command.
+  The `exec()` string below is gone. The password now travels in a **0600 `--defaults-extra-file`**
+  that is deleted in a `finally`, and `mysqldump` is invoked through an **argument-array
+  `Process`** rather than a shell string — so a password containing shell metacharacters cannot
+  inject, and the credential appears in neither the process list nor `/proc/<pid>/environ`.
+  The evidence below is retained as the record of what was wrong.
 
 **Evidence**
 

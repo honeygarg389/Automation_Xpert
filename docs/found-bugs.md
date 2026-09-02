@@ -2137,8 +2137,9 @@ admin surface.
 
 ## BUG-031 — assigning a plan leaves the customer's gateway subscription charging
 
-**Severity: HIGH → ⚠️ RAISED 2026-08-13. Still not fixed — the right behaviour remains a
-business decision, not a code choice — but it is no longer an edge case.** Recorded 2026-08-12.
+**Severity: HIGH — ✅ FIXED 2026-09-02** in `5781162` (merged `21448ed`). Recorded 2026-08-12;
+raised 2026-08-13 when an owner ruling made admin assignment the intended upgrade route rather
+than an occasional mistake.
 
 ### ⚠️ Why the priority went up
 
@@ -2180,7 +2181,24 @@ with:
 plan's entitlements while being billed for the previous one. Two active subscriptions, two
 plans, one of them invisible to everyone except the payment processor.
 
-### Why it is not fixed here
+### The decision — option 1, taken 2026-09-02
+
+⚠️ **The owner chose option 1: cancel the gateway subscription.** `assignPlan()` now resolves the
+client's active gateway subscriptions (through the `Client::effectivePlan()` bridge, since
+`subscriptions` is keyed on `user_id`, filtered with `isActive()`), cancels each through the
+registry, and **blocks the assignment if any cancel fails** — mirroring
+`Client\SubscriptionController::destroy()`. The cancels and the `client_subscriptions` write share
+one transaction, so a partial multi-gateway failure rolls back instead of half-applying.
+
+⚠️ **Refunding the overlap was NOT decided and remains open.** The fix stops future double-billing;
+it says nothing about money already taken.
+
+⚠️ **"Already cancelled at the gateway" cannot be distinguished from a genuine failure** — measured
+across all thirteen drivers, none of which inspect a not-found signal (Stripe's `catch (\Throwable)`
+and the HTTP drivers' `successful()`-only check both collapse the two cases to `false`). Such a case
+therefore blocks. Disambiguating it is a driver-contract change and its own slice.
+
+The three options as they stood before that ruling:
 
 "Assign a plan to a customer who is already paying" has at least three defensible answers, and
 they differ in who loses money:
@@ -2531,7 +2549,16 @@ the right start, because it currently fails and nothing else does.
 
 - **Severity:** High — silent data loss in files that ship in the repo, and it corrupts
   **deployed** installs, not just working copies
-- **Status:** **NOT FIXED.** Found 2026-08-14 during Smart QR slice 3c.
+- **Status:** **✅ CODE FIXED 2026-09-02** in `bb229c8` (merged `a530945`). Found 2026-08-14
+  during Smart QR slice 3c.
+  ⚠️ **THE DATA REPAIR IS STILL OPEN — this entry is not fully resolved.** The fix stops further
+  damage; it does not undo damage already done. **246 keys in `resources/js/locales/en.json` are
+  still wrong** from earlier runs (measured: undiscoverable by the fixed scanner *and* carrying
+  `keyToDefaultEnglish()`'s exact output, e.g. `client.tenants.index` = `"Index"`,
+  `client.profile.sessions.destroy` = `"Destroy"`). Deciding which to delete or restore is a data
+  question, not a code one, and one of them — `client.profile.2fa.enable` — sits **inside** a
+  subtree the fix now protects, having been created by this same bug. `en.json` was deliberately
+  left untouched by the fix commit.
 - **Files:** `app/Services/I18n/TranslationKeyScanner.php` (root cause),
   `app/Services/I18n/I18nFileService.php` (`unflatten`, the destruction),
   `database/seeders/TranslationSeeder.php`, `app/Services/Install/InstallerService.php`
