@@ -157,3 +157,28 @@ Schedule::command('smartqr:prune-exports')
     ->name('smartqr-prune-exports')
     ->withoutOverlapping()
     ->onOneServer();
+
+// ── Database backup ─────────────────────────────────────────────────────────
+//
+// ⚠️ NOTHING RAN THIS UNTIL NOW. `db:backup` has existed and been practised by
+// hand since 2026-08-07, and `db:restore` was round-trip tested against it —
+// but the command was in no schedule, so on any unattended box the recovery
+// story was "a working tool and no backups".
+//
+// 01:30 is chosen, not arbitrary:
+//   - every :00 is occupied by five hourly billing jobs;
+//   - it follows smartqr:aggregate (00:20), so the dump is taken after the
+//     night's aggregation rather than during it;
+//   - it PRECEDES both destructive weekly prunes (03:00 scans, 04:00 exports),
+//     so a backup always exists before anything deletes rows or files.
+//
+// ⚠️ No retention exists yet — see the note in docs/deployment-safety.md. The
+// dumps accumulate in `backups/` on the configured disk and nothing removes
+// them. A prune must not simply delete by age: db:restore calls db:backup for
+// its pre-restore SAFETY backup, which lands in the same directory and is the
+// one archive that must never be reaped.
+Schedule::command('db:backup')
+    ->dailyAt('01:30')
+    ->name('db-backup')
+    ->withoutOverlapping()
+    ->onOneServer();
