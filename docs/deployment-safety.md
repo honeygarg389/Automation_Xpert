@@ -14,9 +14,18 @@
 >        fired as designed**, finished with `✅ Restore finished.` The guards were exercised by
 >        the person who will need them at 3am, which is the only test of them that counts.
 > 4. ☐ Production runs on a **fresh, clean VPS** — not the testing box promoted in place
->        — **the only open item, and it is a deploy-day action, not a code change.**
->        **Nothing further is blocked on development.** When this box is ticked the gate
->        opens; there is no engineering work left standing between here and a first customer.
+>        — **a deploy-day action, not a code change. Nothing further is blocked on
+>        development**; there is no engineering work left standing between here and a first
+>        customer.
+>
+> ⚠️ **ITEM 1 IS NOT SELF-EXECUTING — the production host's cron must invoke `schedule:run`
+> every minute.** Noted 2026-09-02. `db:backup` is scheduled in `routes/console.php`
+> (`041779a`, `dailyAt('01:30')`), but a Laravel schedule is inert on a box whose crontab never
+> calls it: the command is registered and nothing runs it, which looks exactly like a working
+> backup until the morning you need one. This is a **second deploy-day action** alongside item 4
+> — a fresh VPS with no cron entry gives you a backup command nobody runs. Verify with
+> `crontab -l` on the production host, then confirm a dump actually lands the next day. This
+> development machine has no crontab at all, so nothing fires here.
 >
 > **Security** — added 2026-08-04
 >
@@ -221,12 +230,12 @@ to reach a wiki, and if this file is only on the server you cannot read it at al
 | Feature-flag package (e.g. Laravel Pennant) | **Not installed** |
 | Config-driven switches | Yes — `config/saas.php`, and `app.demo_mode` is an existing on/off pattern |
 | Runtime settings store | Yes — `SystemSetting`, a database key/value table |
-| Database backup command | `php artisan db:backup` — **exists but has an open security flaw** (below) |
-| Database **restore** command | **None. Does not exist.** |
+| Database backup command | `php artisan db:backup` — exists, and **SEC-003 is closed** (2026-08-07, see below). Scheduled daily since 2026-09-02. |
+| Database **restore** command | **`php artisan db:restore` now exists**, with seven guards, and is round-trip tested (2026-08-07). |
 | `Dockerfile` / `docker-compose.yml` | **None** (only a queue-worker compose file and a Supervisor config) |
 | Web server config (nginx/apache) | **None in the repo** |
 | Deployment script or documentation | **None** |
-| Scheduled tasks needing cron | **16** |
+| Scheduled tasks needing cron | **18** as of 2026-09-02 — ⚠️ drifts whenever a job is added (it was 16 on 2026-08-03). Count the rows of `php artisan schedule:list` rather than trusting this number. |
 | Background queue worker | Required (`database` driver) |
 
 **Two things to know before relying on anything here.**
@@ -263,8 +272,10 @@ to reach a wiki, and if this file is only on the server you cannot read it at al
 
    ~~**It should be fixed before you
    depend on it.** Small job — under a day.
-2. **There is no restore command.** A backup you cannot restore is not a backup. Restoring
-   currently means typing MySQL commands by hand. This is the single biggest gap.
+2. **`php artisan db:restore` now exists**, with seven guards, and is round-trip tested
+   (backup → destroy → restore → verify) — **closed 2026-08-07.** This was recorded here as
+   "the single biggest gap" while restoring meant typing MySQL commands by hand; it no longer
+   does.
 
 ---
 
@@ -404,13 +415,28 @@ Guards 2 and 3 are the non-negotiable pair.
   (`file_get_contents($tmpPath)`). Irrelevant at 0.12 MB, not irrelevant on a real production
   database. The dump itself is streamed; only the upload is not.
 
-**What I would propose building (not built yet):**
+**What was proposed here — all four are now built** (with the two caveats under item 3):
 
 1. ☑ Fix `db:backup` (SEC-003) — **done 2026-08-07**
 2. ☑ Add `php artisan db:restore --file=<backup>` with a confirmation prompt —
    **done 2026-08-07**, with seven guards
-3. ☐ Schedule daily automatic backups — a few hours. **Still outstanding:** `db:backup` works
-   but is **not** in `routes/console.php`, so nothing runs it unattended.
+3. ☑ Schedule daily automatic backups — **done 2026-09-02** in `041779a`. `db:backup` now runs
+   `dailyAt('01:30')` in `routes/console.php`, with `->withoutOverlapping()->onOneServer()` like
+   every other command entry. 01:30 sits after `smartqr:aggregate` (00:20) so the dump is not
+   taken mid-aggregation, and before both destructive weekly prunes (Sun 03:00 scans, Sun 04:00
+   exports), so a backup always exists before anything deletes rows or files.
+
+   ⚠️ **DEPLOY-DAY ACTION, NOT DONE BY THIS COMMIT: the target machine's cron must actually
+   invoke `schedule:run`.** A Laravel schedule entry is inert on a box whose crontab does not
+   call it every minute — the command is registered and nothing runs it, which looks identical
+   to a working backup until the day you need one. This development machine has **no crontab at
+   all** (`crontab: no crontab for honey`), so nothing fires here regardless. Verify on the
+   production host with `crontab -l`, then confirm a backup actually lands the following morning
+   rather than assuming the schedule implies execution.
+
+   ⚠️ **Retention is still missing.** Nothing deletes an old dump. A naive age-based prune is
+   not safe to bolt on: `db:restore` writes its own pre-restore safety backup into the same
+   directory, and that is the one archive that must never be reaped.
 4. ☑ **Practise a restore into staging, on a calm afternoon, before you ever need it.** An
    untested backup is a guess. — **done 2026-08-07, by hand.**
 

@@ -309,7 +309,7 @@ Full detail in [`project-security-findings.md`](project-security-findings.md). 2
 |---|---|---|
 | SEC-001 | Critical | Test suite targets live DB and drops all tables |
 | SEC-002 | Critical | 3 critical + 13 high npm; 5 high Composer advisories |
-| SEC-003 | High | `db:backup` leaks DB password to process list |
+| ~~SEC-003~~ | ~~High~~ | ~~`db:backup` leaks DB password to process list~~ — **FIXED, verified 2026-08-07** |
 | SEC-004 | High | SVG upload → stored XSS |
 | SEC-005 | High | No model-level tenant scoping |
 | SEC-006 | High | Sanctum tokens never expire |
@@ -394,7 +394,7 @@ Full detail in [`project-security-findings.md`](project-security-findings.md). 2
 | Cron | One entry needed: `schedule:run` every minute |
 | PHP extensions | Installer checks 10: pdo, pdo_mysql, mbstring, openssl, tokenizer, ctype, json, bcmath, fileinfo, curl ✅ |
 | Zero-downtime | **Not ready** — no release/symlink strategy |
-| Backup/restore | `db:backup` exists but is **insecure** (SEC-003); no restore command; no schedule |
+| Backup/restore | ✅ **All three claims are stale.** SEC-003 **fixed** (verified 2026-08-07: the password travels in a 0600 `--defaults-extra-file` deleted in a `finally`, and the command uses an argument-array `Process`, so nothing reaches the process list or the environment). `db:restore` **exists** (`DbRestoreCommand.php`) with guards for production, non-`_test` targets, typed-name confirmation, archive corruption, missing `CREATE TABLE`, and a source/target database mismatch. Scheduling **exists** since `041779a` (`dailyAt('01:30')`) — ⚠️ but only fires where the host's cron invokes `schedule:run`, a deploy-day action. Retention still missing. |
 | Shared hosting | Plausible (installer + database queue), but no `exec` guarantee for `db:backup` |
 
 **Deployment is the weakest documented area.** A new operator has the installer and `.env.example` — nothing else.
