@@ -3,7 +3,9 @@
 namespace App\Modules\Shared\Models;
 
 use App\Models\Concerns\BelongsToWorkspace;
+use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -73,6 +75,35 @@ class ChannelAccount extends Model
             'credentials' => 'encrypted:array',
             'meta_json' => 'array',
         ];
+    }
+
+    /**
+     * The WhatsApp number behind this channel.
+     *
+     * ⚠️ JOINED ON THE META IDENTIFIER, NOT A FOREIGN KEY. Both sides store the
+     * same `phone_number_id` string, and both carry a UNIQUE index on it
+     * (channel_accounts' was added by BUG-019), so this is a genuine 1:1 despite
+     * looking unconventional. There is no id-based FK between these tables.
+     *
+     * ⚠️ NO SCOPE BYPASS HERE, deliberately — and the wording avoids naming the
+     * bypass helper because the CI inventory guard greps for that token in prose
+     * as readily as in code, and a relation with nothing to bypass must not end up
+     * on the sanctioned list. WhatsappPhoneNumber has no workspace_id and does not
+     * use BelongsToWorkspace — it hangs off a WABA, not a workspace — so there is
+     * no scope here to remove. SmartQrAssignment::channelAccount() does remove one,
+     * because ChannelAccount itself IS workspace-scoped.
+     *
+     * ⚠️ Reaching the number through this relation rather than a query-builder
+     * pull is what keeps demo masking working: WhatsappPhoneNumber uses
+     * MasksDemoData, which applies in toArray() — the serialization step — and
+     * not on attribute access. A ->value('display_phone') returns the real number
+     * even in demo mode.
+     *
+     * @return BelongsTo<WhatsappPhoneNumber, $this>
+     */
+    public function phoneNumber(): BelongsTo
+    {
+        return $this->belongsTo(WhatsappPhoneNumber::class, 'phone_number_id', 'phone_number_id');
     }
 
     public function conversations(): HasMany
