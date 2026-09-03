@@ -11,7 +11,6 @@ use App\Modules\SmartQr\Models\SmartQrCode;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
 use App\Modules\SmartQr\Services\SmartQrImageRenderer;
 use App\Modules\SmartQr\Support\SmartQrStatus;
-use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Services\AuditLogService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -236,6 +235,7 @@ class QrInventoryController extends Controller
             'currentAssignment.assignedUser',
             'currentAssignment.lockedByAdmin',
             'currentAssignment.channelAccount' => fn ($q) => $q->withoutGlobalScope(WorkspaceScope::class),
+            'currentAssignment.channelAccount.phoneNumber',
         ]);
 
         $assignment = $code->currentAssignment;
@@ -253,23 +253,28 @@ class QrInventoryController extends Controller
         // a "Destination phone" label — plausible enough that it read as data
         // rather than as a bug.
         //
-        // ⚠️ QUERIED HERE RATHER THAN VIA A RELATION ON ChannelAccount, and the
-        // direction is the reason. ChannelAccount lives in Shared; hanging a
-        // WhatsappPhoneNumber relation off it would make a shared model depend on
-        // a feature module for one consumer's display need. SmartQr is already the
-        // only module outside Whatsapp that reads this table, and it already does
-        // so from its own code — SmartQrRedirectResolver::dialableNumber(), whose
-        // query shape this mirrors.
+        // ⚠️ THAT DECISION WAS REVERSED 2026-09-03, and the reason it was made is
+        // worth keeping. This used to be queried here rather than through a
+        // relation, to avoid making ChannelAccount (in Shared) depend on a feature
+        // module for one consumer's display need. That objection still stands on
+        // its own terms — but the query-builder pull silently defeated demo
+        // masking, which is a data-exposure bug, and a module-boundary preference
+        // does not outrank one. ChannelAccount::phoneNumber() now exists and both
+        // this panel and the assignments list read through it.
         //
         // ⚠️ RAW, NOT NORMALISED. display_phone is stored free-form
         // ("+91 88828 33998") and every UI consumer passes it through unchanged;
         // only the redirect resolver strips it to digits, because wa.me demands
         // that. A display panel is not that caller.
-        $destinationPhone = $channel?->phone_number_id === null
-            ? null
-            : WhatsappPhoneNumber::query()
-                ->where('phone_number_id', $channel->phone_number_id)
-                ->value('display_phone');
+        // ⚠️ READ THROUGH THE MODEL, VIA toArray() — NOT ->value('display_phone').
+        // MasksDemoData masks in toArray(), the serialization choke point, and
+        // deliberately NOT on attribute access, so both the old query-builder pull
+        // AND a plain $phone->display_phone hand the browser the real number in
+        // demo mode. Measured: attribute access returns "+1 415-555-0142" while
+        // toArray() returns "+14•••••••42". Taking the value out of the serialized
+        // array is what makes this panel agree with the assignments list, which
+        // gets the same masking for free by passing the relation to Inertia.
+        $destinationPhone = $channel?->phoneNumber?->toArray()['display_phone'] ?? null;
 
         return Inertia::render('Admin/SmartQr/Inventory/Show', [
             'code' => [
