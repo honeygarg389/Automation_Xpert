@@ -2826,3 +2826,81 @@ Fixing it means changing broadcasting behaviour in a task about model annotation
 whose diff is meant to be reviewable as BUG-002 work. The annotation task's job was to stop
 hiding it; the fix belongs to whoever owns that controller.
 
+---
+
+## BUG-040 — demo-mode masking is bypassed wherever `display_phone` is read as an attribute
+
+- **Severity:** **High — data exposure.** Real customer WhatsApp numbers and verified business
+  names reach the browser while demo mode is active. Demo mode exists precisely for screen
+  shares, sales demos and training environments, so the one situation where masking is relied
+  on is the situation where it silently does nothing.
+- **Status:** **OPEN — not fixed.** Found 2026-09-03 while adding the Destination Phone column
+  to the QR Assignments list. The two Smart QR sites were fixed in that work; the four below
+  were deliberately left alone as out of scope.
+- **Files:**
+  `app/Modules/Whatsapp/Http/Controllers/WhatsappTemplateController.php:36, 69, 155`
+  `app/Modules/Broadcasting/Http/Controllers/CampaignController.php:464`
+
+### The mechanism
+
+`MasksDemoData` masks in **`toArray()` only** — the serialization choke point — and deliberately
+NOT on attribute access, so internal logic keeps the real value. Its own docblock says so:
+
+> Masking happens in toArray() … while direct attribute access (`$contact->phone_e164`) inside
+> the app keeps the real value for internal logic.
+
+That contract is correct. The bug is that several controllers **hand-build arrays out of raw
+attribute reads**, which never touches `toArray()`:
+
+```php
+$phoneNumbers = WhatsappPhoneNumber::whereIn('waba_id_fk', $wabaIdMap->keys())
+    ->get()
+    ->map(fn ($p) => [
+        'display_phone' => $p->display_phone,   // ← raw, unmasked
+        'verified_name' => $p->verified_name,   // ← also in demoMask()
+    ]);
+```
+
+Measured with `app.demo_mode` true:
+
+| Access path | Value |
+|---|---|
+| `$p->display_phone` | `+1 415-555-0142` |
+| `$p->toArray()['display_phone']` | `+14•••••••42` |
+
+⚠️ **`verified_name` leaks at the same lines.** `demoMask()` covers `display_phone`,
+`verified_name` and `requested_verified_name`; every site below maps `verified_name` alongside
+the phone, so the business name is exposed too. Anyone fixing this should fix both fields
+rather than the one the bug is named after.
+
+⚠️ **A relation is not a fix by itself.** Reading `$model->relation->display_phone` is just as
+unmasked as a `->value('display_phone')` query-builder pull — the mask keys off serialization,
+not off how the model was reached. This was the specific trap in the Smart QR work: the obvious
+"read it through Eloquent instead" change would have left the exposure in place.
+
+### The fix pattern, as applied in Smart QR
+
+Two shapes, depending on whether the payload is hand-built:
+
+```php
+// Hand-built array (QrInventoryController) — take the value out of toArray():
+$destinationPhone = $channel?->phoneNumber?->toArray()['display_phone'] ?? null;
+
+// Passing models to Inertia (QrAssignmentController) — eager-load and let
+// serialization do it; no mapping code at all, and the mask applies for free:
+->with(['channelAccount.phoneNumber:id,phone_number_id,display_phone'])
+```
+
+The second is preferable where the shape allows it: there is no per-field code to forget.
+
+### ⚠️ Not part of this bug, but checked
+
+`app/Modules/Whatsapp/Http/Controllers/WhatsappWidgetController.php:141` reads
+`$widget->display_phone`, which **looks** like the same pattern and is not. It is a different
+model — `WhatsappWidget`, which does **not** use `MasksDemoData` — and the value is the number
+the customer deliberately publishes in their own website widget. There is nothing to mask, and
+masking it would break the widget. Recorded here so the next person greping for `display_phone`
+does not "fix" it.
+
+⚠️ `SmartQrRedirectResolver.php:153` also uses `->value('display_phone')` and is likewise
+correct: it strips the number to digits for a `wa.me` redirect and never renders it.
