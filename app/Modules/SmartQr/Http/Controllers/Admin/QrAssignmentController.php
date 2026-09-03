@@ -40,8 +40,35 @@ class QrAssignmentController extends Controller
             'reason: the Super Admin assignments screen spans all tenants by design; the '
             .'scope fails closed with no admin workspace context and would show nothing'
         )
-            ->with(['code:id,serial_number,status', 'workspace:id,name'])
+            // ⚠️ THE PHONE IS EAGER-LOADED AS A MODEL, NOT EXTRACTED AS A STRING.
+            // WhatsappPhoneNumber uses MasksDemoData, which masks in toArray() —
+            // the serialization step — and NOT on attribute access. Pulling
+            // ->display_phone into a hand-built array would hand the browser the
+            // real number in demo mode; passing the relation lets Inertia serialize
+            // it through toArray() and the mask applies for free.
+            //
+            // ⚠️ phone_number_id must be selected at BOTH levels: it is the join key
+            // on each side (there is no id-based FK), so omitting it from either
+            // select silently yields null relations for every row.
+            ->with([
+                'code:id,serial_number,status',
+                'workspace:id,name',
+                'channelAccount:id,phone_number_id',
+                'channelAccount.phoneNumber:id,phone_number_id,display_phone',
+            ])
             ->when($request->query('workspace_id'), fn ($q, $v) => $q->where('workspace_id', $v))
+            // ⚠️ whereHas, not a join: serial_number lives on smart_qr_codes and the
+            // list is already eager-loading that relation. A join would duplicate rows
+            // where an assignment matches more than one code row and quietly inflate
+            // the paginator's total.
+            //
+            // ⚠️ Its own ->when() link rather than being folded into the current-filter
+            // above, so search and `current=all` compose: searching while viewing
+            // history must still search history, not silently reset to current-only.
+            ->when($request->query('search'), fn ($q, $v) => $q->whereHas(
+                'code',
+                fn ($c) => $c->where('serial_number', 'like', '%'.$v.'%')
+            ))
             ->when($request->query('current') !== 'all', fn ($q) => $q->whereNull('unassigned_at'))
             ->latest('assigned_at')
             ->paginate(50)
@@ -49,6 +76,13 @@ class QrAssignmentController extends Controller
 
         return Inertia::render('Admin/SmartQr/Assignments/Index', [
             'assignments' => $assignments,
+
+            // ⚠️ Echoed back so the input still shows the active term after a
+            // pagination click or a full reload. withQueryString() keeps the param
+            // in the URL, but nothing would put it back in the field.
+            'filters' => [
+                'search' => (string) $request->query('search', ''),
+            ],
         ]);
     }
 
