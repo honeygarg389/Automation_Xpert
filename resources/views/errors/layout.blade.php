@@ -114,6 +114,13 @@
         .btn-ghost { background: transparent; color: var(--ink); border: 1px solid rgba(8, 33, 50, .14); }
         .btn-ghost:hover { background: rgba(8, 33, 50, .04); transform: translateY(-1px); }
 
+        .powered-by {
+            position: relative; z-index: 1;
+            margin-top: 1.5rem; font-size: .8rem; color: #000; text-align: center;
+        }
+        .powered-by a { color: #000; font-weight: 700; text-decoration: none; }
+        .powered-by a:hover { text-decoration: underline; }
+
         @media (prefers-color-scheme: dark) {
             :root { --ink: #eef2f6; --ink-soft: #94a3b8; --surface: #0a1722; }
             body { background:
@@ -124,6 +131,7 @@
             .code { background: linear-gradient(135deg, #eef2f6 35%, var(--primary)); -webkit-background-clip: text; background-clip: text; }
             .btn-ghost { color: var(--ink); border-color: rgba(255, 255, 255, .16); }
             .btn-ghost:hover { background: rgba(255, 255, 255, .06); }
+            .powered-by, .powered-by a { color: var(--ink); }
         }
         @media (prefers-reduced-motion: reduce) {
             .btn { transition: none; }
@@ -132,23 +140,29 @@
     </style>
 </head>
 <body>
-    <a href="{{ url('/') }}" class="brand" aria-label="{{ $appName }}">
-        @if ($logoUrl)
-            <img src="{{ $logoUrl }}" alt="{{ $appName }}">
-        @else
-            <span class="dot">{{ strtoupper(substr($appName, 0, 1)) }}</span>
-            <span>{{ $appName }}</span>
-        @endif
-    </a>
+    @if($showBranding ?? true)
+        <a href="{{ url('/') }}" class="brand" aria-label="{{ $appName }}">
+            @if ($logoUrl)
+                <img src="{{ $logoUrl }}" alt="{{ $appName }}">
+            @else
+                <span class="dot">{{ strtoupper(substr($appName, 0, 1)) }}</span>
+                <span>{{ $appName }}</span>
+            @endif
+        </a>
+    @endif
 
     <main class="card">
         <div class="code">{{ $code }}</div>
         <h1>{{ $title }}</h1>
         <p>{{ $message }}</p>
-        <div class="actions">
-            <a href="{{ url('/') }}" class="btn btn-primary">Go Home</a>
-            <a href="javascript:history.back()" class="btn btn-ghost">Go Back</a>
-        </div>
+        @if($showBranding ?? true)
+            <div class="actions">
+                <a href="{{ url('/') }}" class="btn btn-primary">Go Home</a>
+                <a href="javascript:history.back()" class="btn btn-ghost">Go Back</a>
+            </div>
+        @endif
     </main>
+
+    <footer class="powered-by">Powered by <a href="{{ url('/') }}">{{ $appName }}</a></footer>
 </body>
 </html>
