@@ -78,6 +78,14 @@ class QrBatchController extends Controller
             'created_by_admin_id' => $request->user('admin')?->id,
         ]);
 
+        app(AuditLogService::class)->logAdmin(
+            'smart_qr.batch_created',
+            SmartQrBatch::class,
+            $batch->id,
+            ['batch_name' => $batch->batch_name, 'batch_number' => $batch->batch_number, 'quantity' => $batch->quantity],
+            $request->user('admin'),
+        );
+
         // Queued (§4): the spec's batches are 500 codes and the action chunks.
         GenerateQrBatchJob::dispatch($batch->id);
 
