@@ -37,7 +37,8 @@
         "view": "View",
         "settings": "Settings",
         "type_to_confirm": "Type {{word}} to confirm",
-        "soon": "Soon"
+        "soon": "Soon",
+        "system": "System"
     },
     "nav": {
         "dashboard": "Dashboard",
@@ -333,7 +334,7 @@
             "qr_inventory": "QR Inventory",
             "qr_assignments": "QR Assignments",
             "qr_management": "QR Management",
-            "qr_dashboard": "Dashboard"
+            "qr_dashboard": "QR Dashboard"
         },
         "client_login": "Client login",
         "dashboard": "Dashboard",
@@ -3899,6 +3900,37 @@
             "ready": "Ready",
             "failed": "Failed",
             "expired": "Expired"
-        }
+        },
+        "dashboard_title": "QR Dashboard",
+        "dashboard_subtitle": "An overview of every QR code, batch and assignment across the platform.",
+        "stat_total_codes": "Total QR Codes",
+        "stat_available": "Available",
+        "stat_total_batches": "Total Batches",
+        "stat_configured": "Assigned",
+        "stat_inactive": "Inactive",
+        "stat_retired": "Retired",
+        "view_inventory": "View Inventory",
+        "quick_actions": "Quick actions",
+        "recent_batches": "Recent Batches",
+        "recently_assigned": "Recently Assigned",
+        "recent_activity": "Recent Activity",
+        "no_recent_activity": "No recent activity.",
+        "near_expire": "Near Expire",
+        "col_expires": "Expires",
+        "no_near_expire": "Nothing expiring in the next 7 days.",
+        "stat_locked": "Locked Codes",
+        "top_workspaces": "Codes Currently Held",
+        "top_workspaces_sub": "Current holdings by workspace",
+        "no_top_workspaces": "No codes are currently held.",
+        "donut_other": "Other",
+        "scan_volume": "Scan Volume",
+        "scan_volume_sub": "Platform-wide, ending yesterday",
+        "range_7d": "7 days",
+        "range_30d": "30 days",
+        "recently_ended": "Recently Ended",
+        "no_recently_ended": "No assignment periods have ended yet.",
+        "held_days": "Held {{count}} days",
+        "held_under_day": "Held under a day",
+        "no_scan_data": "No scans recorded in this period."
     }
 }

@@ -78,6 +78,12 @@ const ADMIN_NAV_ITEMS = [
  * href, icon and permission are byte-identical to what they were there.
  */
 const QR_NAV_ITEMS = [
+    // ⚠️ Was a `disabled` static placeholder with no route/href, because
+    // `admin.qr.dashboard` did not exist and naming it here would have thrown
+    // during route() resolution (R-15). The route exists now
+    // (QrDashboardController), so this is a real item like its siblings —
+    // same shape, same permission, same filter.
+    { labelKey: 'admin.nav.qr_dashboard', route: 'admin.qr.dashboard', href: () => route('admin.qr.dashboard'), icon: LayoutDashboard, permission: 'view_qr_inventory' },
     { labelKey: 'admin.nav.qr_batches', route: 'admin.qr.batches.index', href: () => route('admin.qr.batches.index'), icon: Layers, permission: 'view_qr_inventory' },
     { labelKey: 'admin.nav.qr_inventory', route: 'admin.qr.inventory.index', href: () => route('admin.qr.inventory.index'), icon: QrCode, permission: 'view_qr_inventory' },
     { labelKey: 'admin.nav.qr_assignments', route: 'admin.qr.assignments.index', href: () => route('admin.qr.assignments.index'), icon: Link2, permission: 'view_qr_inventory' },
@@ -114,21 +120,7 @@ function useAdminNav() {
                 type: 'group',
                 key: 'qr-management',
                 label: t('admin.nav.qr_management'),
-                items: [
-                    /* ⚠️ STATIC PLACEHOLDER — `disabled`, carrying NO route and NO
-                       href. `admin.qr.dashboard` does not exist; naming it here
-                       would be resolved by route() during render and throw, taking
-                       every admin page down (R-15). Sidebar returns early on
-                       `disabled` before any route resolution. */
-                    {
-                        key: 'qr-dashboard-placeholder',
-                        label: t('admin.nav.qr_dashboard'),
-                        icon: <LayoutDashboard className="h-5 w-5" />,
-                        disabled: true,
-                        badge: t('common.soon'),
-                    },
-                    ...qrItems,
-                ],
+                items: qrItems,
             }
             : null;
 
