@@ -452,6 +452,11 @@ class QrInventoryController extends Controller
 
         SmartQrCode::whereIn('id', $data['code_ids'])->update(['status' => $data['status']]);
 
+        // TODO: This per-code path can retire every code in a batch without
+        // moving smart_qr_batches.status. The batch-level retire action owns that
+        // aggregate transition today; reconciling it here also needs a product
+        // rule for what the batch becomes if one code is later un-retired.
+
         app(AuditLogService::class)->logAdmin(
             'smart_qr.status_changed',
             SmartQrCode::class,
@@ -492,7 +497,7 @@ class QrInventoryController extends Controller
     }
 
     /**
-     * ⚠️ DELETE selected codes — refused for any that were printed or assigned.
+     * ⚠️ DELETE selected codes — refused for any that were printed or have assignment history.
      *
      * All-or-nothing, matching R-11's shape on the assignment path: a partial
      * delete would report failure while some rows were already gone, and there
@@ -516,7 +521,7 @@ class QrInventoryController extends Controller
             $more = $blocked->count() > 5 ? ' and '.($blocked->count() - 5).' more' : '';
 
             return back()->withErrors(['code_ids' => __(
-                ':count of the selected codes have been printed or assigned (:shown:more) and '
+                ':count of the selected codes have been printed or have assignment history (:shown:more) and '
                 .'cannot be deleted. Retire them instead — deleting destroys assignment history '
                 .'and leaves printed stickers unexplainable.',
                 ['count' => $blocked->count(), 'shown' => $shown, 'more' => $more]

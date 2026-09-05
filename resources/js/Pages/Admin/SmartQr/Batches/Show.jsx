@@ -222,10 +222,11 @@ function AddCodesModal({ batch, onClose }) {
  * reloads by hand to find out whether anything happened.
  *
  * ⚠️ ALLOW-LIST OF LIVE STATES, NEVER A DENY-LIST OF TERMINAL ONES. Batches
- * have FIVE statuses — draft, generating, generated, failed, AND printed. A
+ * have SIX statuses — draft, generating, generated, failed, printed, AND
+ * retired. A
  * guard written as "stop once status is generated or failed" polls a printed
  * batch forever, because `printed` is in neither set. Asking "is it still
- * working?" cannot be wrong when a sixth status is added; asking "is it done
+ * working?" cannot be wrong when a seventh status is added; asking "is it done
  * yet?" silently can.
  */
 const LIVE_BATCH_STATUSES = ['draft', 'generating'];
@@ -541,7 +542,7 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                                 </Dropdown.Content>
                             </Dropdown>
 
-                            {canManage && (
+                            {canManage && batch.status !== 'retired' && (
                                 <Button variant="outline" size="sm" onClick={() => setRetiring(batch)}>
                                     <TriangleAlert className="mr-1.5 h-4 w-4" /> {t('smart_qr.retire_batch')}
                                 </Button>

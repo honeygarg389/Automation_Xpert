@@ -213,7 +213,7 @@ class QrBatchController extends Controller
             $more = $blockers->count() > 5 ? ' and '.($blockers->count() - 5).' more' : '';
 
             return back()->withErrors(['batch' => __(
-                'This batch cannot be deleted: :count of its codes have been printed or assigned '
+                'This batch cannot be deleted: :count of its codes have been printed or have assignment history '
                 .'(:shown:more). Retire it instead — deleting would destroy assignment history '
                 .'and leave printed stickers unexplainable.',
                 ['count' => $blockers->count(), 'shown' => $shown, 'more' => $more]
@@ -254,6 +254,8 @@ class QrBatchController extends Controller
         $affected = $batch->codes()
             ->where('status', '!=', SmartQrStatus::CODE_RETIRED)
             ->update(['status' => SmartQrStatus::CODE_RETIRED]);
+
+        $batch->update(['status' => SmartQrStatus::BATCH_RETIRED]);
 
         app(AuditLogService::class)->logAdmin(
             'smart_qr.batch_retired',

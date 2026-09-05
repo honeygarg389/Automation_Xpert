@@ -7,9 +7,9 @@ import fs from 'fs';
  *
  *   starts   only while the batch is draft/generating OR a part is
  *            queued/processing
- *   stops    once everything has settled — INCLUDING on `printed`, the fifth
- *            batch status that a deny-list guard ("stop at generated/failed")
- *            would poll forever on
+ *   stops    once everything has settled — INCLUDING on `printed` and `retired`,
+ *            statuses that a deny-list guard ("stop at generated/failed") would
+ *            poll forever on
  *   asks     for exactly the three props show() renders, every 5000ms
  *   cleans   up on unmount, so navigating away does not leave a timer running
  *   gives up after MAX_POLL_ATTEMPTS and says so, instead of hiding a dead
@@ -139,6 +139,18 @@ describe('does not poll once everything has settled', () => {
         renderPage('printed');
         tick(5);
         expect(reloads).toHaveLength(0);
+    });
+
+    it('renders a retired batch as settled and hides the redundant Retire action', () => {
+        renderPage('retired');
+        tick(5);
+
+        expect(reloads).toHaveLength(0);
+
+        const badge = screen.getByText('Retired');
+        expect(badge.className).toContain('bg-coral-50');
+        expect(screen.queryByText('smart_qr.batch_status.retired')).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Retire batch' })).toBeNull();
     });
 
     it('does not poll when every part is ready or failed', () => {
