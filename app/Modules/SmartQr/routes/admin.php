@@ -2,6 +2,7 @@
 
 use App\Modules\SmartQr\Http\Controllers\Admin\QrAssignmentController;
 use App\Modules\SmartQr\Http\Controllers\Admin\QrBatchController;
+use App\Modules\SmartQr\Http\Controllers\Admin\QrDashboardController;
 use App\Modules\SmartQr\Http\Controllers\Admin\QrInventoryController;
 use Illuminate\Support\Facades\Route;
 
@@ -22,6 +23,16 @@ Route::middleware(['web', 'auth:admin', 'demo'])
     ->prefix('admin/qr')
     ->name('admin.qr.')
     ->group(function () {
+
+        // ── Dashboard ────────────────────────────────────────────────────
+        //
+        // ⚠️ NAMED `dashboard`, NOT `dashboard.index`, deliberately matching
+        // the sidebar placeholder that already referenced `admin.qr.dashboard`
+        // by name before this route existed (AdminLayout.jsx) — the group's
+        // own `->name('admin.qr.')` composes with this to the exact string the
+        // placeholder was written against.
+        Route::get('/dashboard', [QrDashboardController::class, 'index'])
+            ->name('dashboard')->middleware('permission:view_qr_inventory');
 
         // ── Batches (§4) ───────────────────────────────────────────────────
         Route::get('/batches', [QrBatchController::class, 'index'])

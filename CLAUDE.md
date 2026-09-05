@@ -594,9 +594,28 @@ scheduled, all would die quietly when Phase 0 closes:
   curl -s http://127.0.0.1:8007/i18n/en | python3 -c "import json,sys; print(json.load(sys.stdin)['translation'].get('smart_qr.filter_all_workspaces'))"
   ```
 
-  **Recurred three times** — `batches_subtitle`, then `filter_all_workspaces` and
+  **Recurred four times** — `batches_subtitle`, then `filter_all_workspaces` and
   `view_qr_coming_soon` together. The third instance under-reported itself: only one broken
   label was noticed, but every key added since the last bump was stale.
+
+  The fourth, **2026-09-05**: 15 keys hand-added to `en.json` for the new QR Dashboard
+  (`Admin/SmartQr/Dashboard.jsx`) and `invalidateCache()` not run afterwards. The whole page
+  rendered raw keys — `smart_qr.dashboard_title`, every `stat_*` label, the panel headings.
+  Cross-checking all 29 `t()` calls against the file found 0 missing and 0 misspelled; the
+  endpoint was serving 3684 keys against a file holding 3699. Diagnosing at the file would have
+  found nothing, which is exactly what the warning above is for.
+
+  ⚠️ **THE TEST SUITE STRUCTURALLY CANNOT CATCH THIS, and that is why it keeps recurring.**
+  The vitest specs read `resources/js/locales/en.json` off disk directly
+  (`fs.readFileSync`, as `smartqr-inventory-detail.test.jsx` does), so they see the correct
+  file and pass while the running app serves the stale snapshot. A green suite is not evidence
+  the labels render. The only detector is a person loading the page — which is how all four
+  were found, each time after the work was believed finished.
+
+  So: **run the invalidation in the same breath as the edit, before loading the page or
+  believing a green suite** — not as a remembered follow-up step. A hand-edit to `en.json` and
+  its `invalidateCache()` are one operation in two commands, and every recurrence so far has
+  been the second command going missing.
 
   ⚠️ **The same caching hides BUG-037 rather than helping.** A corrupted `en.json` on disk keeps
   serving correct strings from cache long after the damage, so the seeder's corruption surfaces

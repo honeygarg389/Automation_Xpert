@@ -32,6 +32,8 @@ use Illuminate\Support\Str;
  * @property string|null $default_message
  * @property string|null $logo_path
  * @property string|null $logo_disk
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  */
 class SmartQrBatch extends Model
 {

@@ -212,6 +212,42 @@ class SmartQrAdminInventoryTest extends TestCase
             'The endpoint refuses every status, so the rejection above proved nothing.');
     }
 
+    /** ⚠️ Was silently unlogged — this bulk action wrote no audit trail at all. */
+    #[Test]
+    public function the_bulk_status_action_is_audit_logged(): void
+    {
+        $admin = $this->adminWith(['manage_qr_batches']);
+        $code = SmartQrCode::factory()->create(['serial_number' => 'AX-STATUS-01']);
+
+        $this->actingAs($admin, 'admin')->post(route('admin.qr.inventory.change-status'), [
+            'code_ids' => [$code->id],
+            'status' => SmartQrStatus::CODE_RETIRED,
+        ]);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'smart_qr.status_changed',
+            'auditable_type' => SmartQrCode::class,
+        ]);
+    }
+
+    /** ⚠️ Same gap as change-status — mark-printed wrote no audit trail either. */
+    #[Test]
+    public function marking_a_code_printed_is_audit_logged(): void
+    {
+        $admin = $this->adminWith(['manage_qr_batches']);
+        $code = SmartQrCode::factory()->create(['serial_number' => 'AX-PRINT-01', 'status' => SmartQrStatus::CODE_GENERATED]);
+
+        $this->actingAs($admin, 'admin')->post(route('admin.qr.inventory.mark-printed'), [
+            'code_ids' => [$code->id],
+        ]);
+
+        $this->assertSame(SmartQrStatus::CODE_PRINTED, $code->fresh()->status);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'smart_qr.marked_printed',
+            'auditable_type' => SmartQrCode::class,
+        ]);
+    }
+
     // ══ Inventory: unassigned inventory must be VISIBLE to admin ═══════════
 
     /**
@@ -382,6 +418,23 @@ class SmartQrAdminInventoryTest extends TestCase
 
         $this->assertSame(1, SmartQrBatch::count(),
             'The endpoint refuses everyone, so the 403 above proved nothing about the gate.');
+    }
+
+    /** ⚠️ Was silently unlogged — rename/delete/retire were audited, creation was not. */
+    #[Test]
+    public function creating_a_batch_is_audit_logged(): void
+    {
+        $admin = $this->adminWith(['manage_qr_batches']);
+
+        $this->actingAs($admin, 'admin')->post(route('admin.qr.batches.store'), $this->batchPayload());
+
+        $batch = SmartQrBatch::sole();
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'smart_qr.batch_created',
+            'auditable_type' => SmartQrBatch::class,
+            'auditable_id' => $batch->id,
+        ]);
     }
 
     #[Test]

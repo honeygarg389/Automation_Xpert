@@ -416,9 +416,20 @@ class QrInventoryController extends Controller
             'code_ids.*' => ['integer', 'exists:smart_qr_codes,id'],
         ]);
 
-        SmartQrCode::whereIn('id', $data['code_ids'])
+        $codes = SmartQrCode::whereIn('id', $data['code_ids'])
             ->whereIn('status', [SmartQrStatus::CODE_GENERATED, SmartQrStatus::CODE_PRINTED])
+            ->get(['id', 'serial_number']);
+
+        SmartQrCode::whereIn('id', $codes->pluck('id'))
             ->update(['status' => SmartQrStatus::CODE_PRINTED, 'printed_at' => now()]);
+
+        app(AuditLogService::class)->logAdmin(
+            'smart_qr.marked_printed',
+            SmartQrCode::class,
+            null,
+            ['count' => $codes->count(), 'serials' => $codes->pluck('serial_number')->all()],
+            $request->user('admin'),
+        );
 
         return back()->with('success', __('Marked as printed.'));
     }
@@ -437,7 +448,17 @@ class QrInventoryController extends Controller
             'status' => ['required', Rule::in(SmartQrStatus::CODE_STATUSES)],
         ]);
 
+        $codes = SmartQrCode::whereIn('id', $data['code_ids'])->get(['id', 'serial_number']);
+
         SmartQrCode::whereIn('id', $data['code_ids'])->update(['status' => $data['status']]);
+
+        app(AuditLogService::class)->logAdmin(
+            'smart_qr.status_changed',
+            SmartQrCode::class,
+            null,
+            ['status' => $data['status'], 'count' => $codes->count(), 'serials' => $codes->pluck('serial_number')->all()],
+            $request->user('admin'),
+        );
 
         // ═══ ⚠️ `printed` IS AN EVENT, NOT ONLY A STATE ════════════════════════
         //
