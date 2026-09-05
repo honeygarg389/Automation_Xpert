@@ -53,6 +53,25 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         Route::post('/batches/{batch}/retire', [QrBatchController::class, 'retire'])
             ->name('batches.retire')->middleware('permission:manage_qr_batches');
 
+        // ═══ ⚠️ FORCE DELETE — REGISTERED ONLY ON LOCAL ═══════════════════
+        //
+        // A developer convenience for clearing test batches that destroy()
+        // rightly refuses: it destroys assignment history, scan events and
+        // exported archives with no undo, which is precisely what destroy()
+        // exists to prevent on real inventory.
+        //
+        // ⚠️ THE ENVIRONMENT CHECK IS HERE **AND** AGAIN IN THE CONTROLLER, and
+        // the duplication is the point. This block means the route does not
+        // exist off local — nothing to probe, nothing to reach. The controller's
+        // own abort_unless() then covers every way the method could still be
+        // called if this file were ever edited, refactored into a shared group,
+        // or the method wired to a second route. One guard in one place is a
+        // guard that a future edit can silently remove.
+        if (app()->environment('local')) {
+            Route::delete('/batches/{batch}/force', [QrBatchController::class, 'forceDestroy'])
+                ->name('batches.forceDestroy')->middleware('permission:manage_qr_batches');
+        }
+
         // ⚠️ manage_qr_batches, NOT view_qr_inventory. This CREATES inventory —
         // it is the only route besides store() that causes codes to exist — so it
         // belongs with the mutating actions above, not with the export routes
