@@ -112,22 +112,11 @@ class QrDashboardController extends Controller
             ]);
         }
 
-        // Configured: current, ACTIVE assignments whose channel resolves to a
-        // dialable number — the inverse of QrRedirectOutcome::UNCONFIGURED.
-        //
-        // ⚠️ PURE EXISTS CHECK, NOT A VALUE READ. whereHas() compiles to
-        // `WHERE EXISTS (subquery ... WHERE display_phone IS NOT NULL)` — the
-        // subquery never selects display_phone into the outer query, so
-        // nothing masked by MasksDemoData is ever serialized here. Demo-mode
-        // masking applies at toArray() time on a SERIALIZED value; a boolean
-        // EXISTS never produces one. If this ever changed to pull the phone
-        // value into a select (e.g. for a "which QR is unconfigured" list),
-        // that reasoning would need re-checking — it does not apply to a list
-        // of raw values, only to a null-check.
-        $configured = (clone $currentAssignments)
-            ->where('status', SmartQrStatus::ASSIGNMENT_ACTIVE)
-            ->whereHas('channelAccount.phoneNumber', fn ($q) => $q->whereNotNull('display_phone'))
-            ->count();
+        // Assigned: any code with a current assignment, regardless of whether
+        // that assignment is active or inactive and whether its channel can
+        // currently resolve to a dialable number. This is the platform-wide
+        // equivalent of QrBatchController::show()'s assigned_count.
+        $assigned = SmartQrCode::whereHas('currentAssignment')->count();
 
         $totalBatches = SmartQrBatch::count();
 
@@ -137,7 +126,7 @@ class QrDashboardController extends Controller
             'active' => $active,
             'total_batches' => $totalBatches,
             'printed' => $printed,
-            'configured' => $configured,
+            'assigned' => $assigned,
             'inactive' => $inactive,
             'retired' => $retired,
         ];

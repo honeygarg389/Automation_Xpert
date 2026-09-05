@@ -54,7 +54,7 @@ export default function SmartQrDashboard({
         { icon: Zap, label: t('smart_qr.stat_active'), value: stats.active },
         { icon: Layers, label: t('smart_qr.stat_total_batches'), value: stats.total_batches },
         { icon: Printer, label: t('smart_qr.stat_printed'), value: stats.printed },
-        { icon: Settings, label: t('smart_qr.stat_configured'), value: stats.configured },
+        { icon: Settings, label: t('smart_qr.stat_assigned'), value: stats.assigned },
         { icon: Ban, label: t('smart_qr.stat_inactive'), value: stats.inactive },
         { icon: Trash2, label: t('smart_qr.stat_retired'), value: stats.retired },
     ];

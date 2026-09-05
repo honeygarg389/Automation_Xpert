@@ -3906,7 +3906,6 @@
         "stat_total_codes": "Total QR Codes",
         "stat_available": "Available",
         "stat_total_batches": "Total Batches",
-        "stat_configured": "Assigned",
         "stat_inactive": "Inactive",
         "stat_retired": "Retired",
         "view_inventory": "View Inventory",

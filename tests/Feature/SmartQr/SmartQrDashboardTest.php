@@ -26,15 +26,14 @@ use Tests\TestCase;
  * ─── ⚠️ WHAT THIS FILE PINS ─────────────────────────────────────────────────
  *
  *   the permission gate    matches the sibling QR screens: view_qr_inventory
- *   the trickier counts    Available, Active/Inactive, Configured — each
+ *   the trickier counts    Available, Active/Inactive, Assigned — each
  *                          seeded against a KNOWN state and asserted exactly,
  *                          not just "the page loaded"
  *   Retired                means status=retired SPECIFICALLY, not the union
  *                          of retired/lost/damaged — matches QrStatusBadge's
  *                          CODE_VARIANTS treating them as three distinct states
- *   Configured              the inverse of QrRedirectOutcome::UNCONFIGURED:
- *                          an active, current assignment whose channel
- *                          resolves to a real WhatsappPhoneNumber row
+ *   Assigned               any current assignment, regardless of status or
+ *                          whether its channel resolves to a dialable number
  */
 class SmartQrDashboardTest extends TestCase
 {
@@ -214,12 +213,23 @@ class SmartQrDashboardTest extends TestCase
             $this->assertSame(2, $stats['active']);
             $this->assertSame(1, $stats['inactive']);
 
-            // Configured: only the active assignment whose channel resolves to
-            // a real phone number — the active-but-unconfigured one must NOT
-            // be counted, and neither must the inactive one even though its
-            // channel IS configured (status must be active AND current).
-            $this->assertSame(1, $stats['configured']);
+            // Assigned: all three CURRENT assignments. The active assignment
+            // without a dialable number and the inactive assignment with one
+            // deliberately distinguish this from the former "Configured" query.
+            $this->assertSame(3, $stats['assigned']);
         });
+    }
+
+    #[Test]
+    public function assigned_equals_active_plus_inactive_for_current_assignments(): void
+    {
+        $this->seedKnownState();
+        $stats = $this->dashboardProps()['stats'];
+
+        $this->assertSame(3, $stats['assigned'],
+            'Every current assignment must count even when inactive or missing a dialable number.');
+        $this->assertSame($stats['assigned'], $stats['active'] + $stats['inactive'],
+            'Assigned must be exactly the partition of current assignments into active and inactive.');
     }
 
     #[Test]

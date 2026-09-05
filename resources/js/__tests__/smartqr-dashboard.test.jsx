@@ -76,7 +76,7 @@ const STATS = {
     active: 37,
     total_batches: 9,
     printed: 55,
-    configured: 34,
+    assigned: 40,
     inactive: 3,
     retired: 12,
 };
@@ -213,10 +213,7 @@ describe('Admin/SmartQr/Dashboard — stat tiles', () => {
             ['Active', '37'],
             ['Total Batches', '9'],
             ['Printed', '55'],
-            // ⚠️ The `stat_configured` COUNT under an "Assigned" LABEL. The key
-            // is deliberately unrenamed — only the display text changed — so
-            // this row is the one place the two can drift apart unnoticed.
-            ['Assigned', '34'],
+            ['Assigned', '40'],
             ['Inactive', '3'],
             ['Retired', '12'],
         ];
