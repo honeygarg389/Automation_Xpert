@@ -3931,6 +3931,12 @@
         "no_recently_ended": "No assignment periods have ended yet.",
         "held_days": "Held {{count}} days",
         "held_under_day": "Held under a day",
-        "no_scan_data": "No scans recorded in this period."
+        "no_scan_data": "No scans recorded in this period.",
+        "force_delete": "Force Delete",
+        "force_delete_dev_only": "DEV ONLY",
+        "force_delete_title": "Force delete batch — permanent",
+        "force_delete_body": "This is a local development tool with no undo. It destroys the batch, every code in it, and every assignment period those codes ever had — including each tenant's scan history, attribution and daily statistics — plus any exported archive files on disk. Nothing here is recoverable and no tenant is warned. The ordinary Delete refuses printed or assigned codes for exactly these reasons; this bypasses that refusal.",
+        "force_delete_confirm_word": "FORCE DELETE",
+        "force_delete_confirm_label": "Permanently destroy"
     }
 }

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Button, Card, Dropdown, Input, Modal, Pagination } from '@/Components/ui';
-import { ArrowLeft, CircleCheck, Layers, Link2, Package, QrCode, Printer, Pencil, Plus, TriangleAlert, Download } from 'lucide-react';
+import { Button, Card, ConfirmDestructiveModal, Dropdown, Input, Modal, Pagination } from '@/Components/ui';
+import { ArrowLeft, CircleCheck, Layers, Link2, Package, QrCode, Printer, Pencil, Plus, TriangleAlert, Download, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CodeStatusBadge, AssignmentStateBadge, BatchStatusBadge, ExportStatusBadge } from '../QrStatusBadge';
 import { formatDateTz } from '@/Utils/datetime';
@@ -258,7 +258,7 @@ const POLL_INTERVAL_MS = 5000;
  */
 const MAX_POLL_ATTEMPTS = 60;
 
-export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
+export default function SmartQrBatchShow({ batch, codes, exports = [], forceDeleteAvailable = false }) {
     const { t } = useTranslation();
     const flash = usePage().props.flash || {};
 
@@ -277,6 +277,7 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
 
     const [renaming, setRenaming] = useState(null);
     const [retiring, setRetiring] = useState(null);
+    const [forceDeleting, setForceDeleting] = useState(false);
     const [addingCodes, setAddingCodes] = useState(false);
 
     // ⚠️ Disables the button for the round trip only. A 20-part batch dispatches
@@ -547,6 +548,25 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                                     <TriangleAlert className="mr-1.5 h-4 w-4" /> {t('smart_qr.retire_batch')}
                                 </Button>
                             )}
+
+                            {/* ⚠️ Reads as a warning, not as another action in the
+                                row. Retire beside it is the SAFE path this one
+                                deliberately bypasses, so the two must not look
+                                interchangeable. */}
+                            {canManage && forceDeleteAvailable && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setForceDeleting(true)}
+                                    className="border-red-300 text-red-600 hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+                                >
+                                    <ShieldAlert className="mr-1.5 h-4 w-4" />
+                                    {t('smart_qr.force_delete')}
+                                    <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700 dark:bg-red-900/40 dark:text-red-300">
+                                        {t('smart_qr.force_delete_dev_only')}
+                                    </span>
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -692,6 +712,21 @@ export default function SmartQrBatchShow({ batch, codes, exports = [] }) {
                     onConfirm={(b) => {
                         router.post(route('admin.qr.batches.retire', b.uuid), {}, { preserveScroll: true });
                         setRetiring(null);
+                    }}
+                />
+            )}
+
+            {canManage && forceDeleteAvailable && (
+                <ConfirmDestructiveModal
+                    show={forceDeleting}
+                    onClose={() => setForceDeleting(false)}
+                    title={t('smart_qr.force_delete_title')}
+                    body={t('smart_qr.force_delete_body')}
+                    confirmWord={t('smart_qr.force_delete_confirm_word')}
+                    confirmLabel={t('smart_qr.force_delete_confirm_label')}
+                    onConfirm={() => {
+                        router.delete(route('admin.qr.batches.forceDestroy', batch.uuid), { preserveScroll: true });
+                        setForceDeleting(false);
                     }}
                 />
             )}

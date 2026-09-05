@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Button, Card, ConfirmDestructiveModal, ImageUploadField, Input, Modal, Pagination, Textarea } from '@/Components/ui';
-import { Layers, Plus, Trash2 } from 'lucide-react';
+import { Layers, Plus, Trash2, ShieldAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { BatchStatusBadge } from '../QrStatusBadge';
 import { formatDateTz } from '@/Utils/datetime';
@@ -247,7 +247,7 @@ function CreateBatchModal({ show, onClose }) {
     );
 }
 
-export default function SmartQrBatchesIndex({ batches }) {
+export default function SmartQrBatchesIndex({ batches, forceDeleteAvailable = false }) {
     const { t } = useTranslation();
     const page = usePage();
     const flash = page.props.flash || {};
@@ -259,6 +259,10 @@ export default function SmartQrBatchesIndex({ batches }) {
 
     const [createOpen, setCreateOpen] = useState(false);
     const [deleting, setDeleting] = useState(null);
+    // ⚠️ Separate state from `deleting`. Sharing one would let the safe delete's
+    // modal and the irreversible one be told apart only by a second flag —
+    // exactly the confusion this action must not have.
+    const [forceDeleting, setForceDeleting] = useState(null);
     const rows = batches?.data ?? [];
 
     return (
@@ -369,6 +373,23 @@ export default function SmartQrBatchesIndex({ batches }) {
                                                         <Trash2 className="h-4 w-4" />
                                                     </button>
                                                 )}
+                                                {/* ⚠️ DELIBERATELY UNLIKE THE DELETE BUTTON BESIDE IT.
+                                                    Different icon, permanently red rather than red-on-
+                                                    hover, and a literal DEV ONLY label — a force delete
+                                                    that looked like the safe delete would eventually be
+                                                    clicked as one. */}
+                                                {canManage && forceDeleteAvailable && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setForceDeleting(batch)}
+                                                        aria-label={t('smart_qr.force_delete')}
+                                                        title={t('smart_qr.force_delete')}
+                                                        className="inline-flex items-center gap-1 rounded-soft border border-red-300 px-1.5 py-1 text-[10px] font-bold uppercase tracking-wide text-red-600 transition hover:bg-red-50 dark:border-red-900 dark:text-red-400 dark:hover:bg-red-900/20"
+                                                    >
+                                                        <ShieldAlert className="h-4 w-4" />
+                                                        {t('smart_qr.force_delete_dev_only')}
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>
@@ -401,6 +422,23 @@ export default function SmartQrBatchesIndex({ batches }) {
                     onConfirm={() => {
                         router.delete(route('admin.qr.batches.destroy', deleting.uuid), { preserveScroll: true });
                         setDeleting(null);
+                    }}
+                />
+            )}
+
+            {/* ⚠️ confirmWord is TWO WORDS, and the space is the feature: it
+                cannot be produced by the muscle memory that types DELETE. */}
+            {canManage && forceDeleteAvailable && (
+                <ConfirmDestructiveModal
+                    show={!! forceDeleting}
+                    onClose={() => setForceDeleting(null)}
+                    title={t('smart_qr.force_delete_title')}
+                    body={t('smart_qr.force_delete_body')}
+                    confirmWord={t('smart_qr.force_delete_confirm_word')}
+                    confirmLabel={t('smart_qr.force_delete_confirm_label')}
+                    onConfirm={() => {
+                        router.delete(route('admin.qr.batches.forceDestroy', forceDeleting.uuid), { preserveScroll: true });
+                        setForceDeleting(null);
                     }}
                 />
             )}

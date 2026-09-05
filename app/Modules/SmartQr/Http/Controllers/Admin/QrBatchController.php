@@ -9,6 +9,7 @@ use App\Modules\SmartQr\Http\Requests\StoreQrBatchRequest;
 use App\Modules\SmartQr\Http\Requests\UpdateQrBatchRequest;
 use App\Modules\SmartQr\Jobs\GenerateQrBatchJob;
 use App\Modules\SmartQr\Jobs\GenerateQrExportJob;
+use App\Modules\SmartQr\Models\SmartQrAssignment;
 use App\Modules\SmartQr\Models\SmartQrBatch;
 use App\Modules\SmartQr\Models\SmartQrExport;
 use App\Modules\SmartQr\Services\SmartQrDeletability;
@@ -21,6 +22,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -59,6 +61,15 @@ class QrBatchController extends Controller
 
         return Inertia::render('Admin/SmartQr/Batches/Index', [
             'batches' => $batches,
+
+            // ⚠️ The page must not decide this for itself. `import.meta.env.DEV`
+            // reflects how the ASSETS were built, not what the server is — a
+            // production build served from a local box, or a dev build proxied
+            // elsewhere, would each get it wrong. The server is the only thing
+            // that knows its own environment, and it is also the only thing
+            // enforcing it (route + abort_unless); this prop merely keeps the UI
+            // honest about a control that would 404 anyway.
+            'forceDeleteAvailable' => app()->environment('local'),
         ]);
     }
 
@@ -241,6 +252,161 @@ class QrBatchController extends Controller
         return redirect()
             ->route('admin.qr.batches.index')
             ->with('success', __(':count code(s) and their batch were deleted.', ['count' => $codeCount]));
+    }
+
+    /**
+     * ═══ ⚠️ FORCE DELETE — LOCAL ONLY, AND IRREVERSIBLE ══════════════════════
+     *
+     * destroy() refuses a batch with any printed or ever-assigned code, because
+     * removing one destroys a tenant's assignment history and leaves printed
+     * stickers unexplainable. That refusal is correct on real inventory and
+     * merely obstructive on a developer's test data, which is the only thing
+     * this method exists for.
+     *
+     * ⚠️ THE ENVIRONMENT CHECK IS REPEATED HERE, and it is not redundant. The
+     * route is registered inside `if (app()->environment('local'))`, so off
+     * local there is nothing to call — but that guard protects the ROUTE, and
+     * this one protects the METHOD. A future edit that moves the route into the
+     * shared group, adds a second route, or reaches this method from a console
+     * command would silently lose the only check if it lived in one place.
+     *
+     * ⚠️ 404, NOT 403. A 403 confirms the endpoint exists and is merely
+     * forbidden; a 404 is indistinguishable from any other missing URL. Same
+     * posture QrRedirectOutcome::INVALID already takes on the public scan page.
+     */
+    public function forceDestroy(Request $request, SmartQrBatch $batch): RedirectResponse
+    {
+        abort_unless(app()->environment('local'), 404);
+
+        /**
+         * ⚠️ CAPTURED INSIDE THE TRANSACTION, USED AFTER IT COMMITS.
+         *
+         * `smart_qr_exports.batch_id` is cascadeOnDelete, so the rows naming
+         * these files are gone the moment the batch is — reading the paths
+         * afterwards would return nothing and orphan every archive on disk.
+         *
+         * @var list<string> $exportPaths
+         */
+        $exportPaths = [];
+        $counts = [];
+
+        DB::transaction(function () use ($batch, $request, &$exportPaths, &$counts) {
+            // Re-read under a row lock: two admins force-deleting the same batch
+            // would otherwise both read the same counts and both audit a full
+            // destruction, when only one of them performed it.
+            $locked = SmartQrBatch::query()->whereKey($batch->id)->lockForUpdate()->firstOrFail();
+
+            $codeIds = $locked->codes()->pluck('id');
+
+            // ⚠️ Counted BEFORE anything is deleted, and counted through the
+            // codes rather than trusting a cascade to report itself. Assignments
+            // are workspace-scoped and an admin has no workspace, so the scope
+            // would fail closed and report ZERO destroyed history — an audit
+            // entry that understates what it destroyed is worse than none.
+            $assignments = SmartQrAssignment::withoutWorkspaceScope(
+                'reason: force-delete audits how much tenant history it is about to destroy, across '
+                .'every tenant; the scope fails closed with no admin workspace context and would '
+                .'record zero assignments destroyed'
+            )->whereIn('smart_qr_code_id', $codeIds);
+
+            $counts = [
+                'codes_deleted' => $codeIds->count(),
+                'assignments_deleted' => (clone $assignments)->count(),
+                'assignments_current' => (clone $assignments)->whereNull('unassigned_at')->count(),
+                'assignments_ended' => (clone $assignments)->whereNotNull('unassigned_at')->count(),
+            ];
+
+            $exportPaths = SmartQrExport::query()
+                ->where('batch_id', $locked->id)
+                ->pluck('path')
+                ->filter(fn ($p) => is_string($p) && $p !== '')
+                ->values()
+                ->all();
+
+            // ⚠️ AUDITED BEFORE THE DELETE, INSIDE THE TRANSACTION. Before,
+            // because afterwards there is no row left to describe. Inside,
+            // because if anything below fails the entry must roll back with it —
+            // an audit record of a destruction that did not happen is a lie the
+            // log cannot later correct.
+            app(AuditLogService::class)->logAdmin(
+                'smart_qr.batch_force_deleted',
+                SmartQrBatch::class,
+                $locked->id,
+                array_merge(['batch_number' => $locked->batch_number], $counts, [
+                    'exports_deleted' => count($exportPaths),
+                ]),
+                $request->user('admin'),
+            );
+
+            // ⚠️ CODES FIRST — `smart_qr_codes.batch_id` is restrictOnDelete, so
+            // the batch cannot go while they exist. Deleting them cascades
+            // assignments, and assignments cascade scan events, daily stats,
+            // attribution sessions and conversion events. That whole subtree is
+            // the "no recovery" this action warns about.
+            //
+            // ⚠️ Mass delete is safe HERE specifically: SmartQrCode declares no
+            // booted() and no model events, so a per-row loop would fire nothing
+            // extra and only cost N queries. Checked, not assumed — if a
+            // deleting hook is ever added to that model, this line must become a
+            // loop or the hook will be skipped silently.
+            $locked->codes()->delete();
+
+            // ⚠️ Model delete(), NOT the query builder's. SmartQrBatch::booted()
+            // registers a `deleting` hook that removes the batch logo from disk;
+            // a ->getQuery()->delete() would drop the row and orphan the file.
+            $locked->delete();
+        });
+
+        $this->cleanUpExportFiles($exportPaths, $batch->id, $request);
+
+        return redirect()
+            ->route('admin.qr.batches.index')
+            ->with('success', __(
+                'Batch permanently purged: :codes code(s), :assignments assignment period(s) and '
+                .':exports export file(s) destroyed. This cannot be undone.',
+                [
+                    'codes' => $counts['codes_deleted'] ?? 0,
+                    'assignments' => $counts['assignments_deleted'] ?? 0,
+                    'exports' => count($exportPaths),
+                ]
+            ));
+    }
+
+    /**
+     * Remove the archives whose rows the cascade has already taken.
+     *
+     * ⚠️ RUNS AFTER THE TRANSACTION COMMITS, AND NEVER FAILS THE REQUEST.
+     *
+     * By this point the database state is gone and cannot be brought back by
+     * throwing. A filesystem fault here means one orphaned archive in
+     * storage/app/private — recoverable by hand, and far less harmful than
+     * reporting failure for an operation that demonstrably succeeded. So each
+     * file is deleted independently and a failure is recorded and stepped over.
+     *
+     * ⚠️ Audited rather than Log::error()'d, which DIVERGES from the sibling
+     * `smart_qr.batch_logo_cleanup_failed` in SmartQrBatch::booted(). That hook
+     * runs inside model events on any deletion path, including console
+     * contexts with no admin to attribute; this runs in a request that has just
+     * written `smart_qr.batch_force_deleted` to `audit_logs`, and a cleanup
+     * failure belongs beside the destruction it belongs to.
+     *
+     * @param  list<string>  $paths
+     */
+    private function cleanUpExportFiles(array $paths, int $batchId, Request $request): void
+    {
+        foreach ($paths as $path) {
+            try {
+                Storage::disk('local')->delete($path);
+            } catch (\Throwable $e) {
+                app(AuditLogService::class)->logAdmin(
+                    'smart_qr.export_cleanup_failed',
+                    SmartQrBatch::class,
+                    $batchId,
+                    ['path' => $path, 'error' => $e->getMessage()],
+                    $request->user('admin'),
+                );
+            }
+        }
     }
 
     /**
@@ -515,6 +681,9 @@ class QrBatchController extends Controller
             // stays available for a future slice that wants live refresh.
             'exports' => SmartQrExport::forBatch($batch->id)
                 ->get(['id', 'part_number', 'total_parts', 'format', 'status', 'path', 'error', 'updated_at']),
+
+            // Server-decided, for the reason given on index().
+            'forceDeleteAvailable' => app()->environment('local'),
         ]);
     }
 }
