@@ -3736,7 +3736,8 @@
             "generating": "Generating",
             "generated": "Generated",
             "failed": "Failed",
-            "printed": "Printed"
+            "printed": "Printed",
+            "retired": "Retired"
         },
         "delete_codes": "Delete",
         "retire_codes": "Retire",
@@ -3744,8 +3745,8 @@
         "retire_batch": "Retire batch",
         "rename_batch": "Rename batch",
         "edit_qr": "Edit QR details",
-        "delete_batch_body": "This permanently deletes the batch and all {{count}} of its codes. Only possible because none have been printed or assigned. This cannot be undone.",
-        "delete_codes_body": "This permanently deletes {{count}} code(s). Only codes that were never printed and never assigned can be deleted. This cannot be undone.",
+        "delete_batch_body": "This permanently deletes the batch and all {{count}} of its codes. Only possible because none have been printed or have assignment history. This cannot be undone.",
+        "delete_codes_body": "This permanently deletes {{count}} code(s). Only codes that were never printed and have no assignment history can be deleted. This cannot be undone.",
         "retire_batch_body": "Retiring keeps every row. The codes stay in inventory, can no longer be assigned, and a scan will say the QR is no longer active. If retired by mistake, an admin can set each code’s status again from QR Inventory — the previous status is not stored, so it must be chosen manually.",
         "save": "Save changes",
         "title": "Smart QR",

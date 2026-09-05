@@ -38,6 +38,7 @@ const BATCH_VARIANTS = {
     generated: 'success',
     printed: 'brand',
     failed: 'danger',
+    retired: 'danger',
 };
 
 /**

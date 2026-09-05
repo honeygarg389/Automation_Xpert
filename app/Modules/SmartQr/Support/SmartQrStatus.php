@@ -95,6 +95,8 @@ final class SmartQrStatus
 
     // ── Batch lifecycle (slice 2) ─────────────────────────────────────────
 
+    public const BATCH_RETIRED = 'retired';
+
     /** @var list<string> */
-    public const BATCH_STATUSES = ['draft', 'generating', 'generated', 'failed', 'printed'];
+    public const BATCH_STATUSES = ['draft', 'generating', 'generated', 'failed', 'printed', self::BATCH_RETIRED];
 }

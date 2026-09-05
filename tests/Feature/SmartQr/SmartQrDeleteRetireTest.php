@@ -221,12 +221,19 @@ class SmartQrDeleteRetireTest extends TestCase
         $admin = $this->adminWith(['manage_qr_batches']);
         $batch = SmartQrBatch::factory()->create();
         SmartQrCode::factory()->count(2)->create(['batch_id' => $batch->id]);
-        $this->formerlyAssigned($batch);
+        $formerlyAssigned = $this->formerlyAssigned($batch);
 
         $this->actingAs($admin, 'admin')
             ->from(route('admin.qr.batches.index'))
             ->delete(route('admin.qr.batches.destroy', $batch->uuid))
             ->assertSessionHasErrors('batch');
+
+        $this->assertSame(
+            'This batch cannot be deleted: 1 of its codes have been printed or have assignment history '
+            ."({$formerlyAssigned->serial_number} (assigned)). Retire it instead — deleting would destroy "
+            .'assignment history and leave printed stickers unexplainable.',
+            session('errors')->first('batch')
+        );
 
         $this->assertDatabaseHas('smart_qr_batches', ['id' => $batch->id]);
         $this->assertSame(1, (int) DB::table('smart_qr_scan_events')->count(),
@@ -264,7 +271,10 @@ class SmartQrDeleteRetireTest extends TestCase
             ->post(route('admin.qr.batches.retire', $batch->uuid))
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('smart_qr_batches', ['id' => $batch->id]);
+        $this->assertDatabaseHas('smart_qr_batches', [
+            'id' => $batch->id,
+            'status' => SmartQrStatus::BATCH_RETIRED,
+        ]);
         $this->assertSame(3, SmartQrCode::where('batch_id', $batch->id)
             ->where('status', SmartQrStatus::CODE_RETIRED)->count(),
             'Retiring must keep the rows and move their status — it is the alternative to '
