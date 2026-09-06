@@ -134,10 +134,17 @@ return Application::configure(basePath: dirname(__DIR__))
                 | Request::HEADER_X_FORWARDED_PROTO,
         );
 
+        // ⚠️ EVERY billing gateway with a webhook route needs an entry here.
+        // These routes carry the `web` group, so anything absent from this list is
+        // CSRF-protected and answers a real gateway callback with 419 — silently,
+        // because the gateway retries into the same rejection and nothing is logged
+        // on our side. Razorpay and Cashfree were missing and were unreachable.
         $middleware->validateCsrfTokens(except: [
             'webhooks/stripe',
             'webhooks/paypal',
             'webhooks/paddle',
+            'webhooks/razorpay',
+            'webhooks/cashfree',
             'webhooks/whatsapp/*',
             'webhooks/meta/*',
             'webhooks/sms/*',
