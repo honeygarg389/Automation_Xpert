@@ -270,8 +270,6 @@ to reach a wiki, and if this file is only on the server you cannot read it at al
    things. And backup filenames gained a random suffix — second precision alone meant a safety
    backup taken in the same second as another backup **silently overwrote it**.
 
-   ~~**It should be fixed before you
-   depend on it.** Small job — under a day.
 2. **`php artisan db:restore` now exists**, with seven guards, and is round-trip tested
    (backup → destroy → restore → verify) — **closed 2026-08-07.** This was recorded here as
    "the single biggest gap" while restoring meant typing MySQL commands by hand; it no longer

@@ -228,29 +228,12 @@
         "manage_workspaces": "Gestionar espacios de trabajo",
         "change_plan": "Cambiar plan",
         "no_workspace": "Sin espacio de trabajo",
-        "contacts": {
-            "index": "Índice"
-        },
         "whatsapp": {
             "setup": "Configuración"
         },
-        "inbox": {
-            "index": "Índice"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Índice"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "Índice"
-            },
             "composer": "Editor",
             "calendar": "Calendario"
-        },
-        "campaigns": {
-            "create": "Crear"
         },
         "invite_by_email": "Invitar por correo electrónico",
         "next_step": "Siguiente paso:",
@@ -288,12 +271,6 @@
         "no_workspace_title": "Sin espacio de trabajo activo",
         "no_workspace_body": "Selecciona o crea un espacio de trabajo para ver tus analíticas de mensajería.",
         "invoice": "Factura",
-        "ecommerce": {
-            "stores": {
-                "test": "Probar",
-                "sync": "Sincronizar"
-            }
-        },
         "workspaces": "Espacios de trabajo"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "Pasarelas de pago",
         "email": "Correo electrónico",
         "languages": "Idiomas",
-        "locales": {
-            "index": "Índice"
-        },
         "website_templates": "Sitios web/Páginas de destino",
         "roles_permissions": "Roles y permisos",
         "ai_requests": "Solicitudes de IA",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "Asignar plan",
         "delete_user_confirm": "¿Seguro que quieres quitar a {{name}} ({{email}}) de este cliente?",
         "delete_client_confirm": "¿Seguro que quieres eliminar a {{name}}? Esto eliminará todos los usuarios y suscripciones del cliente.",
-        "coupons": {
-            "index": "Índice"
-        },
         "tax_rates": "Tasas de impuestos",
         "landing_page": "Contenido del sitio",
         "cms_pages": "Páginas CMS",
         "cron_setup": "Configuración de Cron",
-        "support": {
-            "index": "Índice"
-        },
-        "queue": {
-            "index": "Índice"
-        },
         "clients_count": "Total de clientes",
         "users_count": "Total de usuarios",
-        "integrations": {
-            "index": "Índice"
-        },
         "pusher_settings": "Configuración de Pusher",
         "admin_management_desc": "Gestiona los usuarios administradores y sus roles.",
         "total_admins": "Total de administradores",
@@ -609,28 +571,8 @@
         "secret_key_hint": "Clave secreta del lado del servidor — mantenla privada",
         "stripe_webhook_hint": "Secreto de firma del webhook (whsec_…) del panel de Stripe",
         "webhook_hint": "Secreto del webhook usado para verificar los eventos entrantes de la pasarela",
-        "subscriptions": {
-            "index": "Índice"
-        },
         "payments": "Pagos",
         "plans": "Planes",
-        "currencies": {
-            "index": "Índice"
-        },
-        "settings": {
-            "index": "Índice",
-            "logo": {
-                "upload": "Subir",
-                "delete": "Eliminar"
-            },
-            "favicon": {
-                "upload": "Subir",
-                "delete": "Eliminar"
-            }
-        },
-        "ai": {
-            "index": "Índice"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Inicia sesión en el panel de administración.",
         "client_login_link": "← Acceso de clientes",

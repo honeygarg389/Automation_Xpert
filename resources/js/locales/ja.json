@@ -228,29 +228,12 @@
         "manage_workspaces": "ワークスペースを管理",
         "change_plan": "プランを変更",
         "no_workspace": "ワークスペースがありません",
-        "contacts": {
-            "index": "一覧"
-        },
         "whatsapp": {
             "setup": "セットアップ"
         },
-        "inbox": {
-            "index": "一覧"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "一覧"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "一覧"
-            },
             "composer": "投稿作成",
             "calendar": "カレンダー"
-        },
-        "campaigns": {
-            "create": "作成"
         },
         "invite_by_email": "メールで招待",
         "next_step": "次のステップ：",
@@ -288,12 +271,6 @@
         "no_workspace_title": "有効なワークスペースがありません",
         "no_workspace_body": "メッセージ分析を表示するには、ワークスペースを選択または作成してください。",
         "invoice": "請求書",
-        "ecommerce": {
-            "stores": {
-                "test": "テスト",
-                "sync": "同期"
-            }
-        },
         "workspaces": "ワークスペース"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "決済ゲートウェイ",
         "email": "メールアドレス",
         "languages": "言語",
-        "locales": {
-            "index": "一覧"
-        },
         "website_templates": "ウェブサイト/ランディングページ",
         "roles_permissions": "役割と権限",
         "ai_requests": "AIリクエスト",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "プランを割り当て",
         "delete_user_confirm": "{{name}}（{{email}}）をこのクライアントから削除してもよろしいですか？",
         "delete_client_confirm": "{{name}}を削除してもよろしいですか？クライアントのユーザーとサブスクリプションもすべて削除されます。",
-        "coupons": {
-            "index": "一覧"
-        },
         "tax_rates": "税率",
         "landing_page": "サイトコンテンツ",
         "cms_pages": "CMSページ",
         "cron_setup": "Cron設定",
-        "support": {
-            "index": "一覧"
-        },
-        "queue": {
-            "index": "一覧"
-        },
         "clients_count": "クライアント総数",
         "users_count": "ユーザー総数",
-        "integrations": {
-            "index": "一覧"
-        },
         "pusher_settings": "Pusher設定",
         "admin_management_desc": "管理者ユーザーとその役割を管理します。",
         "total_admins": "管理者総数",
@@ -609,28 +571,8 @@
         "secret_key_hint": "サーバーサイドのシークレットキー — 厳重に管理してください",
         "stripe_webhook_hint": "Stripeダッシュボードで確認できるWebhook署名シークレット（whsec_…）",
         "webhook_hint": "受信したゲートウェイイベントの検証に使用するWebhookシークレット",
-        "subscriptions": {
-            "index": "一覧"
-        },
         "payments": "支払い",
         "plans": "プラン",
-        "currencies": {
-            "index": "一覧"
-        },
-        "settings": {
-            "index": "一覧",
-            "logo": {
-                "upload": "アップロード",
-                "delete": "削除"
-            },
-            "favicon": {
-                "upload": "アップロード",
-                "delete": "削除"
-            }
-        },
-        "ai": {
-            "index": "一覧"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "管理者パネルにサインインします。",
         "client_login_link": "← クライアントログイン",

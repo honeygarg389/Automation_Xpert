@@ -228,29 +228,12 @@
         "manage_workspaces": "Kelola ruang kerja",
         "change_plan": "Ganti Paket",
         "no_workspace": "Tidak ada ruang kerja",
-        "contacts": {
-            "index": "Indeks"
-        },
         "whatsapp": {
             "setup": "Pengaturan"
         },
-        "inbox": {
-            "index": "Indeks"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Indeks"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "Indeks"
-            },
             "composer": "Komposer",
             "calendar": "Kalender"
-        },
-        "campaigns": {
-            "create": "Buat"
         },
         "invite_by_email": "Undang lewat email",
         "next_step": "Langkah berikutnya:",
@@ -288,12 +271,6 @@
         "no_workspace_title": "Tidak ada ruang kerja aktif",
         "no_workspace_body": "Pilih atau buat ruang kerja untuk melihat analitik perpesanan Anda.",
         "invoice": "Faktur",
-        "ecommerce": {
-            "stores": {
-                "test": "Uji",
-                "sync": "Sinkronkan"
-            }
-        },
         "workspaces": "Ruang Kerja"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "Gateway Pembayaran",
         "email": "Email",
         "languages": "Bahasa",
-        "locales": {
-            "index": "Indeks"
-        },
         "website_templates": "Situs Web/Halaman Landing",
         "roles_permissions": "Peran & Izin",
         "ai_requests": "Permintaan AI",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "Tetapkan Paket",
         "delete_user_confirm": "Apakah Anda yakin ingin menghapus {{name}} ({{email}}) dari klien ini?",
         "delete_client_confirm": "Apakah Anda yakin ingin menghapus {{name}}? Ini akan menghapus semua pengguna dan langganan klien.",
-        "coupons": {
-            "index": "Indeks"
-        },
         "tax_rates": "Tarif Pajak",
         "landing_page": "Konten Situs",
         "cms_pages": "Halaman CMS",
         "cron_setup": "Pengaturan Cron",
-        "support": {
-            "index": "Indeks"
-        },
-        "queue": {
-            "index": "Indeks"
-        },
         "clients_count": "Total klien",
         "users_count": "Total pengguna",
-        "integrations": {
-            "index": "Indeks"
-        },
         "pusher_settings": "Pengaturan Pusher",
         "admin_management_desc": "Kelola pengguna admin dan peran mereka.",
         "total_admins": "Total Admin",
@@ -609,28 +571,8 @@
         "secret_key_hint": "Secret key sisi server — jaga kerahasiaannya",
         "stripe_webhook_hint": "Secret penandatanganan webhook (whsec_…) dari dasbor Stripe",
         "webhook_hint": "Secret webhook yang digunakan untuk memverifikasi event gateway masuk",
-        "subscriptions": {
-            "index": "Indeks"
-        },
         "payments": "Pembayaran",
         "plans": "Paket",
-        "currencies": {
-            "index": "Indeks"
-        },
-        "settings": {
-            "index": "Indeks",
-            "logo": {
-                "upload": "Unggah",
-                "delete": "Hapus"
-            },
-            "favicon": {
-                "upload": "Unggah",
-                "delete": "Hapus"
-            }
-        },
-        "ai": {
-            "index": "Indeks"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Masuk ke panel admin.",
         "client_login_link": "← Login klien",

@@ -228,29 +228,12 @@
         "manage_workspaces": "Управление рабочими пространствами",
         "change_plan": "Сменить тариф",
         "no_workspace": "Нет рабочего пространства",
-        "contacts": {
-            "index": "Список"
-        },
         "whatsapp": {
             "setup": "Настройка"
         },
-        "inbox": {
-            "index": "Список"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Список"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "Список"
-            },
             "composer": "Редактор",
             "calendar": "Календарь"
-        },
-        "campaigns": {
-            "create": "Создание"
         },
         "invite_by_email": "Пригласить по email",
         "next_step": "Следующий шаг:",
@@ -288,12 +271,6 @@
         "no_workspace_title": "Нет активного рабочего пространства",
         "no_workspace_body": "Выберите или создайте рабочее пространство, чтобы видеть аналитику сообщений.",
         "invoice": "Счёт",
-        "ecommerce": {
-            "stores": {
-                "test": "Тест",
-                "sync": "Синхронизация"
-            }
-        },
         "workspaces": "Рабочие пространства"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "Платёжные шлюзы",
         "email": "Email",
         "languages": "Языки",
-        "locales": {
-            "index": "Список"
-        },
         "website_templates": "Сайты/лендинги",
         "roles_permissions": "Роли и права",
         "ai_requests": "Запросы к ИИ",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "Назначить тариф",
         "delete_user_confirm": "Вы уверены, что хотите удалить {{name}} ({{email}}) у этого клиента?",
         "delete_client_confirm": "Вы уверены, что хотите удалить {{name}}? Будут удалены все пользователи и подписки клиента.",
-        "coupons": {
-            "index": "Список"
-        },
         "tax_rates": "Налоговые ставки",
         "landing_page": "Контент сайта",
         "cms_pages": "Страницы CMS",
         "cron_setup": "Настройка Cron",
-        "support": {
-            "index": "Список"
-        },
-        "queue": {
-            "index": "Список"
-        },
         "clients_count": "Всего клиентов",
         "users_count": "Всего пользователей",
-        "integrations": {
-            "index": "Список"
-        },
         "pusher_settings": "Настройки Pusher",
         "admin_management_desc": "Управляйте администраторами и их ролями.",
         "total_admins": "Всего администраторов",
@@ -609,28 +571,8 @@
         "secret_key_hint": "Серверный секретный ключ — не разглашайте его",
         "stripe_webhook_hint": "Секрет подписи Webhook (whsec_…) из панели Stripe",
         "webhook_hint": "Секрет Webhook для проверки входящих событий шлюза",
-        "subscriptions": {
-            "index": "Список"
-        },
         "payments": "Платежи",
         "plans": "Тарифы",
-        "currencies": {
-            "index": "Список"
-        },
-        "settings": {
-            "index": "Список",
-            "logo": {
-                "upload": "Загрузить",
-                "delete": "Удалить"
-            },
-            "favicon": {
-                "upload": "Загрузить",
-                "delete": "Удалить"
-            }
-        },
-        "ai": {
-            "index": "Список"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Войдите в панель администратора.",
         "client_login_link": "← Вход для клиентов",

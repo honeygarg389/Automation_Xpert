@@ -159,10 +159,6 @@
         "account": "Compte"
     },
     "client": {
-        "profile": {
-            "2fa": "2Fa",
-            "sessions": "Sessions"
-        },
         "dashboard": "Tableau de bord",
         "panel": "Espace client",
         "pricing": "Tarifs",
@@ -232,35 +228,12 @@
         "manage_workspaces": "Gérer les espaces de travail",
         "change_plan": "Changer de forfait",
         "no_workspace": "Aucun espace de travail",
-        "contacts": {
-            "index": "Index"
-        },
-        "segments": {
-            "contacts": "Contacts"
-        },
         "whatsapp": {
-            "setup": {
-                "destroy": "Destroy"
-            }
-        },
-        "inbox": {
-            "index": "Index",
-            "setup": "Setup"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Index"
-            }
+            "setup": "Configuration"
         },
         "social": {
-            "accounts": {
-                "index": "Index"
-            },
             "composer": "Composeur",
             "calendar": "Calendrier"
-        },
-        "campaigns": {
-            "create": "Créer"
         },
         "invite_by_email": "Inviter par e-mail",
         "next_step": "Étape suivante :",
@@ -297,18 +270,7 @@
         "no_agents": "Aucune conversation attribuée pour le moment",
         "no_workspace_title": "Aucun espace de travail actif",
         "no_workspace_body": "Sélectionnez ou créez un espace de travail pour voir vos analyses de messagerie.",
-        "invoice": "Facture",
-        "ecommerce": {
-            "stores": {
-                "test": "Tester",
-                "sync": "Synchroniser"
-            }
-        },
-        "workspaces": {
-            "switch": "Switch",
-            "index": "Index",
-            "store": "Store"
-        }
+        "invoice": "Facture"
     },
     "pagination": {
         "label": "Pagination",
@@ -375,9 +337,6 @@
         "payment_gateways": "Passerelles de paiement",
         "email": "E-mail",
         "languages": "Langues",
-        "locales": {
-            "index": "Index"
-        },
         "website_templates": "Sites web / pages d'atterrissage",
         "roles_permissions": "Rôles et autorisations",
         "ai_requests": "Requêtes IA",
@@ -515,24 +474,12 @@
         "assign_plan_btn": "Attribuer le forfait",
         "delete_user_confirm": "Voulez-vous vraiment retirer {{name}} ({{email}}) de ce client ?",
         "delete_client_confirm": "Voulez-vous vraiment supprimer {{name}} ? Cela supprimera tous les utilisateurs et abonnements du client.",
-        "coupons": {
-            "index": "Index"
-        },
         "tax_rates": "Taux de taxe",
         "landing_page": "Contenu du site",
         "cms_pages": "Pages CMS",
         "cron_setup": "Configuration du Cron",
-        "support": {
-            "index": "Index"
-        },
-        "queue": {
-            "index": "Index"
-        },
         "clients_count": "Total des clients",
         "users_count": "Total des utilisateurs",
-        "integrations": {
-            "index": "Index"
-        },
         "pusher_settings": "Paramètres Pusher",
         "admin_management_desc": "Gérez les utilisateurs administrateurs et leurs rôles.",
         "total_admins": "Total des administrateurs",
@@ -623,43 +570,9 @@
         "secret_key_hint": "Clé secrète côté serveur — gardez-la confidentielle",
         "stripe_webhook_hint": "Secret de signature du Webhook (whsec_…) issu du tableau de bord Stripe",
         "webhook_hint": "Secret du Webhook utilisé pour vérifier les événements entrants de la passerelle",
-        "clients": {
-            "index": "Index",
-            "users": {
-                "index": "Index",
-                "store": "Store",
-                "update": "Update",
-                "destroy": "Destroy"
-            },
-            "impersonate": "Impersonate",
-            "destroy": "Destroy",
-            "export": "Export",
-            "store": "Store",
-            "update": "Update"
-        },
         "subscriptions": "Subscriptions",
-        "payments": {
-            "index": "Index"
-        },
-        "plans": {
-            "index": "Index",
-            "update": "Update",
-            "store": "Store",
-            "duplicate": "Duplicate",
-            "destroy": "Destroy",
-            "reorder": "Reorder"
-        },
         "currencies": "Currencies",
-        "admins": {
-            "index": "Index",
-            "destroy": "Destroy",
-            "store": "Store",
-            "update": "Update"
-        },
         "settings": "Settings",
-        "ai": {
-            "index": "Index"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Connectez-vous au panneau d'administration.",
         "client_login_link": "← Connexion client",

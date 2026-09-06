@@ -2904,3 +2904,76 @@ does not "fix" it.
 
 ⚠️ `SmartQrRedirectResolver.php:153` also uses `->value('display_phone')` and is likewise
 correct: it strips the number to digits for a `wa.me` redirect and never renders it.
+
+---
+
+## BUG-041 — `client.whatsapp.setup.store` survives in `au.json`/`cn.json` and cannot be classified by the route-name test
+
+- **Severity:** **Low — cosmetic at worst, but unclassified.** Two locale files carry a key that
+  looks exactly like the fabricated junk removed in this cleanup, yet fails the verification
+  condition that made removing the others safe. Nothing is broken today; the risk is that it is
+  either left forever as residue, or deleted on a hunch and takes a real label with it.
+- **Status:** **OPEN — deliberately left untouched pending manual review.** Found 2026-09-07 on
+  branch `feature/small-cleanup-batch`, in the cleanup that deleted 49 fabricated route-name keys
+  across all 17 locale files (Item A of that batch).
+- **Files:**
+  `resources/js/locales/au.json` — `client.whatsapp.setup.store` = `"Store"`
+  `resources/js/locales/cn.json` — `client.whatsapp.setup.store` = `"保存"`
+
+### Why it was not deleted with the rest
+
+That cleanup deleted a key only when **both** conditions held:
+
+  a. the key exactly matches a **registered route name** (`route:list --json`, 457 names), and
+  b. it has **zero** translation-usage references (`t()` / `__()` / `trans()`, including dynamic
+     construction such as `labelKey:` maps).
+
+Condition (b) alone is not sufficient, and condition (a) alone is documented as actively unsafe —
+`TranslationKeyScanner.php:90-102` records that **154 strings in this codebase are legitimately
+both a route name and a translation key**, so a result-filter on route names deletes real keys.
+
+`client.whatsapp.setup.store` **fails (a)**:
+
+| Name | Registered route? |
+|---|---|
+| `client.whatsapp.setup` | yes |
+| `client.whatsapp.setup.destroy` | yes — deleted by the cleanup |
+| `client.whatsapp.setup.store` | **no** |
+
+So whatever produced it, it was **not** BUG-037's route-name harvesting — that mechanism can only
+emit strings that are actually route names. A different fabrication path, or a genuine key, is
+responsible. It was left in place because the conservative rule had nothing to say about it, and
+guessing is how a live label gets deleted.
+
+### The evidence pulls in both directions
+
+**Toward junk:**
+
+- It is **absent from `en.json`**, the source of truth. A legitimate UI label reaching two
+  translated locales but never the English file is close to impossible through normal authoring.
+- Only **two** of seventeen locales carry it.
+- It sits under `client.whatsapp.setup`, whose sibling `.destroy` **was** confirmed fabrication.
+- Nothing references it: `grep -rn "whatsapp.setup.store"` across `*.jsx`, `*.js` and `*.php`
+  returns zero hits.
+- `au.json`'s value `"Store"` is the bare humanised route action, the exact signature of the 49
+  removed keys.
+
+**Toward legitimate:**
+
+- `cn.json`'s value is **`保存` — "Save", not "Store"**. Somebody translated it as a UI verb, which
+  is what a human or a translation pass does to a string it believes is real. The 49 confirmed
+  junk keys in `cn.json` were translated too (`admin.ai.index` = `索引`), so this is weaker than it
+  looks — but it does mean the two files disagree about what the string even means.
+
+⚠️ **The two files disagreeing is itself the finding.** `"Store"` (a noun, or an HTTP-verb action)
+and `保存` ("Save") are not translations of each other. Whichever way this is resolved, they cannot
+both be right.
+
+### What the reviewer needs to decide
+
+Whether this is (1) residue from a fabrication mechanism **other than** route-name scanning — in
+which case there may be more of its kind, and finding the mechanism matters more than deleting
+this one key — or (2) a real key that was never added to `en.json`, in which case it needs an
+English value and the `au`/`cn` values reconciled.
+
+Deleting it without answering that question closes the symptom and loses the lead.

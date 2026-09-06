@@ -228,29 +228,12 @@
         "manage_workspaces": "Çalışma alanlarını yönet",
         "change_plan": "Planı Değiştir",
         "no_workspace": "Çalışma alanı yok",
-        "contacts": {
-            "index": "Dizin"
-        },
         "whatsapp": {
             "setup": "Kurulum"
         },
-        "inbox": {
-            "index": "Dizin"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Dizin"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "Dizin"
-            },
             "composer": "Oluşturucu",
             "calendar": "Takvim"
-        },
-        "campaigns": {
-            "create": "Oluştur"
         },
         "invite_by_email": "E-posta ile davet et",
         "next_step": "Sonraki adım:",
@@ -288,12 +271,6 @@
         "no_workspace_title": "Aktif çalışma alanı yok",
         "no_workspace_body": "Mesajlaşma analizlerinizi görmek için bir çalışma alanı seçin veya oluşturun.",
         "invoice": "Fatura",
-        "ecommerce": {
-            "stores": {
-                "test": "Test",
-                "sync": "Senkronize Et"
-            }
-        },
         "workspaces": "Çalışma Alanları"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "Ödeme Ağ Geçitleri",
         "email": "E-posta",
         "languages": "Diller",
-        "locales": {
-            "index": "Dizin"
-        },
         "website_templates": "Web Sitesi/Açılış Sayfaları",
         "roles_permissions": "Roller ve İzinler",
         "ai_requests": "AI İstekleri",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "Plan Ata",
         "delete_user_confirm": "{{name}} ({{email}}) kullanıcısını bu müşteriden kaldırmak istediğinizden emin misiniz?",
         "delete_client_confirm": "{{name}} müşterisini silmek istediğinizden emin misiniz? Bu işlem tüm müşteri kullanıcılarını ve abonelikleri kaldıracaktır.",
-        "coupons": {
-            "index": "Dizin"
-        },
         "tax_rates": "Vergi Oranları",
         "landing_page": "Site İçeriği",
         "cms_pages": "CMS Sayfaları",
         "cron_setup": "Cron Kurulumu",
-        "support": {
-            "index": "Dizin"
-        },
-        "queue": {
-            "index": "Dizin"
-        },
         "clients_count": "Toplam müşteri",
         "users_count": "Toplam kullanıcı",
-        "integrations": {
-            "index": "Dizin"
-        },
         "pusher_settings": "Pusher Ayarları",
         "admin_management_desc": "Yönetici kullanıcılarını ve rollerini yönetin.",
         "total_admins": "Toplam Yönetici",
@@ -609,28 +571,8 @@
         "secret_key_hint": "Sunucu tarafı gizli anahtar — gizli tutun",
         "stripe_webhook_hint": "Stripe panelinden webhook imzalama anahtarı (whsec_…)",
         "webhook_hint": "Gelen ağ geçidi olaylarını doğrulamak için kullanılan webhook gizli anahtarı",
-        "subscriptions": {
-            "index": "Dizin"
-        },
         "payments": "Ödemeler",
         "plans": "Planlar",
-        "currencies": {
-            "index": "Dizin"
-        },
-        "settings": {
-            "index": "Dizin",
-            "logo": {
-                "upload": "Yükle",
-                "delete": "Sil"
-            },
-            "favicon": {
-                "upload": "Yükle",
-                "delete": "Sil"
-            }
-        },
-        "ai": {
-            "index": "Dizin"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Yönetici paneline giriş yapın.",
         "client_login_link": "← Müşteri girişi",

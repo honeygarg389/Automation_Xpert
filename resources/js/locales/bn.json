@@ -153,10 +153,6 @@
         "account": "অ্যাকাউন্ট"
     },
     "client": {
-        "profile": {
-            "2fa": "2Fa",
-            "sessions": "Sessions"
-        },
         "dashboard": "ড্যাশবোর্ড",
         "panel": "ক্লায়েন্ট প্যানেল",
         "pricing": "মূল্য নির্ধারণ",
@@ -226,35 +222,12 @@
         "manage_workspaces": "ওয়ার্কস্পেস পরিচালনা করুন",
         "change_plan": "প্ল্যান পরিবর্তন করুন",
         "no_workspace": "কোনো ওয়ার্কস্পেস নেই",
-        "contacts": {
-            "index": "তালিকা"
-        },
-        "segments": {
-            "contacts": "Contacts"
-        },
         "whatsapp": {
-            "setup": {
-                "destroy": "Destroy"
-            }
-        },
-        "inbox": {
-            "index": "তালিকা",
-            "setup": "Setup"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "তালিকা"
-            }
+            "setup": "সেটআপ"
         },
         "social": {
-            "accounts": {
-                "index": "তালিকা"
-            },
             "composer": "কম্পোজার",
             "calendar": "ক্যালেন্ডার"
-        },
-        "campaigns": {
-            "create": "তৈরি"
         },
         "invite_by_email": "ইমেইলের মাধ্যমে আমন্ত্রণ জানান",
         "next_step": "পরবর্তী ধাপ:",
@@ -268,17 +241,6 @@
         "chart_opened": "খোলা",
         "chart_resolved": "সমাধান",
         "invoice": "ইনভয়েস",
-        "ecommerce": {
-            "stores": {
-                "test": "টেস্ট",
-                "sync": "সিঙ্ক"
-            }
-        },
-        "workspaces": {
-            "switch": "Switch",
-            "index": "Index",
-            "store": "Store"
-        },
         "kpi_messages_sent": "Messages sent",
         "kpi_messages_received": "Messages received",
         "kpi_open_conversations": "Open conversations",
@@ -358,9 +320,6 @@
         "payment_gateways": "পেমেন্ট গেটওয়ে",
         "email": "ইমেল",
         "languages": "ভাষাসমূহ",
-        "locales": {
-            "index": "তালিকা"
-        },
         "website_templates": "ওয়েবসাইট/ল্যান্ডিং পেজ",
         "roles_permissions": "ভূমিকা ও অনুমতি",
         "ai_requests": "এআই অনুরোধ",
@@ -478,24 +437,12 @@
         "assign_plan_btn": "পরিকল্পনা বরাদ্দ করুন",
         "delete_user_confirm": "আপনি কি নিশ্চিত যে {{name}} ({{email}}) কে এই ক্লায়েন্ট থেকে সরাতে চান?",
         "delete_client_confirm": "আপনি কি নিশ্চিত যে {{name}} মুছতে চান? এটি সমস্ত ক্লায়েন্ট ব্যবহারকারী এবং সাবস্ক্রিপশন সরিয়ে দেবে।",
-        "coupons": {
-            "index": "কুপন তালিকা"
-        },
         "tax_rates": "কর হার",
         "landing_page": "ল্যান্ডিং পেজ",
         "cms_pages": "সিএমএস পেজ",
         "cron_setup": "ক্রন সেটআপ",
-        "support": {
-            "index": "সাপোর্ট তালিকা"
-        },
-        "queue": {
-            "index": "কিউ তালিকা"
-        },
         "clients_count": "মোট ক্লায়েন্ট",
         "users_count": "মোট ব্যবহারকারী",
-        "integrations": {
-            "index": "ইন্টিগ্রেশন তালিকা"
-        },
         "pusher_settings": "পুশার সেটিংস",
         "admin_management_desc": "অ্যাডমিন ব্যবহারকারী ও তাদের ভূমিকা পরিচালনা করুন।",
         "total_admins": "মোট অ্যাডমিন",
@@ -586,43 +533,9 @@
         "secret_key_hint": "সার্ভার-সাইড সিক্রেট কী — এটি গোপন রাখুন",
         "stripe_webhook_hint": "Stripe ড্যাশবোর্ড থেকে Webhook সাইনিং সিক্রেট (whsec_…)",
         "webhook_hint": "ইনকামিং গেটওয়ে ইভেন্ট যাচাই করতে ব্যবহৃত Webhook সিক্রেট",
-        "clients": {
-            "index": "Index",
-            "users": {
-                "index": "Index",
-                "store": "Store",
-                "update": "Update",
-                "destroy": "Destroy"
-            },
-            "impersonate": "Impersonate",
-            "destroy": "Destroy",
-            "export": "Export",
-            "store": "Store",
-            "update": "Update"
-        },
         "subscriptions": "Subscriptions",
-        "payments": {
-            "index": "Index"
-        },
-        "plans": {
-            "index": "Index",
-            "update": "Update",
-            "store": "Store",
-            "duplicate": "Duplicate",
-            "destroy": "Destroy",
-            "reorder": "Reorder"
-        },
         "currencies": "Currencies",
-        "admins": {
-            "index": "Index",
-            "destroy": "Destroy",
-            "store": "Store",
-            "update": "Update"
-        },
         "settings": "Settings",
-        "ai": {
-            "index": "ইনডেক্স"
-        },
         "subscriptions_create": "নতুন সাবস্ক্রিপশন",
         "subscriptions_user_search_placeholder": "নাম বা ইমেইল দিয়ে খুঁজুন…",
         "subscriptions_billing_cycle": "বিলিং চক্র",
