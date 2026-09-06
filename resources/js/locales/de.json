@@ -228,29 +228,12 @@
         "manage_workspaces": "Arbeitsbereiche verwalten",
         "change_plan": "Tarif wechseln",
         "no_workspace": "Kein Arbeitsbereich",
-        "contacts": {
-            "index": "Übersicht"
-        },
         "whatsapp": {
             "setup": "Einrichtung"
         },
-        "inbox": {
-            "index": "Übersicht"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Übersicht"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "Übersicht"
-            },
             "composer": "Editor",
             "calendar": "Kalender"
-        },
-        "campaigns": {
-            "create": "Erstellen"
         },
         "invite_by_email": "Per E-Mail einladen",
         "next_step": "Nächster Schritt:",
@@ -288,12 +271,6 @@
         "no_workspace_title": "Kein aktiver Arbeitsbereich",
         "no_workspace_body": "Wählen oder erstellen Sie einen Arbeitsbereich, um Ihre Messaging-Analysen zu sehen.",
         "invoice": "Rechnung",
-        "ecommerce": {
-            "stores": {
-                "test": "Testen",
-                "sync": "Synchronisieren"
-            }
-        },
         "workspaces": "Arbeitsbereiche"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "Zahlungs-Gateways",
         "email": "E-Mail",
         "languages": "Sprachen",
-        "locales": {
-            "index": "Übersicht"
-        },
         "website_templates": "Website/Landingpages",
         "roles_permissions": "Rollen & Berechtigungen",
         "ai_requests": "KI-Anfragen",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "Tarif zuweisen",
         "delete_user_confirm": "Möchten Sie {{name}} ({{email}}) wirklich von diesem Kunden entfernen?",
         "delete_client_confirm": "Möchten Sie {{name}} wirklich löschen? Dadurch werden alle Kundenbenutzer und Abonnements entfernt.",
-        "coupons": {
-            "index": "Übersicht"
-        },
         "tax_rates": "Steuersätze",
         "landing_page": "Website-Inhalte",
         "cms_pages": "CMS-Seiten",
         "cron_setup": "Cron-Einrichtung",
-        "support": {
-            "index": "Übersicht"
-        },
-        "queue": {
-            "index": "Übersicht"
-        },
         "clients_count": "Kunden gesamt",
         "users_count": "Benutzer gesamt",
-        "integrations": {
-            "index": "Übersicht"
-        },
         "pusher_settings": "Pusher-Einstellungen",
         "admin_management_desc": "Verwalten Sie Admin-Benutzer und deren Rollen.",
         "total_admins": "Administratoren gesamt",
@@ -609,28 +571,8 @@
         "secret_key_hint": "Serverseitiger geheimer Schlüssel — behandeln Sie ihn vertraulich",
         "stripe_webhook_hint": "Webhook-Signatur-Secret (whsec_…) aus dem Stripe-Dashboard",
         "webhook_hint": "Webhook-Secret zur Verifizierung eingehender Gateway-Ereignisse",
-        "subscriptions": {
-            "index": "Übersicht"
-        },
         "payments": "Zahlungen",
         "plans": "Tarife",
-        "currencies": {
-            "index": "Übersicht"
-        },
-        "settings": {
-            "index": "Übersicht",
-            "logo": {
-                "upload": "Hochladen",
-                "delete": "Löschen"
-            },
-            "favicon": {
-                "upload": "Hochladen",
-                "delete": "Löschen"
-            }
-        },
-        "ai": {
-            "index": "Übersicht"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Melden Sie sich im Admin-Bereich an.",
         "client_login_link": "← Kunden-Login",

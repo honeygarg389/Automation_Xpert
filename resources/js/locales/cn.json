@@ -121,45 +121,25 @@
         "inactive": "非活跃",
         "save": "保存",
         "remove_member_confirm": "确认移除此成员？",
-        "workspaces": {
-            "switch": "切换",
-            "index": "列表",
-            "store": "保存"
-        },
         "team_members": "团队成员",
         "manage_team": "管理团队",
         "manage_workspaces": "管理工作区",
         "change_plan": "更改计划",
         "no_workspace": "无工作区",
-        "contacts": {
-            "index": "列表"
-        },
         "whatsapp": {
             "setup": {
                 "store": "保存"
             }
         },
         "inbox": {
-            "index": "列表",
             "setup": {
                 "instagram": "Instagram",
                 "messenger": "Messenger"
             }
         },
-        "ai": {
-            "chatbots": {
-                "index": "列表"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "列表"
-            },
             "composer": "内容创作",
             "calendar": "日历"
-        },
-        "campaigns": {
-            "create": "创建"
         },
         "invite_by_email": "通过邮件邀请",
         "next_step": "下一步：",
@@ -202,9 +182,6 @@
         "client_login": "客户登录",
         "dashboard": "仪表板",
         "client_management": "客户管理",
-        "subscriptions": {
-            "index": "订阅列表"
-        },
         "subscriptions_export": "导出 CSV",
         "mrr_trend": "月度经常性收入趋势（12个月）",
         "mrr_label": "月度经常性收入（$）",
@@ -226,45 +203,11 @@
         "col_starts": "开始",
         "col_renews": "续订",
         "col_created": "创建时间",
-        "plans": {
-            "index": "计划列表",
-            "update": "更新",
-            "duplicate": "复制",
-            "destroy": "删除",
-            "reorder": "重新排序",
-            "store": "保存"
-        },
         "payment_gateways": "支付网关",
-        "payments": {
-            "index": "付款列表"
-        },
         "email": "邮件",
-        "settings": {
-            "index": "设置",
-            "logo": {
-                "upload": "上传",
-                "delete": "删除"
-            },
-            "favicon": {
-                "upload": "上传",
-                "delete": "删除"
-            }
-        },
-        "currencies": {
-            "index": "货币列表"
-        },
         "languages": "语言",
-        "locales": {
-            "index": "列表"
-        },
         "website_templates": "网站/落地页",
         "roles_permissions": "角色与权限",
-        "admins": {
-            "index": "管理员列表",
-            "destroy": "删除",
-            "store": "保存",
-            "update": "更新"
-        },
         "ai_requests": "AI 请求",
         "audit_log": "审计日志",
         "user_id": "用户ID",
@@ -381,23 +324,11 @@
         "assign_plan_btn": "分配计划",
         "delete_user_confirm": "确认要从此客户中移除 {{name}}（{{email}}）？",
         "delete_client_confirm": "确认要删除 {{name}}？这将移除所有客户用户和订阅。",
-        "coupons": {
-            "index": "优惠券列表"
-        },
         "tax_rates": "税率",
         "landing_page": "落地页",
         "cms_pages": "CMS 页面",
-        "support": {
-            "index": "支持列表"
-        },
-        "queue": {
-            "index": "队列列表"
-        },
         "clients_count": "客户总数",
         "users_count": "用户总数",
-        "integrations": {
-            "index": "集成列表"
-        },
         "pusher_settings": "Pusher 设置",
         "admin_management_desc": "管理管理员用户及其角色。",
         "total_admins": "管理员总数",

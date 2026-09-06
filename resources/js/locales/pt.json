@@ -228,29 +228,12 @@
         "manage_workspaces": "Gerenciar espaços de trabalho",
         "change_plan": "Mudar de plano",
         "no_workspace": "Nenhum espaço de trabalho",
-        "contacts": {
-            "index": "Lista"
-        },
         "whatsapp": {
             "setup": "Configuração"
         },
-        "inbox": {
-            "index": "Lista"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Lista"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "Lista"
-            },
             "composer": "Criador",
             "calendar": "Calendário"
-        },
-        "campaigns": {
-            "create": "Criar"
         },
         "invite_by_email": "Convidar por e-mail",
         "next_step": "Próximo passo:",
@@ -288,12 +271,6 @@
         "no_workspace_title": "Nenhum espaço de trabalho ativo",
         "no_workspace_body": "Selecione ou crie um espaço de trabalho para ver suas análises de mensagens.",
         "invoice": "Fatura",
-        "ecommerce": {
-            "stores": {
-                "test": "Testar",
-                "sync": "Sincronizar"
-            }
-        },
         "workspaces": "Espaços de trabalho"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "Gateways de pagamento",
         "email": "E-mail",
         "languages": "Idiomas",
-        "locales": {
-            "index": "Lista"
-        },
         "website_templates": "Site/Páginas de destino",
         "roles_permissions": "Funções e permissões",
         "ai_requests": "Solicitações de IA",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "Atribuir plano",
         "delete_user_confirm": "Tem certeza de que deseja remover {{name}} ({{email}}) deste cliente?",
         "delete_client_confirm": "Tem certeza de que deseja excluir {{name}}? Isso removerá todos os usuários e assinaturas do cliente.",
-        "coupons": {
-            "index": "Lista"
-        },
         "tax_rates": "Alíquotas de impostos",
         "landing_page": "Conteúdo do site",
         "cms_pages": "Páginas do CMS",
         "cron_setup": "Configuração do cron",
-        "support": {
-            "index": "Lista"
-        },
-        "queue": {
-            "index": "Lista"
-        },
         "clients_count": "Total de clientes",
         "users_count": "Total de usuários",
-        "integrations": {
-            "index": "Lista"
-        },
         "pusher_settings": "Configurações do Pusher",
         "admin_management_desc": "Gerencie usuários administradores e suas funções.",
         "total_admins": "Total de administradores",
@@ -609,28 +571,8 @@
         "secret_key_hint": "Chave secreta do servidor — mantenha-a privada",
         "stripe_webhook_hint": "Segredo de assinatura do webhook (whsec_…) no painel do Stripe",
         "webhook_hint": "Segredo do webhook usado para verificar eventos recebidos do gateway",
-        "subscriptions": {
-            "index": "Lista"
-        },
         "payments": "Pagamentos",
         "plans": "Planos",
-        "currencies": {
-            "index": "Lista"
-        },
-        "settings": {
-            "index": "Lista",
-            "logo": {
-                "upload": "Enviar",
-                "delete": "Excluir"
-            },
-            "favicon": {
-                "upload": "Enviar",
-                "delete": "Excluir"
-            }
-        },
-        "ai": {
-            "index": "Lista"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Entre no painel de administração.",
         "client_login_link": "← Login do cliente",

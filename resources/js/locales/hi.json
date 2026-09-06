@@ -153,10 +153,6 @@
         "account": "खाता"
     },
     "client": {
-        "profile": {
-            "2fa": "2Fa",
-            "sessions": "Sessions"
-        },
         "dashboard": "डैशबोर्ड",
         "panel": "क्लाइंट पैनल",
         "pricing": "मूल्य निर्धारण",
@@ -226,35 +222,12 @@
         "manage_workspaces": "कार्यक्षेत्र प्रबंधित करें",
         "change_plan": "प्लान बदलें",
         "no_workspace": "कोई कार्यक्षेत्र नहीं",
-        "contacts": {
-            "index": "सूची"
-        },
-        "segments": {
-            "contacts": "Contacts"
-        },
         "whatsapp": {
-            "setup": {
-                "destroy": "Destroy"
-            }
-        },
-        "inbox": {
-            "index": "सूची",
-            "setup": "Setup"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "सूची"
-            }
+            "setup": "सेटअप"
         },
         "social": {
-            "accounts": {
-                "index": "सूची"
-            },
             "composer": "कम्पोज़र",
             "calendar": "कैलेंडर"
-        },
-        "campaigns": {
-            "create": "बनाएं"
         },
         "invite_by_email": "ईमेल द्वारा आमंत्रित करें",
         "next_step": "अगला चरण:",
@@ -268,17 +241,6 @@
         "chart_opened": "खुले",
         "chart_resolved": "हल",
         "invoice": "इनवॉइस",
-        "ecommerce": {
-            "stores": {
-                "test": "टेस्ट",
-                "sync": "सिंक"
-            }
-        },
-        "workspaces": {
-            "switch": "Switch",
-            "index": "Index",
-            "store": "Store"
-        },
         "kpi_messages_sent": "Messages sent",
         "kpi_messages_received": "Messages received",
         "kpi_open_conversations": "Open conversations",
@@ -358,9 +320,6 @@
         "payment_gateways": "भुगतान गेटवे",
         "email": "ईमेल",
         "languages": "भाषाएं",
-        "locales": {
-            "index": "सूची"
-        },
         "website_templates": "वेबसाइट/लैंडिंग पृष्ठ",
         "roles_permissions": "भूमिकाएं और अनुमतियां",
         "ai_requests": "AI अनुरोध",
@@ -478,24 +437,12 @@
         "assign_plan_btn": "योजना सौंपें",
         "delete_user_confirm": "क्या आप वाकई {{name}} ({{email}}) को इस क्लाइंट से हटाना चाहते हैं?",
         "delete_client_confirm": "क्या आप वाकई {{name}} को हटाना चाहते हैं? यह सभी क्लाइंट उपयोगकर्ताओं और सदस्यताओं को हटा देगा।",
-        "coupons": {
-            "index": "कूपन सूची"
-        },
         "tax_rates": "कर दरें",
         "landing_page": "लैंडिंग पृष्ठ",
         "cms_pages": "CMS पृष्ठ",
         "cron_setup": "क्रॉन सेटअप",
-        "support": {
-            "index": "सहायता सूची"
-        },
-        "queue": {
-            "index": "कतार सूची"
-        },
         "clients_count": "कुल क्लाइंट",
         "users_count": "कुल उपयोगकर्ता",
-        "integrations": {
-            "index": "एकीकरण सूची"
-        },
         "pusher_settings": "Pusher सेटिंग",
         "admin_management_desc": "एडमिन उपयोगकर्ताओं और उनकी भूमिकाओं का प्रबंधन करें।",
         "total_admins": "कुल एडमिन",
@@ -586,43 +533,9 @@
         "secret_key_hint": "सर्वर-साइड सीक्रेट की — इसे गोपनीय रखें",
         "stripe_webhook_hint": "Stripe डैशबोर्ड से Webhook साइनिंग सीक्रेट (whsec_…)",
         "webhook_hint": "इनकमिंग गेटवे इवेंट सत्यापित करने के लिए उपयोग होने वाला Webhook सीक्रेट",
-        "clients": {
-            "index": "Index",
-            "users": {
-                "index": "Index",
-                "store": "Store",
-                "update": "Update",
-                "destroy": "Destroy"
-            },
-            "impersonate": "Impersonate",
-            "destroy": "Destroy",
-            "export": "Export",
-            "store": "Store",
-            "update": "Update"
-        },
         "subscriptions": "Subscriptions",
-        "payments": {
-            "index": "Index"
-        },
-        "plans": {
-            "index": "Index",
-            "update": "Update",
-            "store": "Store",
-            "duplicate": "Duplicate",
-            "destroy": "Destroy",
-            "reorder": "Reorder"
-        },
         "currencies": "Currencies",
-        "admins": {
-            "index": "Index",
-            "destroy": "Destroy",
-            "store": "Store",
-            "update": "Update"
-        },
         "settings": "Settings",
-        "ai": {
-            "index": "इंडेक्स"
-        },
         "subscriptions_create": "नया सब्सक्रिप्शन",
         "subscriptions_user_search_placeholder": "नाम या ईमेल से खोजें…",
         "subscriptions_billing_cycle": "बिलिंग चक्र",

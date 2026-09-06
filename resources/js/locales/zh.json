@@ -228,29 +228,12 @@
         "manage_workspaces": "管理工作区",
         "change_plan": "更改计划",
         "no_workspace": "无工作区",
-        "contacts": {
-            "index": "列表"
-        },
         "whatsapp": {
             "setup": "Setup"
         },
-        "inbox": {
-            "index": "列表"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "列表"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "列表"
-            },
             "composer": "内容创作",
             "calendar": "日历"
-        },
-        "campaigns": {
-            "create": "创建"
         },
         "invite_by_email": "通过邮件邀请",
         "next_step": "下一步：",
@@ -288,12 +271,6 @@
         "no_workspace_title": "No active workspace",
         "no_workspace_body": "Select or create a workspace to see your messaging analytics.",
         "invoice": "Invoice",
-        "ecommerce": {
-            "stores": {
-                "test": "Test",
-                "sync": "Sync"
-            }
-        },
         "workspaces": "Workspaces"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "支付网关",
         "email": "邮件",
         "languages": "语言",
-        "locales": {
-            "index": "列表"
-        },
         "website_templates": "网站/落地页",
         "roles_permissions": "角色与权限",
         "ai_requests": "AI 请求",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "分配计划",
         "delete_user_confirm": "确认要从此客户中移除 {{name}}（{{email}}）？",
         "delete_client_confirm": "确认要删除 {{name}}？这将移除所有客户用户和订阅。",
-        "coupons": {
-            "index": "优惠券列表"
-        },
         "tax_rates": "税率",
         "landing_page": "落地页",
         "cms_pages": "CMS 页面",
         "cron_setup": "Cron Setup",
-        "support": {
-            "index": "支持列表"
-        },
-        "queue": {
-            "index": "队列列表"
-        },
         "clients_count": "客户总数",
         "users_count": "用户总数",
-        "integrations": {
-            "index": "集成列表"
-        },
         "pusher_settings": "Pusher 设置",
         "admin_management_desc": "管理管理员用户及其角色。",
         "total_admins": "管理员总数",
@@ -609,28 +571,8 @@
         "secret_key_hint": "Server-side secret key — keep this private",
         "stripe_webhook_hint": "Webhook signing secret (whsec_…) from the Stripe dashboard",
         "webhook_hint": "Webhook secret used to verify incoming gateway events",
-        "subscriptions": {
-            "index": "订阅列表"
-        },
         "payments": "Payments",
         "plans": "Plans",
-        "currencies": {
-            "index": "货币列表"
-        },
-        "settings": {
-            "index": "设置",
-            "logo": {
-                "upload": "上传",
-                "delete": "删除"
-            },
-            "favicon": {
-                "upload": "上传",
-                "delete": "删除"
-            }
-        },
-        "ai": {
-            "index": "Index"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Sign in to the admin panel.",
         "client_login_link": "← Client login",

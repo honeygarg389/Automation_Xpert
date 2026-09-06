@@ -236,29 +236,12 @@
         "manage_workspaces": "Manage workspaces",
         "change_plan": "Change Plan",
         "no_workspace": "No workspace",
-        "contacts": {
-            "index": "Index"
-        },
         "whatsapp": {
             "setup": "Setup"
         },
-        "inbox": {
-            "index": "Index"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "Index"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "Index"
-            },
             "composer": "Composer",
             "calendar": "Calendar"
-        },
-        "campaigns": {
-            "create": "Create"
         },
         "invite_by_email": "Invite by email",
         "next_step": "Next step:",
@@ -296,12 +279,6 @@
         "no_workspace_title": "No active workspace",
         "no_workspace_body": "Select or create a workspace to see your messaging analytics.",
         "invoice": "Invoice",
-        "ecommerce": {
-            "stores": {
-                "test": "Test",
-                "sync": "Sync"
-            }
-        },
         "workspaces": "Workspaces"
     },
     "pagination": {
@@ -374,9 +351,6 @@
         "payment_gateways": "Payment Gateways",
         "email": "Email",
         "languages": "Languages",
-        "locales": {
-            "index": "Index"
-        },
         "website_templates": "Website/Landing Pages",
         "roles_permissions": "Roles & Permissions",
         "ai_requests": "AI Requests",
@@ -514,24 +488,12 @@
         "assign_plan_btn": "Assign Plan",
         "delete_user_confirm": "Are you sure you want to remove {{name}} ({{email}}) from this client?",
         "delete_client_confirm": "Are you sure you want to delete {{name}}? This will remove all client users and subscriptions.",
-        "coupons": {
-            "index": "Index"
-        },
         "tax_rates": "Tax Rates",
         "landing_page": "Site Content",
         "cms_pages": "CMS Pages",
         "cron_setup": "Cron Setup",
-        "support": {
-            "index": "Index"
-        },
-        "queue": {
-            "index": "Index"
-        },
         "clients_count": "Total clients",
         "users_count": "Total users",
-        "integrations": {
-            "index": "Index"
-        },
         "pusher_settings": "Pusher Settings",
         "admin_management_desc": "Manage admin users and their roles.",
         "total_admins": "Total Admins",
@@ -622,28 +584,8 @@
         "secret_key_hint": "Server-side secret key — keep this private",
         "stripe_webhook_hint": "Webhook signing secret (whsec_…) from the Stripe dashboard",
         "webhook_hint": "Webhook secret used to verify incoming gateway events",
-        "subscriptions": {
-            "index": "Index"
-        },
         "payments": "Payments",
         "plans": "Plans",
-        "currencies": {
-            "index": "Index"
-        },
-        "settings": {
-            "index": "Index",
-            "logo": {
-                "upload": "Upload",
-                "delete": "Delete"
-            },
-            "favicon": {
-                "upload": "Upload",
-                "delete": "Delete"
-            }
-        },
-        "ai": {
-            "index": "Index"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "Sign in to the admin panel.",
         "client_login_link": "← Client login",

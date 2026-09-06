@@ -228,29 +228,12 @@
         "manage_workspaces": "워크스페이스 관리",
         "change_plan": "요금제 변경",
         "no_workspace": "워크스페이스 없음",
-        "contacts": {
-            "index": "목록"
-        },
         "whatsapp": {
             "setup": "설정"
         },
-        "inbox": {
-            "index": "목록"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "목록"
-            }
-        },
         "social": {
-            "accounts": {
-                "index": "목록"
-            },
             "composer": "작성기",
             "calendar": "캘린더"
-        },
-        "campaigns": {
-            "create": "생성"
         },
         "invite_by_email": "이메일로 초대",
         "next_step": "다음 단계:",
@@ -288,12 +271,6 @@
         "no_workspace_title": "활성 워크스페이스 없음",
         "no_workspace_body": "메시징 분석을 보려면 워크스페이스를 선택하거나 생성하세요.",
         "invoice": "청구서",
-        "ecommerce": {
-            "stores": {
-                "test": "테스트",
-                "sync": "동기화"
-            }
-        },
         "workspaces": "워크스페이스"
     },
     "pagination": {
@@ -361,9 +338,6 @@
         "payment_gateways": "결제 게이트웨이",
         "email": "이메일",
         "languages": "언어",
-        "locales": {
-            "index": "목록"
-        },
         "website_templates": "웹사이트/랜딩 페이지",
         "roles_permissions": "역할 및 권한",
         "ai_requests": "AI 요청",
@@ -501,24 +475,12 @@
         "assign_plan_btn": "요금제 배정",
         "delete_user_confirm": "정말 {{name}}({{email}})을(를) 이 클라이언트에서 제거하시겠습니까?",
         "delete_client_confirm": "정말 {{name}}을(를) 삭제하시겠습니까? 모든 클라이언트 사용자와 구독이 제거됩니다.",
-        "coupons": {
-            "index": "목록"
-        },
         "tax_rates": "세율",
         "landing_page": "사이트 콘텐츠",
         "cms_pages": "CMS 페이지",
         "cron_setup": "Cron 설정",
-        "support": {
-            "index": "목록"
-        },
-        "queue": {
-            "index": "목록"
-        },
         "clients_count": "전체 클라이언트",
         "users_count": "전체 사용자",
-        "integrations": {
-            "index": "목록"
-        },
         "pusher_settings": "Pusher 설정",
         "admin_management_desc": "관리자 사용자와 역할을 관리합니다.",
         "total_admins": "전체 관리자",
@@ -609,28 +571,8 @@
         "secret_key_hint": "서버 측 시크릿 키 — 비공개로 유지하세요",
         "stripe_webhook_hint": "Stripe 대시보드의 Webhook 서명 시크릿 (whsec_…)",
         "webhook_hint": "수신 게이트웨이 이벤트를 검증하는 데 사용되는 Webhook 시크릿",
-        "subscriptions": {
-            "index": "목록"
-        },
         "payments": "결제",
         "plans": "요금제",
-        "currencies": {
-            "index": "목록"
-        },
-        "settings": {
-            "index": "목록",
-            "logo": {
-                "upload": "업로드",
-                "delete": "삭제"
-            },
-            "favicon": {
-                "upload": "업로드",
-                "delete": "삭제"
-            }
-        },
-        "ai": {
-            "index": "목록"
-        },
         "price_placeholder": "price_...",
         "admin_login_subtitle": "관리자 패널에 로그인하세요.",
         "client_login_link": "← 클라이언트 로그인",

@@ -153,10 +153,6 @@
         "account": "الحساب"
     },
     "client": {
-        "profile": {
-            "2fa": "2Fa",
-            "sessions": "Sessions"
-        },
         "dashboard": "لوحة التحكم",
         "panel": "لوحة العميل",
         "pricing": "الأسعار",
@@ -226,35 +222,12 @@
         "manage_workspaces": "إدارة مساحات العمل",
         "change_plan": "تغيير الخطة",
         "no_workspace": "لا توجد مساحة عمل",
-        "contacts": {
-            "index": "قائمة جهات الاتصال"
-        },
-        "segments": {
-            "contacts": "Contacts"
-        },
         "whatsapp": {
-            "setup": {
-                "destroy": "Destroy"
-            }
-        },
-        "inbox": {
-            "index": "القائمة",
-            "setup": "Setup"
-        },
-        "ai": {
-            "chatbots": {
-                "index": "القائمة"
-            }
+            "setup": "الإعداد"
         },
         "social": {
-            "accounts": {
-                "index": "القائمة"
-            },
             "composer": "المحرر",
             "calendar": "التقويم"
-        },
-        "campaigns": {
-            "create": "إنشاء"
         },
         "invite_by_email": "دعوة عبر البريد الإلكتروني",
         "next_step": "الخطوة التالية:",
@@ -268,17 +241,6 @@
         "chart_opened": "مفتوحة",
         "chart_resolved": "محلولة",
         "invoice": "الفاتورة",
-        "ecommerce": {
-            "stores": {
-                "test": "اختبار",
-                "sync": "مزامنة"
-            }
-        },
-        "workspaces": {
-            "switch": "Switch",
-            "index": "Index",
-            "store": "Store"
-        },
         "kpi_messages_sent": "Messages sent",
         "kpi_messages_received": "Messages received",
         "kpi_open_conversations": "Open conversations",
@@ -358,9 +320,6 @@
         "payment_gateways": "بوابات الدفع",
         "email": "البريد الإلكتروني",
         "languages": "اللغات",
-        "locales": {
-            "index": "القائمة"
-        },
         "website_templates": "المواقع/صفحات الهبوط",
         "roles_permissions": "الأدوار والصلاحيات",
         "ai_requests": "طلبات الذكاء الاصطناعي",
@@ -478,24 +437,12 @@
         "assign_plan_btn": "تعيين خطة",
         "delete_user_confirm": "هل أنت متأكد من إزالة {{name}} ({{email}}) من هذا العميل؟",
         "delete_client_confirm": "هل أنت متأكد من حذف {{name}}؟ سيؤدي هذا إلى إزالة جميع مستخدمي العميل والاشتراكات.",
-        "coupons": {
-            "index": "قائمة القسائم"
-        },
         "tax_rates": "معدلات الضريبة",
         "landing_page": "صفحة الهبوط",
         "cms_pages": "صفحات CMS",
         "cron_setup": "إعداد Cron",
-        "support": {
-            "index": "قائمة الدعم"
-        },
-        "queue": {
-            "index": "قائمة الانتظار"
-        },
         "clients_count": "إجمالي العملاء",
         "users_count": "إجمالي المستخدمين",
-        "integrations": {
-            "index": "قائمة التكاملات"
-        },
         "pusher_settings": "إعدادات Pusher",
         "admin_management_desc": "إدارة مستخدمي الإدارة وأدوارهم.",
         "total_admins": "إجمالي المديرين",
@@ -586,43 +533,9 @@
         "secret_key_hint": "المفتاح السري للخادم — حافظ على سريته",
         "stripe_webhook_hint": "سر توقيع Webhook‏ (whsec_…) من لوحة تحكم Stripe",
         "webhook_hint": "سر Webhook المستخدم للتحقق من أحداث بوابة الدفع الواردة",
-        "clients": {
-            "index": "Index",
-            "users": {
-                "index": "Index",
-                "store": "Store",
-                "update": "Update",
-                "destroy": "Destroy"
-            },
-            "impersonate": "Impersonate",
-            "destroy": "Destroy",
-            "export": "Export",
-            "store": "Store",
-            "update": "Update"
-        },
         "subscriptions": "Subscriptions",
-        "payments": {
-            "index": "Index"
-        },
-        "plans": {
-            "index": "Index",
-            "update": "Update",
-            "store": "Store",
-            "duplicate": "Duplicate",
-            "destroy": "Destroy",
-            "reorder": "Reorder"
-        },
         "currencies": "Currencies",
-        "admins": {
-            "index": "Index",
-            "destroy": "Destroy",
-            "store": "Store",
-            "update": "Update"
-        },
         "settings": "Settings",
-        "ai": {
-            "index": "الفهرس"
-        },
         "subscriptions_create": "اشتراك جديد",
         "subscriptions_user_search_placeholder": "ابحث بالاسم أو البريد الإلكتروني…",
         "subscriptions_billing_cycle": "دورة الفوترة",
