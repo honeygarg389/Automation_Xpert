@@ -5024,13 +5024,13 @@ parameters:
 		-
 			message: '#^Unable to resolve the template type TKey in call to function collect$#'
 			identifier: argument.templateType
-			count: 4
+			count: 5
 			path: app/Modules/Social/Http/Controllers/SocialPostController.php
 
 		-
 			message: '#^Unable to resolve the template type TValue in call to function collect$#'
 			identifier: argument.templateType
-			count: 4
+			count: 5
 			path: app/Modules/Social/Http/Controllers/SocialPostController.php
 
 		-
