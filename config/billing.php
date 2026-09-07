@@ -33,20 +33,5 @@ return [
             'sandbox' => env('CASHFREE_SANDBOX', true),
             'return_url' => env('CASHFREE_RETURN_URL', env('APP_URL') . '/app/billing?checkout=success'),
         ],
-        // Tap (MENA/GCC) — hosted first charge + merchant-initiated saved-card renewals.
-        // Paystack (Africa: Nigeria, Ghana, South Africa, Kenya, Rwanda, etc.)
-        // Native Subscriptions API — webhook-driven renewals.
-        // Xendit (Southeast Asia: Indonesia, Philippines, Vietnam, Thailand, Malaysia)
-        // Native Recurring Plans API — webhook-driven renewals.
-        // Paymob (Egypt, Jordan, Pakistan, Morocco, Saudi Arabia, UAE)
-        // MIT save-card pattern — merchant-initiated recurring via scheduler.
-        // MyFatoorah (Kuwait, Saudi Arabia, UAE, Bahrain, Oman, Qatar, Jordan)
-        // MIT save-token pattern — merchant-initiated recurring via scheduler.
-        // Mollie (Europe: Netherlands, Belgium, Germany, France, and more)
-        // Native Customers + Subscriptions API — webhook-driven renewals.
-        // Square (US, Canada, UK, Australia, Ireland, France, Spain, Japan)
-        // Native Catalog + Subscriptions API (invoice-billed) — webhook-driven renewals.
-        // Mercado Pago (Latin America: Brazil, Argentina, Mexico, Chile, Colombia, Peru, Uruguay)
-        // Native Preapproval (subscriptions) API — webhook-driven renewals.
     ],
 ];
