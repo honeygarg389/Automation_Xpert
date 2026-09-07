@@ -16,6 +16,7 @@ use App\Models\Workspace;
 use App\Notifications\BillingPaymentFailedNotification;
 use App\Services\Mail\MailService;
 use App\Services\WebhookIdempotencyService;
+use App\Support\BillingCycle;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -75,18 +76,28 @@ class StripeGateway implements BillingGatewayInterface
 
         try {
             $stripe = $this->client();
-            $interval = $billingCycle === 'year' ? 'year' : 'month';
+
+            // ⚠️ interval AND interval_count — quarter/half_year are month
+            // multiples, and omitting the count silently bills monthly.
+            $recurring = BillingCycle::stripe($billingCycle);
+            if ($recurring === null) {
+                return ['error' => "Unsupported billing cycle '{$billingCycle}'."];
+            }
 
             // Use pre-configured catalog price ID when available, otherwise create ad-hoc
-            $catalogPriceId = $billingCycle === 'year' ? $plan->stripe_yearly_id : $plan->stripe_monthly_id;
+            $catalogColumn = BillingCycle::stripePriceIdColumn($billingCycle);
+            $catalogPriceId = $catalogColumn ? $plan->{$catalogColumn} : null;
             if ($catalogPriceId) {
                 $priceId = $catalogPriceId;
             } else {
                 $price = $stripe->prices->create([
                     'currency' => strtolower($plan->currency_code ?? 'usd'),
                     'unit_amount' => $priceCents,
-                    'recurring' => ['interval' => $interval],
-                    'product_data' => ['name' => $plan->name.' ('.$interval.'ly)'],
+                    'recurring' => [
+                        'interval' => $recurring['interval'],
+                        'interval_count' => $recurring['interval_count'],
+                    ],
+                    'product_data' => ['name' => $plan->name.' ('.$billingCycle.')'],
                 ]);
                 $priceId = $price->id;
             }
@@ -581,7 +592,15 @@ class StripeGateway implements BillingGatewayInterface
             return ['ok' => false, 'error' => 'Stripe is not configured.'];
         }
 
-        $priceKey = $billingCycle === 'year' ? 'stripe_yearly_id' : 'stripe_monthly_id';
+        // ⚠️ THIS WAS `$cycle === 'year' ? yearly_id : monthly_id`, WHICH FAILED
+        // OPEN. Any cycle that was not 'year' resolved to the MONTHLY price id,
+        // so a quarterly change would have moved the customer to monthly billing
+        // — silently, with the caller reporting success. A map returns null for
+        // an unknown cycle and the guard below refuses.
+        $priceKey = BillingCycle::stripePriceIdColumn($billingCycle);
+        if ($priceKey === null) {
+            return ['ok' => false, 'error' => "Unsupported billing cycle '{$billingCycle}'."];
+        }
         $newPriceId = $newPlan->{$priceKey};
 
         if (! $newPriceId) {

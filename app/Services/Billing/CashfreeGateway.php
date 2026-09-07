@@ -10,6 +10,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\WebhookIdempotencyService;
+use App\Support\BillingCycle;
 use Carbon\Carbon;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
@@ -82,8 +83,15 @@ class CashfreeGateway implements BillingGatewayInterface
 
         $amount = round($priceCents / 100, 2); // rupees (major units)
         $currency = strtoupper($plan->currency_code ?? 'INR');
-        $intervalType = $billingCycle === 'year' ? 'YEAR' : 'MONTH';
-        $maxCycles = $billingCycle === 'year' ? 10 : 120;
+        // ⚠️ Cashfree accepts DAY|WEEK|MONTH|YEAR only — quarter and half_year
+        // are MONTH multiples via plan_intervals. maxCycles counts CYCLES, so
+        // each mapping works out to the same ~10-year horizon.
+        $mapping = BillingCycle::cashfree($billingCycle);
+        $maxCycles = BillingCycle::horizonCycles($billingCycle);
+        if ($mapping === null || $maxCycles === null) {
+            return ['error' => "Unsupported billing cycle '{$billingCycle}'."];
+        }
+        $intervalType = $mapping['type'];
         $subscriptionId = 'sub_'.$user->id.'_'.Str::lower(Str::random(18));
 
         $body = [
@@ -101,7 +109,7 @@ class CashfreeGateway implements BillingGatewayInterface
                 'plan_amount' => $amount,
                 'plan_max_amount' => $amount,
                 'plan_max_cycles' => $maxCycles,
-                'plan_intervals' => 1,
+                'plan_intervals' => $mapping['intervals'],
                 'plan_interval_type' => $intervalType,
             ],
             'authorization_details' => [
