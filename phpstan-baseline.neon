@@ -5180,24 +5180,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Modules\\Social\\Models\\SocialAccount\:\:\$access_token\.$#'
 			identifier: property.notFound
-			count: 2
-			path: app/Modules/Social/Services/Drivers/TikTokDriver.php
-
-		-
-			message: '#^Method App\\Modules\\Social\\Services\\Drivers\\TikTokDriver\:\:fetchAccountInfo\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Modules/Social/Services/Drivers/TikTokDriver.php
-
-		-
-			message: '#^Method App\\Modules\\Social\\Services\\Drivers\\TikTokDriver\:\:publish\(\) has parameter \$postData with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Modules/Social/Services/Drivers/TikTokDriver.php
-
-		-
-			message: '#^Access to an undefined property App\\Modules\\Social\\Models\\SocialAccount\:\:\$access_token\.$#'
-			identifier: property.notFound
 			count: 1
 			path: app/Modules/Social/Services/Drivers/TwitterDriver.php
 
