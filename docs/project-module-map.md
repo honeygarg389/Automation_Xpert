@@ -213,6 +213,13 @@ graph TD
 
 **Billing** — `app/Services/Billing/` holds **14 gateway implementations** (Stripe 712 lines, Paymob 567, Tap 544, Mollie 485, Square 483, MercadoPago 478, PayPal 469, plus Razorpay, Cashfree, Paystack, MyFatoorah, Xendit, Paddle). Five scheduled billing commands run hourly. All verify webhook signatures with `hash_equals` ✅.
 
+> ⚠️ **SUPERSEDED 2026-09-07.** Nine gateways (Paddle, Tap, Paystack, Xendit, Paymob,
+> MyFatoorah, Mollie, Square, MercadoPago) were removed on `feature/payment-gateway-cleanup`.
+> **Four remain: Stripe, PayPal, Razorpay, Cashfree.** The counts and line totals above are the
+> measurement as taken on the date of this report and are left unedited as a record; they no
+> longer describe the codebase.
+
+
 > This is the largest single concentration of duplicated structure in the project — see AUD-QUAL-002.
 
 **Analytics** — `AnalyticsService` (889 lines, 39 PHPStan errors).

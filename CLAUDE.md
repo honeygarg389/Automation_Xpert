@@ -487,8 +487,12 @@ entitlement, not more gateway code. Webhook idempotency is NOT a blocker: all th
 already dedup through `WebhookIdempotencyService` against a real unique constraint — the
 "7 of 15 stub handleWebhook, nothing is idempotent" claim was measured false and is recorded
 as BUG-033, together with the non-unique `billing_events` index that probably caused it.
-Separately, BUG-034: Paddle and PayPal never RELEASE that lock on handler failure, so a
-transient error permanently dedups the event and the renewal is lost.
+Separately, BUG-034 — ✅ **FIXED 2026-09-07**: Paddle and PayPal never RELEASED that lock on
+handler failure, so a transient error permanently dedupped the event and the renewal was lost.
+Paddle left with the nine-gateway removal; **PayPal was fixed**, because it is a keeper — the
+old "closes by deletion" note assumed a removal scope that keeps only Razorpay and Cashfree, and
+the executed scope keeps four. A guard test now fails the build if any gateway calls
+`isNewEvent()` without `release()`.
 
 ### Named items that must not be lost when a phase closes
 
@@ -536,6 +540,22 @@ scheduled, all would die quietly when Phase 0 closes:
 | SEC-006 | High | Sanctum tokens never expire (`expiration = null`) | same |
 
 **Design constraints that must not be violated later** (agreed in conversation, easily lost):
+
+- ⚠️ **THE GATEWAY SET IS FOUR: Stripe, PayPal, Razorpay, Cashfree.** Nine others (Paddle, Tap,
+  Paystack, Xendit, Paymob, MyFatoorah, Mollie, Square, MercadoPago) were removed on 2026-09-07;
+  ~4,600 lines. Do not reintroduce one by copying a deleted class out of git history — each was
+  an independent duplicate of the same HTTP client, status mapper and invoice hook, which is the
+  duplication AUD-QUAL-002 recorded. A new gateway implements `BillingGatewayInterface` and
+  registers in `BillingGatewayRegistry`, and must appear in ALL of: the registry's DB branch and
+  config branch and `$labels`, `CheckoutController`'s `Rule::in`, `PaymentGatewayConfigController::GATEWAYS`
+  and its labels, `config/billing.php`, `routes/web.php`, `WebhookController`, and
+  **`bootstrap/app.php`'s CSRF exempt list** — that last one is the entry that has been forgotten
+  before, and its failure mode is a silent 419 on every inbound webhook.
+
+  ⚠️ **`resources/js/Pages/client/Checkout/Sdk.jsx` is Cashfree-only and looks dead.** It is the
+  interstitial for gateways that return a `['checkout' => …]` envelope instead of a redirect URL.
+  Paddle was the only other producer and is gone, so `SDK_SRC` now lists exactly one entry.
+  Deleting it breaks Cashfree checkout with **no compile error and no failing test**.
 
 - ⚠️ **Razorpay in-place plan change works ONLY for card-authorized subscriptions. A UPI or
   eMandate customer getting a refusal is CORRECT BEHAVIOUR, not a bug.**
@@ -588,7 +608,7 @@ scheduled, all would die quietly when Phase 0 closes:
 
   | Table | Live writers |
   |---|---|
-  | `subscriptions` | **15** — one per payment gateway (`StripeGateway`, `PaddleGateway`, …) |
+  | `subscriptions` | **4** — one per payment gateway (`StripeGateway`, `PayPalGateway`, `RazorpayGateway`, `CashfreeGateway`). Was 15 before the 2026-09-07 removal of nine gateways. |
   | `client_subscriptions` | **1** — `Admin\ClientController::assignPlan`, plus 2 seeder calls |
 
   Neither is authoritative alone. **They are two parallel billing paths**: `subscriptions` is
