@@ -12,7 +12,6 @@ class IntegrationConfig extends Model
         'oauth_linkedin',
         'oauth_twitter',
         'oauth_youtube',
-        'oauth_tiktok',
         'oauth_shopify',
         'oauth_bigcommerce',
         'llm_openai_default',
@@ -44,7 +43,6 @@ class IntegrationConfig extends Model
         'oauth_linkedin' => 'LinkedIn OAuth',
         'oauth_twitter' => 'Twitter / X OAuth',
         'oauth_youtube' => 'YouTube / Google OAuth',
-        'oauth_tiktok' => 'TikTok OAuth',
         'oauth_shopify' => 'Shopify App (OAuth)',
         'oauth_bigcommerce' => 'BigCommerce App (OAuth)',
         'llm_openai_default' => 'OpenAI (Default)',
@@ -65,7 +63,6 @@ class IntegrationConfig extends Model
         'oauth_linkedin' => 'Social OAuth',
         'oauth_twitter' => 'Social OAuth',
         'oauth_youtube' => 'Social OAuth',
-        'oauth_tiktok' => 'Social OAuth',
         'oauth_shopify' => 'E-Commerce OAuth',
         'oauth_bigcommerce' => 'E-Commerce OAuth',
         'llm_openai_default' => 'AI / LLM',
@@ -100,10 +97,6 @@ class IntegrationConfig extends Model
         ],
         'oauth_youtube' => [
             ['key' => 'client_id',     'label' => 'Client ID',     'type' => 'text',     'required' => true],
-            ['key' => 'client_secret', 'label' => 'Client Secret', 'type' => 'password', 'required' => true],
-        ],
-        'oauth_tiktok' => [
-            ['key' => 'client_key',    'label' => 'Client Key',    'type' => 'text',     'required' => true],
             ['key' => 'client_secret', 'label' => 'Client Secret', 'type' => 'password', 'required' => true],
         ],
         'oauth_shopify' => [

@@ -16,7 +16,7 @@ export const CHANNEL_LABELS = {
 function SvgBrand({ name, className }) {
     const data = brandIconData[name];
     if (!data) return null;
-    const useCurrentColor = name === 'twitter' || name === 'tiktok';
+    const useCurrentColor = name === 'twitter';
     const fill = useCurrentColor ? 'currentColor' : `#${data.hex}`;
     return (
         <svg
@@ -54,7 +54,7 @@ export function ChannelBrandIcon({ channel, className }) {
     return <SvgBrand name={key} className={className} />;
 }
 
-/** Facebook, Instagram, LinkedIn, X, YouTube, TikTok */
+/** Facebook, Instagram, LinkedIn, X, YouTube */
 export function SocialBrandIcon({ network, className }) {
     const map = {
         facebook: 'facebook',
@@ -62,7 +62,6 @@ export function SocialBrandIcon({ network, className }) {
         linkedin: 'linkedin',
         twitter: 'twitter',
         youtube: 'youtube',
-        tiktok: 'tiktok',
     };
     const name = map[network];
     if (!name) return null;

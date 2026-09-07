@@ -8,11 +8,11 @@ import { ArrowLeft, Clock, Trash2, Plus, Send, Calendar } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { browserTz, tzLocalToUtcIso, formatInTz } from '@/Utils/datetime';
 
-const CHAR_LIMITS = { twitter: 280, tiktok: 2200, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
+const CHAR_LIMITS = { twitter: 280, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
 
 const NETWORK_LABELS = {
     facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn',
-    twitter: 'X (Twitter)', youtube: 'YouTube', tiktok: 'TikTok',
+    twitter: 'X (Twitter)', youtube: 'YouTube',
 };
 
 /** Convert a UTC datetime string to a `datetime-local` value in the given timezone. */

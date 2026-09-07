@@ -7,7 +7,6 @@ use App\Modules\Social\Models\SocialAccount;
 use App\Modules\Social\Services\Drivers\FacebookDriver;
 use App\Modules\Social\Services\Drivers\InstagramSocialDriver;
 use App\Modules\Social\Services\Drivers\LinkedInDriver;
-use App\Modules\Social\Services\Drivers\TikTokDriver;
 use App\Modules\Social\Services\Drivers\TwitterDriver;
 use App\Modules\Social\Services\Drivers\YoutubeDriver;
 use App\Modules\Social\Services\OAuth\OAuthManager;
@@ -31,7 +30,6 @@ class SocialAccountController extends Controller
             'linkedin' => new LinkedInDriver,
             'twitter' => new TwitterDriver,
             'youtube' => new YoutubeDriver,
-            'tiktok' => new TikTokDriver,
         ];
     }
 
@@ -50,7 +48,7 @@ class SocialAccountController extends Controller
 
     public function connect(Request $request, string $network): RedirectResponse
     {
-        $validNetworks = ['facebook', 'instagram', 'linkedin', 'twitter', 'youtube', 'tiktok'];
+        $validNetworks = ['facebook', 'instagram', 'linkedin', 'twitter', 'youtube'];
         abort_unless(in_array($network, $validNetworks, true), 404);
 
         Session::put('social_oauth_workspace', $this->workspaceId($request));

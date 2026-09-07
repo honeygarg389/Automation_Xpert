@@ -2902,7 +2902,6 @@
         "network_desc_linkedin": "اربط ملفك الشخصي أو صفحة شركتك على LinkedIn.",
         "network_desc_twitter": "اربط حسابك على X / Twitter.",
         "network_desc_youtube": "اربط قناتك على YouTube لرفع مقاطع الفيديو.",
-        "network_desc_tiktok": "اربط حسابك على TikTok لنشر مقاطع الفيديو.",
         "token_expired": "انتهت صلاحية الرمز المميز",
         "disconnect": "قطع الاتصال",
         "disconnect_confirm": "قطع الاتصال بـ \"{{name}}\"؟",

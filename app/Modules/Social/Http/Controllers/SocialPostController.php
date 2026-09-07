@@ -325,7 +325,7 @@ class SocialPostController extends Controller
         string $timezone
     ): array {
         $networksStr = implode(', ', $networks);
-        $limits = ['twitter' => 280, 'tiktok' => 2200, 'linkedin' => 3000, 'facebook' => 63206, 'instagram' => 2200, 'youtube' => 5000];
+        $limits = ['twitter' => 280, 'linkedin' => 3000, 'facebook' => 63206, 'instagram' => 2200, 'youtube' => 5000];
         $limitLines = collect($networks)->map(fn ($n) => "- {$n}: ".($limits[$n] ?? 5000).' characters')->implode("\n");
 
         $system = <<<SYSTEM

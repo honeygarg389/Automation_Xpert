@@ -3003,7 +3003,6 @@
         "network_desc_linkedin": "अपनी LinkedIn प्रोफ़ाइल या कंपनी पेज कनेक्ट करें।",
         "network_desc_twitter": "अपना X / Twitter खाता कनेक्ट करें।",
         "network_desc_youtube": "वीडियो अपलोड करने के लिए अपना YouTube चैनल कनेक्ट करें।",
-        "network_desc_tiktok": "वीडियो प्रकाशित करने के लिए अपना TikTok खाता कनेक्ट करें।",
         "token_expired": "टोकन की अवधि समाप्त",
         "disconnect": "डिस्कनेक्ट करें",
         "disconnect_confirm": "\"{{name}}\" को डिस्कनेक्ट करें?",

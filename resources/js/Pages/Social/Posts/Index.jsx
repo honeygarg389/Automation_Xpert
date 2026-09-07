@@ -19,8 +19,8 @@ const STATUS_META = {
     failed:     { labelKey: 'social.status_failed',     cls: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',             icon: <XCircle className="h-3 w-3" /> },
 };
 
-const NETWORKS = ['facebook', 'instagram', 'linkedin', 'twitter', 'youtube', 'tiktok'];
-const NETWORK_LABELS = { facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', twitter: 'X (Twitter)', youtube: 'YouTube', tiktok: 'TikTok' };
+const NETWORKS = ['facebook', 'instagram', 'linkedin', 'twitter', 'youtube'];
+const NETWORK_LABELS = { facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn', twitter: 'X (Twitter)', youtube: 'YouTube' };
 
 function StatusBadge({ status }) {
     const { t } = useTranslation();
