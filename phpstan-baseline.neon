@@ -5424,36 +5424,6 @@ parameters:
 			path: app/Modules/Social/Services/SocialPublisher.php
 
 		-
-			message: '#^Access to an undefined property App\\Modules\\Social\\Models\\SocialPostAccount\:\:\$platform_post_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Social/Services/SocialPublisher.php
-
-		-
-			message: '#^Access to an undefined property App\\Modules\\Social\\Models\\SocialPostAccount\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Modules/Social/Services/SocialPublisher.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Support\\Collection\<int,array\<string, mixed\>\>\:\:filter\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Modules/Social/Services/SocialPublisher.php
-
-		-
-			message: '#^Parameter \#1 \$value of function collect contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
-			path: app/Modules/Social/Services/SocialPublisher.php
-
-		-
-			message: '#^Return type of call to function collect contains unresolvable type\.$#'
-			identifier: function.unresolvableReturnType
-			count: 1
-			path: app/Modules/Social/Services/SocialPublisher.php
-
-		-
 			message: '#^Access to an undefined property App\\Modules\\Whatsapp\\Models\\WhatsappAutoReply\:\:\$workspace_id\.$#'
 			identifier: property.notFound
 			count: 1
