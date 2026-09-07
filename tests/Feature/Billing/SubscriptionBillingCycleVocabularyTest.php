@@ -72,7 +72,7 @@ class SubscriptionBillingCycleVocabularyTest extends TestCase
                 $lines = file($file->getPathname());
 
                 foreach ($lines as $i => $line) {
-                    if (preg_match("/'billing_cycle'\s*=>\s*'(monthly|yearly)'/", $line, $m)) {
+                    if (preg_match("/'billing_cycle'\s*=>\s*'(monthly|quarterly|half_yearly|yearly)'/", $line, $m)) {
                         $rel = str_replace(base_path().'/', '', $file->getPathname());
                         $offenders[] = "{$rel}:".($i + 1)." writes '{$m[1]}'";
                     }
@@ -82,9 +82,93 @@ class SubscriptionBillingCycleVocabularyTest extends TestCase
 
         $this->assertSame([], $offenders,
             "A billing_cycle literal from the client_subscriptions vocabulary was found.\n"
-            ."If the target is `subscriptions`, use 'month'/'year'.\n"
-            ."If the target is `client_subscriptions`, use ClientSubscription::BILLING_MONTHLY/BILLING_YEARLY.\n"
+            .'If the target is `subscriptions`, use a BillingCycle::* constant '
+            ."(month|quarter|half_year|year).\n"
+            .'If the target is `client_subscriptions`, use a ClientSubscription::BILLING_* constant '
+            ."(monthly|quarterly|half_yearly|yearly).\n"
             .implode("\n", $offenders));
+    }
+
+    /**
+     * ⚠️ THE MIRROR GUARD, added with quarter/half_year.
+     *
+     * The scan above catches a LONG form used on `subscriptions`. It cannot
+     * catch the opposite mistake — a SHORT form written to
+     * `client_subscriptions` — because both literals are legitimate somewhere.
+     * This one names the offending direction by looking at what the surrounding
+     * write targets.
+     *
+     * Both vocabularies now have four values instead of two, which doubles the
+     * number of ways to get this wrong; the original bug was a copy-paste
+     * between two adjacent blocks in one file.
+     */
+    #[Test]
+    public function client_subscription_writes_do_not_use_the_short_vocabulary(): void
+    {
+        $offenders = [];
+
+        foreach (['app', 'database'] as $dir) {
+            $files = new RecursiveIteratorIterator(
+                new RecursiveDirectoryIterator(base_path($dir), RecursiveDirectoryIterator::SKIP_DOTS)
+            );
+
+            foreach ($files as $file) {
+                if ($file->getExtension() !== 'php') {
+                    continue;
+                }
+
+                $source = file_get_contents($file->getPathname());
+                $lines = explode("\n", $source);
+
+                foreach ($lines as $i => $line) {
+                    if (! preg_match("/'billing_cycle'\s*=>\s*'(month|quarter|half_year|year)'/", $line, $m)) {
+                        continue;
+                    }
+
+                    // ⚠️ NEAREST PRECEDING MODEL WINS, not "appears within N lines".
+                    // A window is wrong here: DemoSeeder writes a
+                    // ClientSubscription and a Subscription in adjacent blocks —
+                    // which is how the original bug happened — so a window over
+                    // the correct Subscription write also sees the
+                    // ClientSubscription above it and reports a false positive.
+                    // Scanning backwards to the FIRST model mention classifies
+                    // the write by the block it is actually in.
+                    $target = null;
+                    for ($j = $i; $j >= max(0, $i - 25); $j--) {
+                        // ⚠️ COMMENTS ARE SKIPPED, and that is not a nicety.
+                        // The correct write in DemoSeeder carries a comment
+                        // explaining the two vocabularies, which NAMES
+                        // ClientSubscription — so a scan that reads comments
+                        // classifies the one provably-correct site in the
+                        // codebase as an offender. A guard whose first finding
+                        // is a false positive gets muted, not fixed.
+                        $code = trim($lines[$j]);
+                        if ($code === '' || str_starts_with($code, '//') || str_starts_with($code, '*') || str_starts_with($code, '/*')) {
+                            continue;
+                        }
+
+                        if (str_contains($lines[$j], 'ClientSubscription')) {
+                            $target = 'client';
+                            break;
+                        }
+                        if (preg_match('/\bSubscription::|->subscriptions\(\)/', $lines[$j])) {
+                            $target = 'subscription';
+                            break;
+                        }
+                    }
+
+                    if ($target === 'client') {
+                        $rel = str_replace(base_path().'/', '', $file->getPathname());
+                        $offenders[] = "{$rel}:".($i + 1)." writes '{$m[1]}' into a ClientSubscription";
+                    }
+                }
+            }
+        }
+
+        $this->assertSame([], $offenders,
+            'A short-vocabulary billing_cycle literal appears in what looks like a '
+            .'`client_subscriptions` write. That table uses monthly|quarterly|half_yearly|yearly '
+            ."— see ClientSubscription::BILLING_*.\n".implode("\n", $offenders));
     }
 
     /** The validator that defines the vocabulary for `subscriptions`. */

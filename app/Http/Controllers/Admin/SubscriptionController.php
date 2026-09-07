@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\AuditLogService;
+use App\Support\BillingCycle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -89,7 +90,7 @@ class SubscriptionController extends Controller
         $validated = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
             'plan_id' => ['required', 'integer', 'exists:plans,id'],
-            'billing_cycle' => ['required', Rule::in(['month', 'year'])],
+            'billing_cycle' => ['required', Rule::in(BillingCycle::ALL)],
             'status' => ['required', Rule::in(['active', 'trialing'])],
             'starts_at' => ['nullable', 'date'],
             'ends_at' => ['nullable', 'date', 'after:starts_at'],
