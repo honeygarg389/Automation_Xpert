@@ -246,7 +246,12 @@ class DemoSeeder extends Seeder
             ['user_id' => $this->admin->id, 'plan_id' => $business->id],
             [
                 'status' => 'active',
-                'billing_cycle' => 'monthly',
+                // ⚠️ 'month', NOT 'monthly'. This is a `subscriptions` row, whose
+                // vocabulary is month|year (Rule::in at CheckoutController:26 and
+                // both SubscriptionControllers). 'monthly'|'yearly' belongs to the
+                // DIFFERENT `client_subscriptions` table — see the correct use of
+                // ClientSubscription::BILLING_MONTHLY a few lines above.
+                'billing_cycle' => 'month',
                 'gateway' => 'stripe',
                 'gateway_subscription_id' => 'sub_'.Str::lower(Str::random(20)),
                 'starts_at' => $this->days(208),
