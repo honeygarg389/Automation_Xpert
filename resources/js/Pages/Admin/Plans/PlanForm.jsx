@@ -158,6 +158,15 @@ export default function PlanForm({
                         onChange={(e) => setData('stripe_yearly_id', e.target.value)}
                         placeholder={t('admin.price_id_placeholder')}
                     />
+                    {/*
+                      * ⚠️ Says "on save", not "as you type", because the browser
+                      * cannot resolve a Price ID to an amount — only Stripe can.
+                      * Without this the absence of live validation reads as the
+                      * field being unvalidated.
+                      */}
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                        {t('admin.price_id_verified_on_save')}
+                    </p>
                 </div>
             </section>
 

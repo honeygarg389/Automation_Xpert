@@ -57,7 +57,7 @@ class HandleInertiaRequests extends Middleware
             $locale = app()->getLocale();
             $app = [
                 'csrf_token' => csrf_token(),
-                'flash' => ['success' => null, 'error' => null],
+                'flash' => ['success' => null, 'error' => null, 'warning' => null],
                 'auth' => [
                     'user' => $request->user(),
                     'adminUser' => null,
@@ -378,6 +378,10 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
+                // A non-blocking advisory: the action SUCCEEDED but something about
+                // the result deserves attention. Distinct from 'error', which means
+                // the action did not happen.
+                'warning' => $request->session()->get('warning'),
                 'openEditPlanId' => $request->session()->get('openEditPlanId'),
                 'upgrade_required' => $request->session()->get('upgrade_required'),
                 'upgrade_reason' => $request->session()->get('upgrade_reason'),

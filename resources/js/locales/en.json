@@ -574,6 +574,7 @@
         "pricing": "Pricing",
         "price_id_monthly": "Monthly Price ID",
         "price_id_placeholder": "price_...",
+        "price_id_verified_on_save": "Price IDs are verified against Stripe when you save — there is no live check as you type.",
         "price_id_yearly": "Yearly Price ID",
         "status": "Status",
         "test_mode": "Test Mode",
