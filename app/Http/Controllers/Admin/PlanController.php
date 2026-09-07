@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Currency;
 use App\Models\Plan;
 use App\Modules\Entitlements\Support\PlanLimitKinds;
+use App\Services\Billing\BillingGatewayRegistry;
+use App\Services\Billing\StripeGateway;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -119,9 +121,11 @@ class PlanController extends Controller
         $validated['slug'] = $validated['slug'] ?: Str::slug($validated['name']);
         $validated['sort_order'] = (int) (Plan::max('sort_order') ?? 0) + 1;
 
-        Plan::create($this->mapValidatedToAttributes($validated));
+        $plan = Plan::create($this->mapValidatedToAttributes($validated));
 
-        return redirect()->route('admin.plans.index')->with('success', __('Plan created successfully.'));
+        return redirect()->route('admin.plans.index')
+            ->with('success', __('Plan created successfully.'))
+            ->with('warning', $this->stripePriceWarning($plan));
     }
 
     public function edit(Plan $plan): Response
@@ -138,7 +142,9 @@ class PlanController extends Controller
         $validated = $this->validatePlan($request, $plan);
         $plan->update($this->mapValidatedToAttributes($validated));
 
-        return redirect()->route('admin.plans.index')->with('success', __('Plan updated successfully.'));
+        return redirect()->route('admin.plans.index')
+            ->with('success', __('Plan updated successfully.'))
+            ->with('warning', $this->stripePriceWarning($plan->fresh()));
     }
 
     public function destroy(Plan $plan): RedirectResponse
@@ -234,5 +240,74 @@ class PlanController extends Controller
             'sort_order' => (int) ($validated['sort_order'] ?? 0),
             'white_label_enabled' => (bool) ($validated['white_label_enabled'] ?? false),
         ];
+    }
+
+    /**
+     * Compare each configured Stripe Price ID against this plan's own price.
+     *
+     * ⚠️ ADVISORY ONLY — NEVER BLOCKING. The plan is already saved when this runs,
+     * and that is deliberate: verification talks to a third party, so it can fail
+     * for reasons that have nothing to do with what the admin typed (revoked key,
+     * network, test-vs-live mode). Letting any of those refuse a plan save would
+     * make Stripe's availability a prerequisite for editing local pricing.
+     *
+     * ⚠️ WHY IT MATTERS: createCheckout() PREFERS the Stripe catalog price over
+     * `*_price_cents` when one is set. So a mismatch does not mean "two numbers
+     * disagree cosmetically" — it means customers are charged the Stripe number
+     * while every screen here shows the local one.
+     *
+     * A verification failure produces a DISTINCT message rather than silence:
+     * "could not verify" and "verified, and it differs" are different facts, and
+     * staying quiet on the first would let a typo'd price id look approved.
+     */
+    private function stripePriceWarning(Plan $plan): ?string
+    {
+        $pairs = [
+            ['month', $plan->stripe_monthly_id, $plan->monthly_price_cents],
+            ['year', $plan->stripe_yearly_id, $plan->yearly_price_cents],
+        ];
+
+        if (! collect($pairs)->contains(fn ($p) => ! empty($p[1]))) {
+            return null;
+        }
+
+        $gateway = app(BillingGatewayRegistry::class)->get('stripe');
+        if (! $gateway instanceof StripeGateway) {
+            return null; // Stripe not enabled — nothing to verify against.
+        }
+
+        $messages = [];
+
+        foreach ($pairs as [$cycle, $priceId, $localCents]) {
+            if (empty($priceId)) {
+                continue;
+            }
+
+            $result = $gateway->priceAmountMinorUnits((string) $priceId);
+
+            if (isset($result['error'])) {
+                $messages[] = __('Could not verify the Stripe Price ID for :cycle billing (:id). Check the ID and that your Stripe key is valid.', [
+                    'cycle' => $cycle,
+                    'id' => $priceId,
+                ]);
+
+                continue;
+            }
+
+            $stripeCents = $result['amount'];
+            if ($stripeCents === null || $localCents === null) {
+                continue;
+            }
+
+            if ((int) $stripeCents !== (int) $localCents) {
+                $messages[] = __("Your Stripe Price ID for :cycle billing charges :stripe, but this plan's price here is :local. Customers will be charged the Stripe amount at checkout.", [
+                    'cycle' => $cycle,
+                    'stripe' => number_format($stripeCents / 100, 2).' '.strtoupper((string) $plan->currency_code),
+                    'local' => number_format(((int) $localCents) / 100, 2).' '.strtoupper((string) $plan->currency_code),
+                ]);
+            }
+        }
+
+        return $messages === [] ? null : implode(' ', $messages);
     }
 }

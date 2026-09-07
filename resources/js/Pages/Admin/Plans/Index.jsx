@@ -5,6 +5,7 @@ import { Button, Modal } from '@/Components/ui';
 import PlanTable from './PlanTable';
 import PlanModal from './PlanModal';
 import { useTranslation } from 'react-i18next';
+import { AlertTriangle, X } from 'lucide-react';
 
 function Toast({ message, onDismiss }) {
     useEffect(() => {
@@ -20,6 +21,32 @@ function Toast({ message, onDismiss }) {
             role="alert"
         >
             <span className="text-sm font-medium">{message}</span>
+        </div>
+    );
+}
+
+/**
+ * A non-blocking advisory. NOT the Toast above: that auto-dismisses after 4s,
+ * which is wrong for a message containing two amounts the admin has to read and
+ * compare. This stays until dismissed.
+ */
+function WarningBanner({ message, onDismiss }) {
+    if (!message) return null;
+    return (
+        <div
+            className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3"
+            role="alert"
+        >
+            <AlertTriangle className="h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+            <p className="flex-1 text-sm text-amber-800 dark:text-amber-200">{message}</p>
+            <button
+                type="button"
+                onClick={onDismiss}
+                className="shrink-0 rounded p-1 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-800/40"
+                aria-label="Dismiss"
+            >
+                <X className="h-4 w-4" />
+            </button>
         </div>
     );
 }
@@ -58,6 +85,13 @@ export default function AdminPlansIndex({ plans = [], currencies = [], defaultCu
     const openEditPlanId = flash?.openEditPlanId ?? null;
 
     const [toast, setToast] = useState(flash?.success ?? '');
+    // ⚠️ DERIVED, not synced through an effect. The file's `toast` uses the
+    // useState+useEffect pattern, which react-hooks/set-state-in-effect already
+    // flags twice here; copying it would add a third. Tracking what was DISMISSED
+    // instead of what is SHOWN needs no effect and still works across Inertia
+    // visits, where the component is reused and only props change.
+    const [dismissedWarning, setDismissedWarning] = useState('');
+    const warning = flash?.warning && flash.warning !== dismissedWarning ? flash.warning : '';
     const [modalOpen, setModalOpen] = useState(false);
     const [editPlan, setEditPlan] = useState(null);
     const [deletePlan, setDeletePlan] = useState(null);
@@ -132,6 +166,7 @@ export default function AdminPlansIndex({ plans = [], currencies = [], defaultCu
         <AdminLayout title={t('admin.price_plans')}>
             <Head title={`${t('admin.price_plans')} · Admin`} />
             <div className="space-y-6">
+                <WarningBanner message={warning} onDismiss={() => setDismissedWarning(warning)} />
                 {/* Section 1 — Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                     <div>

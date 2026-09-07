@@ -537,6 +537,45 @@ scheduled, all would die quietly when Phase 0 closes:
 
 **Design constraints that must not be violated later** (agreed in conversation, easily lost):
 
+- ⚠️ **Razorpay in-place plan change works ONLY for card-authorized subscriptions. A UPI or
+  eMandate customer getting a refusal is CORRECT BEHAVIOUR, not a bug.**
+
+  `RazorpayGateway::changePlan()` is implemented (PATCH `/v1/subscriptions/:id` with
+  `schedule_change_at: 'now'`), but Razorpay's Update Subscription API documents two hard
+  exclusions:
+
+  > "Subscriptions cannot be updated when payment mode is UPI"
+  > "Emandate subscriptions cannot be updated" — they are "immutable post-authentication"
+
+  (`https://razorpay.com/docs/api/payments/subscriptions/update-subscription/`)
+
+  This follows from mandate authorization, not from our code: the mandate the customer signed
+  is what caps collectable amounts, and changing it needs a fresh authorization. Such a customer
+  must cancel and re-subscribe.
+
+  ⚠️ **The gateway cannot detect this in advance.** The app never records the authorization
+  method and Razorpay does not return it on the subscription object we hold, so the check
+  cannot move earlier than the API call. The refusal arrives as Razorpay's own
+  `error.description`, passed through unchanged — do NOT "fix" this by replacing that message
+  with a generic one; it is the only thing telling the customer what to do instead.
+
+  ⚠️ **The ₹0.50 minimum is on the PRORATED difference, which we cannot compute.**
+  Razorpay requires "the prorated amount difference between the existing and new plans is at
+  least 50 currency subunits" and only "when you update a Subscription immediately"
+  (`https://razorpay.com/docs/payments/subscriptions/update/`). Our pre-flight guard compares
+  FULL PLAN PRICES, which is a deliberate one-way filter: proration only ever shrinks the
+  difference, so refusing below 50 can never reject a change Razorpay would accept — but a
+  full difference of 50+ can still prorate under the line late in a cycle, and Razorpay
+  rejects those. The API error path is the real backstop; the guard exists to turn the common
+  case into a sentence a customer can act on.
+
+  ⚠️ **Stripe's identical guard is a PRODUCT choice, not an API constraint.** Stripe has no
+  documented minimum proration difference and handles small amounts gracefully. Keeping the
+  guard is purely a deliberate consistency choice with Razorpay, whose minimum is a real vendor
+  constraint. Reconfirmed on 2026-09-07: both guards are staying, and same-price swaps (a zero
+  difference) remain intentionally blocked on both gateways. If that consistency decision ever
+  changes, drop the guard on the Stripe side and keep Razorpay's.
+
 - **Per-workspace integrations need a SEPARATE `workspace_integration_connections` table**
   with encrypted per-workspace credentials. Do **not** extend `IntegrationConfig`, which is
   platform-global and admin-managed. Applies to Google Business Profile, Calendly, n8n.

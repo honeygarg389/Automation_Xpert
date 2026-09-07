@@ -3,6 +3,7 @@
 namespace App\Services\Billing;
 
 use App\Contracts\BillingGatewayInterface;
+use App\Events\PlanChanged;
 use App\Events\SubscriptionRenewed;
 use App\Events\SubscriptionStarted;
 use App\Models\PaymentTransaction;
@@ -32,6 +33,12 @@ use Symfony\Component\HttpFoundation\Response;
 class RazorpayGateway implements BillingGatewayInterface
 {
     private const BASE_URL = 'https://api.razorpay.com/v1';
+
+    /**
+     * Minimum difference Razorpay accepts between the old and new plan, in
+     * currency subunits (paise). Documented as 50 = ₹0.50.
+     */
+    private const MIN_CHANGE_DIFFERENCE_SUBUNITS = 50;
 
     public function __construct(
         private string $keyId,
@@ -67,36 +74,15 @@ class RazorpayGateway implements BillingGatewayInterface
             return ['error' => 'Plan has no price for this billing cycle.'];
         }
 
-        $currency = strtoupper($plan->currency_code ?? 'INR');
-        $period = $billingCycle === 'year' ? 'yearly' : 'monthly';
         // Razorpay requires a finite cycle count; use a long horizon to emulate open-ended.
         $totalCount = $billingCycle === 'year' ? 10 : 120;
 
         // 1) Create a plan (item.amount in paise).
-        $planRes = $this->http()->post(self::BASE_URL.'/plans', [
-            'period' => $period,
-            'interval' => 1,
-            'item' => [
-                'name' => $plan->name,
-                'amount' => $priceCents,
-                'currency' => $currency,
-            ],
-            'notes' => [
-                'plan_id' => (string) $plan->id,
-                'billing_cycle' => $billingCycle,
-            ],
-        ]);
-
-        if (! $planRes->successful()) {
-            Log::error('Razorpay create plan failed', ['body' => $planRes->json(), 'user_id' => $user->id]);
-
-            return ['error' => $planRes->json('error.description', 'Razorpay plan creation failed.')];
+        $planResult = $this->createRazorpayPlan($plan, $billingCycle, $priceCents);
+        if (isset($planResult['error'])) {
+            return ['error' => $planResult['error']];
         }
-
-        $razorpayPlanId = $planRes->json('id');
-        if (! $razorpayPlanId) {
-            return ['error' => 'No plan ID in Razorpay response.'];
-        }
+        $razorpayPlanId = $planResult['id'];
 
         // 2) Create a subscription → short_url is the hosted authorization page.
         $body = [
@@ -342,10 +328,163 @@ class RazorpayGateway implements BillingGatewayInterface
         };
     }
 
+    /**
+     * Create a Razorpay-side plan object for one (plan, cycle) pair.
+     *
+     * Shared by createCheckout() and changePlan(). Razorpay has no notion of
+     * updating a plan's price, so BOTH paths create a fresh plan object and point
+     * the subscription at it — which is why this is extracted rather than
+     * duplicated.
+     *
+     * ⚠️ Razorpay plan objects accumulate: one per checkout attempt and one per
+     * plan change, including abandoned ones. That is inherent to the API, not a
+     * leak — see the note in docs/billing-gateway-cleanup.md.
+     *
+     * @return array{id: string}|array{error: string}
+     */
+    private function createRazorpayPlan(Plan $plan, string $billingCycle, int $priceCents): array
+    {
+        $res = $this->http()->post(self::BASE_URL.'/plans', [
+            'period' => $billingCycle === 'year' ? 'yearly' : 'monthly',
+            'interval' => 1,
+            'item' => [
+                'name' => $plan->name,
+                'amount' => $priceCents,
+                'currency' => strtoupper($plan->currency_code ?? 'INR'),
+            ],
+            'notes' => [
+                'plan_id' => (string) $plan->id,
+                'billing_cycle' => $billingCycle,
+            ],
+        ]);
+
+        if (! $res->successful()) {
+            Log::error('Razorpay create plan failed', ['body' => $res->json(), 'plan_id' => $plan->id]);
+
+            return ['error' => $res->json('error.description', 'Razorpay plan creation failed.')];
+        }
+
+        $id = $res->json('id');
+        if (! $id) {
+            return ['error' => 'No plan ID in Razorpay response.'];
+        }
+
+        return ['id' => (string) $id];
+    }
+
+    /**
+     * In-place plan change, charged immediately with proration.
+     *
+     * ─── ⚠️ THIS FAILS BY DESIGN FOR UPI AND eMANDATE SUBSCRIPTIONS ────────────
+     *
+     * Razorpay's Update Subscription API documents two hard exclusions:
+     *
+     *   > "Subscriptions cannot be updated when payment mode is UPI"
+     *   > "Emandate subscriptions cannot be updated" — they are
+     *   >  "immutable post-authentication"
+     *
+     * (https://razorpay.com/docs/api/payments/subscriptions/update-subscription/)
+     *
+     * Only CARD-authorized subscriptions can be updated. A UPI or eNACH customer
+     * attempting an upgrade will receive Razorpay's own rejection through the
+     * error path below. **That is correct behaviour, not a bug** — the mandate a
+     * customer authorized is what caps how much can be collected, and changing it
+     * requires a new authorization. Do not "fix" this by suppressing the message;
+     * the customer needs to know to cancel and re-subscribe.
+     *
+     * ⚠️ The gateway cannot tell in advance which it is: the app never records the
+     * authorization method, and Razorpay does not return it on the subscription
+     * object we hold. So the check cannot be moved earlier than the API call.
+     */
     public function changePlan(Subscription $subscription, Plan $newPlan, string $billingCycle): array
     {
-        // Razorpay subscription plan changes require a fresh mandate authorization.
-        return ['ok' => false, 'error' => 'Plan changes for Razorpay require cancelling and re-subscribing.'];
+        if ($subscription->gateway !== 'razorpay' || ! $this->isConfigured()) {
+            return ['ok' => false, 'error' => 'Razorpay is not configured.'];
+        }
+
+        $newPriceCents = $newPlan->priceCentsForCycle($billingCycle);
+        if ($newPriceCents === null || $newPriceCents <= 0) {
+            return ['ok' => false, 'error' => 'New plan has no price for this billing cycle.'];
+        }
+
+        $currentPlan = $subscription->plan ?? Plan::find($subscription->plan_id);
+        $currentPriceCents = $currentPlan?->priceCentsForCycle($subscription->billing_cycle ?? $billingCycle);
+
+        // ⚠️ RAZORPAY REFUSES A DIFFERENCE BELOW 50 SUBUNITS (₹0.50):
+        //
+        //   > "ensure that the prorated amount difference between the existing and
+        //   >  new plans is at least 50 currency subunits, that is, ₹0.5."
+        //   > "This is valid only when you update a Subscription immediately."
+        //
+        // (https://razorpay.com/docs/payments/subscriptions/update/)
+        //
+        // ⚠️ THE THRESHOLD IS ON THE **PRORATED** DIFFERENCE, WHICH WE CANNOT
+        // COMPUTE — it depends on how much of the current cycle remains, which
+        // only Razorpay knows. This check compares FULL PLAN PRICES instead, and
+        // that is deliberately a one-way filter:
+        //
+        //   prorated difference <= full price difference, always (the proration
+        //   factor is at most 1). So a full difference below 50 guarantees the
+        //   prorated one is too, and refusing here can never reject a change
+        //   Razorpay would have accepted.
+        //
+        // The converse does NOT hold: a full difference of 50+ can still prorate
+        // to under 50 late in a cycle. Razorpay rejects those, and the error path
+        // below surfaces it. This guard exists to turn the COMMON case — two plans
+        // priced within half a rupee — into a sentence the customer can act on,
+        // not to replace Razorpay's own check.
+        if ($currentPriceCents !== null && abs($newPriceCents - $currentPriceCents) < self::MIN_CHANGE_DIFFERENCE_SUBUNITS) {
+            return ['ok' => false, 'error' => 'Plan prices are too close to process this change — the minimum difference Razorpay requires is ₹0.50.'];
+        }
+
+        $planResult = $this->createRazorpayPlan($newPlan, $billingCycle, $newPriceCents);
+        if (isset($planResult['error'])) {
+            return ['ok' => false, 'error' => $planResult['error']];
+        }
+
+        // ⚠️ `total_count` is NOT sent, and its absence is deliberate. The Update
+        // Subscription API does not accept it at all — the equivalent field is
+        // `remaining_count`, which is optional and independent of `plan_id`. Every
+        // parameter is optional; the only requirement is that at least one
+        // updatable field is present. Sending `total_count` would be ignored at
+        // best. Leaving `remaining_count` alone preserves the existing schedule,
+        // which is what an in-place plan change should do.
+        $res = $this->http()->patch(self::BASE_URL.'/subscriptions/'.$subscription->gateway_subscription_id, [
+            'plan_id' => $planResult['id'],
+            'schedule_change_at' => 'now',
+        ]);
+
+        if (! $res->successful()) {
+            Log::error('Razorpay changePlan failed', [
+                'subscription_id' => $subscription->id,
+                'body' => $res->json(),
+            ]);
+
+            // This is where a UPI/eMandate subscription lands — see the class-level
+            // note above. Razorpay's own description is the most useful thing we
+            // can show, so it is passed through rather than replaced.
+            return ['ok' => false, 'error' => $res->json('error.description', 'Could not update the subscription.')];
+        }
+
+        $meta = $subscription->gateway_metadata ?? [];
+        $meta['razorpay_plan_id'] = $planResult['id'];
+
+        $subscription->update([
+            'plan_id' => $newPlan->id,
+            'billing_cycle' => $billingCycle,
+            'gateway_metadata' => $meta,
+        ]);
+
+        // ⚠️ Entitlements reconcile off PlanChanged. Stripe dispatches it
+        // (StripeGateway:567-570); Square does not, which is an oversight there
+        // rather than a pattern — without this the customer keeps the old plan's
+        // limits after paying for the new one.
+        $user = $subscription->user ?? User::find($subscription->user_id);
+        if ($user && $currentPlan) {
+            PlanChanged::dispatch($user, $subscription, $currentPlan, $newPlan);
+        }
+
+        return ['ok' => true, 'error' => null];
     }
 
     public function refund(PaymentTransaction $transaction, ?int $amountCents = null): array

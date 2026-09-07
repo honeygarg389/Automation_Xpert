@@ -30,6 +30,12 @@ class StripeGateway implements BillingGatewayInterface
 {
     private ?StripeClient $client = null;
 
+    /**
+     * Consistency threshold with Razorpay, in minor currency units. Stripe itself
+     * imposes no minimum — see the note in changePlan().
+     */
+    private const MIN_CHANGE_DIFFERENCE_MINOR_UNITS = 50;
+
     public function __construct(
         private string $secretKey,
         private string $webhookSecret,
@@ -531,6 +537,44 @@ class StripeGateway implements BillingGatewayInterface
         }
     }
 
+    /**
+     * The amount Stripe will ACTUALLY charge for a catalog price, in minor units.
+     *
+     * ⚠️ This exists because `plans.stripe_*_id` and `plans.*_price_cents` are two
+     * sources of truth for one number, and createCheckout() PREFERS the Stripe one
+     * (see the catalog branch above). So a stale price id means the customer is
+     * charged the Stripe amount while every screen in this app shows the local one.
+     * Nothing else in the codebase can detect that; only Stripe knows.
+     *
+     * Returns a tagged result rather than ?int so the caller can tell "verified,
+     * and it differs" from "could not verify" — those need different messages, and
+     * collapsing them into null would report a mismatch that may not exist.
+     *
+     * @return array{amount: ?int}|array{error: string}
+     */
+    public function priceAmountMinorUnits(string $priceId): array
+    {
+        if (! $this->isConfigured()) {
+            return ['error' => 'Stripe is not configured.'];
+        }
+
+        try {
+            $price = $this->client()->prices->retrieve($priceId, []);
+
+            // A metered or tiered price has no flat unit_amount. That is not an
+            // error and not a mismatch — there is simply nothing to compare.
+            return ['amount' => $price->unit_amount !== null ? (int) $price->unit_amount : null];
+        } catch (\Throwable $e) {
+            Log::warning('Stripe price verification failed', [
+                'price_id' => $priceId,
+                'error' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
+
+            return ['error' => $e->getMessage()];
+        }
+    }
+
     public function changePlan(Subscription $subscription, Plan $newPlan, string $billingCycle): array
     {
         if (! $this->isConfigured()) {
@@ -542,6 +586,25 @@ class StripeGateway implements BillingGatewayInterface
 
         if (! $newPriceId) {
             return ['ok' => false, 'error' => "New plan does not have a Stripe price configured for billing cycle '{$billingCycle}'."];
+        }
+
+        // ⚠️ NOT REQUIRED BY STRIPE'S API. Stripe documents no minimum proration
+        // difference and handles small amounts gracefully, so it would accept a
+        // change this guard refuses. This exists purely as a deliberate PRODUCT
+        // decision to keep plan-change behaviour consistent with Razorpay.
+        //
+        // Razorpay's equivalent guard is a real vendor constraint — see
+        // RazorpayGateway::MIN_CHANGE_DIFFERENCE_SUBUNITS. As explicitly
+        // reconfirmed on 2026-09-07, both guards (including their same-price
+        // refusal) are staying. If that consistency decision changes later, drop
+        // this guard HERE and keep Razorpay's.
+        $newPriceCents = $newPlan->priceCentsForCycle($billingCycle);
+        $currentPlan = $subscription->plan ?? Plan::find($subscription->plan_id);
+        $currentPriceCents = $currentPlan?->priceCentsForCycle($subscription->billing_cycle ?? $billingCycle);
+
+        if ($newPriceCents !== null && $currentPriceCents !== null
+            && abs($newPriceCents - $currentPriceCents) < self::MIN_CHANGE_DIFFERENCE_MINOR_UNITS) {
+            return ['ok' => false, 'error' => 'Plan prices are too close to process this change — the minimum difference is 50 minor currency units (for example ₹0.50 or $0.50).'];
         }
 
         try {
@@ -571,9 +634,22 @@ class StripeGateway implements BillingGatewayInterface
 
             return ['ok' => true, 'error' => null];
         } catch (\Throwable $e) {
-            Log::error('Stripe changePlan failed', ['subscription_id' => $subscription->id, 'error' => $e->getMessage()]);
+            // ⚠️ The exception message is LOGGED, never returned. Stripe's
+            // exception text is written for developers and routinely names price
+            // ids, subscription ids and internal API wording — none of which
+            // helps a customer and some of which should not be on their screen.
+            // The controller flashes whatever is returned here straight to the
+            // browser (Client\SubscriptionController:135), so this string is
+            // user-facing copy, not diagnostics.
+            Log::error('Stripe changePlan failed', [
+                'subscription_id' => $subscription->id,
+                'new_plan_id' => $newPlan->id,
+                'billing_cycle' => $billingCycle,
+                'error' => $e->getMessage(),
+                'exception' => $e::class,
+            ]);
 
-            return ['ok' => false, 'error' => $e->getMessage()];
+            return ['ok' => false, 'error' => 'Could not change your plan. Please try again or contact support.'];
         }
     }
 
