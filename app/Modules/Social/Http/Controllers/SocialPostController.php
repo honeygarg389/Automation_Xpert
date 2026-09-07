@@ -219,6 +219,29 @@ class SocialPostController extends Controller
             'timezone' => ['nullable', 'string', 'max:64'],
         ]);
 
+        // ⚠️ THE SAME CROSS-WORKSPACE IDOR GUARD store() HAS. It was absent from
+        // this path only: `target_accounts.*` is validated as `integer`, so any
+        // account id in the database was accepted and written straight to the
+        // post by $post->update() below.
+        //
+        // Nothing was ever POSTED to another workspace's account — SocialPublisher
+        // re-scopes to the post's own workspace before publishing, so a foreign id
+        // is silently dropped. That second check is the only thing that kept this
+        // from being cross-tenant publishing, which is exactly why this one should
+        // not be missing: it was the sole remaining layer.
+        //
+        // Same query shape as store() deliberately — two spellings of one rule is
+        // how the versions drift apart.
+        $requestedIds = collect($validated['target_accounts'])->map(fn ($id) => (int) $id);
+        $ownedCount = SocialAccount::where('workspace_id', $this->workspaceId($request))
+            ->whereIn('id', $requestedIds)
+            ->count();
+        if ($ownedCount !== $requestedIds->count()) {
+            throw ValidationException::withMessages([
+                'target_accounts' => ['One or more selected accounts do not belong to your workspace.'],
+            ]);
+        }
+
         if (! empty($validated['scheduled_at']) && now()->subSeconds(30)->gt($validated['scheduled_at'])) {
             throw ValidationException::withMessages([
                 'scheduled_at' => ['The scheduled time must be in the future.'],

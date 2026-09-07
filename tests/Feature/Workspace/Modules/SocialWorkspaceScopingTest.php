@@ -48,10 +48,22 @@ class SocialWorkspaceScopingTest extends TestCase
         ]);
     }
 
-    /** update() requires body + target_accounts (min:1); title is nullable. */
-    private function validUpdatePayload(): array
+    /**
+     * update() requires body + target_accounts (min:1); title is nullable.
+     *
+     * ⚠️ THE ACCOUNT ID MUST BE REAL AND IN THE POST'S WORKSPACE. This used to
+     * hardcode `[1]` — an account that no test ever creates — and passed only
+     * because update() had no ownership guard on target_accounts. Once that
+     * guard was added (matching the one store() always had), the two positive
+     * controls below failed: they had been asserting "an update succeeds" while
+     * submitting an account that does not exist.
+     *
+     * The 403 cases can still pass the default: they abort on the post's own
+     * workspace check before validation runs, so the account is never examined.
+     */
+    private function validUpdatePayload(?int $accountId = null): array
     {
-        return ['body' => 'Updated body', 'target_accounts' => [1]];
+        return ['body' => 'Updated body', 'target_accounts' => [$accountId ?? 1]];
     }
 
     private function makeAccount(int $workspaceId, string $name): SocialAccount
@@ -107,9 +119,14 @@ class SocialWorkspaceScopingTest extends TestCase
     {
         ['user' => $user, 'home' => $home] = $this->createTwoWorkspaceUser();
         $post = $this->makePost($home->id, 'Mine');
+        $account = $this->makeAccount($home->id, 'HomeAcct');
 
         $this->actingAs($user)
-            ->put(route('client.social.posts.update', $post), $this->validUpdatePayload())
+            ->put(route('client.social.posts.update', $post), $this->validUpdatePayload($account->id))
+            // ⚠️ assertRedirect() alone cannot tell success from a validation
+            // failure — both redirect. The no-errors assertion is what makes
+            // this a positive control rather than a shape check.
+            ->assertSessionHasNoErrors()
             ->assertRedirect();
 
         $this->assertDatabaseHas('social_media_posts', ['id' => $post->id, 'body' => 'Updated body']);
@@ -121,10 +138,12 @@ class SocialWorkspaceScopingTest extends TestCase
     {
         ['user' => $user, 'other' => $other] = $this->createTwoWorkspaceUser();
         $post = $this->makePost($other->id, 'InOther');
+        $account = $this->makeAccount($other->id, 'OtherAcct');
 
         $this->actingAs($user)
             ->withSession(['current_workspace_id' => $other->id])
-            ->put(route('client.social.posts.update', $post), $this->validUpdatePayload())
+            ->put(route('client.social.posts.update', $post), $this->validUpdatePayload($account->id))
+            ->assertSessionHasNoErrors()
             ->assertRedirect();
 
         $this->assertDatabaseHas('social_media_posts', ['id' => $post->id, 'body' => 'Updated body']);
