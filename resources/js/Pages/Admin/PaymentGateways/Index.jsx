@@ -157,30 +157,6 @@ function EditGatewayModal({ show, gatewayKey, initialData, loading, error, valid
             webhook: 'Not required — Cashfree webhooks are verified with the Secret Key. Endpoint: /webhooks/cashfree',
             note: 'Cashfree uses native Subscriptions (auto-renewing) via its JS SDK. Map: Publishable Key = App ID, Secret Key = Secret Key. Leave Webhook Secret blank.',
         },
-        tap: {
-            publishable: 'Not required for Tap — leave blank.',
-            secret: 'Tap Secret API Key (sk_test_… / sk_live_…). Also verifies the webhook hashstring.',
-            webhook: 'Not required — Tap webhooks are verified with the Secret Key. Endpoint: /webhooks/tap',
-            note: 'Tap has no hosted auto-renew; renewals are merchant-initiated against the saved card by the billing:charge-recurring scheduler. Only the Secret Key is needed.',
-        },
-        mollie: {
-            publishable: 'Not required for Mollie — leave blank.',
-            secret: 'Mollie API Key (test_… / live_…). The prefix selects test or live mode.',
-            webhook: 'Not required — Mollie webhooks are verified by re-fetching the payment from the API. Endpoint: /webhooks/mollie',
-            note: 'Mollie uses native Customers + Subscriptions (auto-renewing). Only the API Key is needed; its test_/live_ prefix decides the environment.',
-        },
-        square: {
-            publishable: 'Square Location ID (from Dashboard → Locations).',
-            secret: 'Square Access Token (sandbox or production).',
-            webhook: 'Square Webhook Signature Key (Dashboard → Webhooks). Endpoint: /webhooks/square',
-            note: 'Square uses native Catalog + Subscriptions billed via emailed invoices (auto-renewing). Map: Publishable Key = Location ID, Secret Key = Access Token. Toggle Test Mode for the sandbox. Refunds are issued from the Square Dashboard.',
-        },
-        mercadopago: {
-            publishable: 'Not required for Mercado Pago — leave blank.',
-            secret: 'Mercado Pago Access Token (TEST-… / APP_USR-…).',
-            webhook: 'Optional signing secret from Dashboard → Webhooks (verifies the x-signature header). Endpoint: /webhooks/mercadopago',
-            note: 'Mercado Pago uses native Preapproval subscriptions (auto-renewing). Only the Access Token is required; add the signing secret to verify webhook signatures.',
-        },
     };
     const isStripe = gatewayKey === 'stripe';
     const custom = GATEWAY_HINTS[gatewayKey];

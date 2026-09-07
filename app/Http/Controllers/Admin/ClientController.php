@@ -335,7 +335,6 @@ class ClientController extends Controller
                         'subscription_id' => (int) $gatewaySubscription->id,
                         'gateway' => (string) $gatewaySubscription->gateway,
                         'cancelled' => $ok,
-                        'note' => $this->gatewayCancelCaveat((string) $gatewaySubscription->gateway),
                     ];
 
                     if (! $ok) {
@@ -401,39 +400,6 @@ class ClientController extends Controller
         }
 
         return redirect()->back()->with('success', __('Plan assigned.'));
-    }
-
-    /**
-     * ⚠️ WHAT A `true` FROM cancel() ACTUALLY MEANS, per gateway — recorded in
-     * the audit entry because the bool alone is misleading and the differences
-     * are load-bearing for anyone auditing a double-billing complaint.
-     *
-     * Measured by reading all thirteen drivers:
-     *
-     *   tap / myfatoorah / paymob   No remote subscription object exists. These
-     *                               are merchant-initiated saved-card gateways
-     *                               billed by the billing:charge-recurring* jobs,
-     *                               so cancel() only flips the local row and
-     *                               ALWAYS returns true. Nothing was called.
-     *
-     *   paystack                    Returns true WITHOUT calling the API when
-     *                               subscription_code or email_token is missing.
-     *                               It logs a warning and marks the row locally.
-     *                               A true here does not prove billing stopped.
-     *
-     *   mollie                      Same shape when customer_id is absent.
-     *
-     * Everything else performs a real remote call and only returns true on a
-     * successful response.
-     */
-    private function gatewayCancelCaveat(string $gateway): ?string
-    {
-        return match ($gateway) {
-            'tap', 'myfatoorah', 'paymob' => 'local_only: no remote subscription exists; scheduler billing stopped',
-            'paystack' => 'may_be_local_only: returns true without an API call when subscription_code/email_token are missing',
-            'mollie' => 'may_be_local_only: returns true without an API call when customer_id is missing',
-            default => null,
-        };
     }
 
     public function impersonate(Request $request, Client $client): RedirectResponse

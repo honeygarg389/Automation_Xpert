@@ -1,5 +1,37 @@
 # Billing gateway cleanup — findings, rulings, and sequence
 
+> ## ⚠️ SUPERSEDED 2026-09-07 — THE EXECUTED SCOPE IS NOT THE SCOPE BELOW
+>
+> **This document was written for: keep Razorpay + Cashfree, remove eleven.**
+> **What was executed: keep Stripe, PayPal, Razorpay, Cashfree — remove NINE.**
+>
+> Removed: Paddle, Tap, Paystack, Xendit, Paymob, MyFatoorah, Mollie, Square, MercadoPago.
+> Executed on `feature/payment-gateway-cleanup`.
+>
+> ### Kept as a record rather than rewritten, deliberately
+>
+> Every claim marked ✅ below was measured directly against this repository on 2026-08-13, and
+> most of it is still accurate — the file inventory, the absence of a shared base class, the
+> `Sdk.jsx` trap, the PhonePe ruling, the Razorpay/Cashfree cycle caps. Rewriting the document
+> to the new scope would either destroy that provenance or restate measurements as though they
+> had been re-taken under the new scope, which they were not. So the analysis stands and the
+> conclusions that DEPEND ON SCOPE are corrected here, once, at the top.
+>
+> ### What the scope change invalidates
+>
+> | Claim below | Status under the executed scope |
+> |---|---|
+> | "Eleven gateways to remove" / "The keepers are Razorpay and Cashfree" | ❌ Nine removed; Stripe and PayPal are also keepers |
+> | **"It CLOSES BUG-034 by deletion"** | ❌ **WRONG, and it was load-bearing.** Paddle and PayPal were the two offenders; PayPal is KEPT. Paddle left with the removal, PayPal was **fixed** by adding the missing `release()`. A guard test now enforces it for every gateway. See BUG-034. |
+> | "Drop the dead Stripe/Paddle price columns … a pure drop" | ⚠️ Half. Only `paddle_monthly_id`, `paddle_yearly_id` and `add_on_prices.paddle_price_id` were dropped. **`stripe_monthly_id` / `stripe_yearly_id` are LIVE** — `StripeGateway::createCheckout()` prefers them and `changePlan()` requires them. |
+> | **Owner ruling 2 — "in-place plan change is out of scope"** | ❌ Obsolete. It reasoned that removing the eleven removes every gateway capable of one. Stripe survives and implements `changePlan()` fully; Razorpay's was implemented on `feature/inplace-plan-change`. In-place change is a shipped feature, not a dropped capability. |
+> | "`PaymentGatewayConfigSeeder` seeds stripe/paypal/paddle — **all three** are being removed, so it needs rewriting" | ⚠️ Only `paddle` was removed; stripe and paypal remain seeded. |
+> | The ⚠️ `Sdk.jsx` warning | ✅ **Still exactly right, and still the most dangerous item.** Cashfree is now the ONLY producer of the `['checkout' => …]` envelope. The file looks more like Paddle residue than ever, and deleting it still breaks Cashfree checkout with no compile error and no failing test. |
+>
+> The recorded sequence at the end (fix refunds → remove → drop columns) was followed in
+> substance, except that BUG-032 remains open and now affects all four keepers rather than two.
+
+
 **Status: RECORDED, NOT STARTED.** This is its own track. Nothing here is scheduled, and none of
 it is part of Smart QR or Phase 1. The purpose of this document is that the inspection behind it
 survives the session that produced it.

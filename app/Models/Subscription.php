@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Per-gateway bag on `gateway_metadata`: the array-cast column seven gateway
- * classes use for ids they must recall later (Razorpay plan id, Paystack
- * subscription code, Mollie customer id, …).
+ * classes use for ids they must recall later (Razorpay plan id, Cashfree
+ * subscription reference, …).
  *
  * @property array<string, mixed>|null $gateway_metadata
  */

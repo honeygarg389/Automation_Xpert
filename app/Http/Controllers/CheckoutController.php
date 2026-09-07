@@ -24,7 +24,7 @@ class CheckoutController extends Controller
         $validated = $request->validate([
             'plan_id' => ['required', 'integer', Rule::exists('plans', 'id')],
             'billing_cycle' => ['required', 'string', Rule::in(['month', 'year'])],
-            'gateway' => ['required', 'string', Rule::in(['stripe', 'paypal', 'paddle', 'razorpay', 'cashfree', 'tap', 'paystack', 'xendit', 'paymob', 'myfatoorah', 'mollie', 'square', 'mercadopago'])],
+            'gateway' => ['required', 'string', Rule::in(['stripe', 'paypal', 'razorpay', 'cashfree'])],
         ]);
 
         $plan = Plan::where('enabled', true)->findOrFail($validated['plan_id']);

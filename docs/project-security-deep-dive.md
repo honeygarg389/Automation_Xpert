@@ -310,7 +310,7 @@ These were read in full and found correct. Recorded so future changes do not sil
 | Notifications | `NotificationController:65,86` | ✅ Scoped through `$request->user()->notifications()` |
 | Webhook delivery view | `WebhookEndpointController::deliveries:113` | ✅ `$this->authorize('view', ...)` |
 | BigCommerce webhook | `EcommerceWebhookController::bigcommerce:62` | ✅ Mandatory token, rejects null secret, `hash_equals` |
-| Paystack webhook | `PaystackGateway.php:143-149` | ✅ Mandatory, `hash_equals` |
+| ~~Paystack webhook~~ | ~~`PaystackGateway.php:143-149`~~ | ⚠️ Gateway REMOVED 2026-09-07 (`feature/payment-gateway-cleanup`) |
 | Razorpay webhook | `RazorpayGateway.php:140-152` | ✅ Empty-signature rejected **and** production guard for missing secret |
 | Demo mode | `EnsureNotDemoMode.php` | ✅ Method-based, tight named allowlist, documented rationale |
 | Path traversal | filesystem call sites | ✅ No user input reaches file paths; `prefixedPath` applies `ltrim` |

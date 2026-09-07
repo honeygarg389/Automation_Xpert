@@ -139,10 +139,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // CSRF-protected and answers a real gateway callback with 419 — silently,
         // because the gateway retries into the same rejection and nothing is logged
         // on our side. Razorpay and Cashfree were missing and were unreachable.
+        // Paddle's entry was removed with the gateway itself.
         $middleware->validateCsrfTokens(except: [
             'webhooks/stripe',
             'webhooks/paypal',
-            'webhooks/paddle',
             'webhooks/razorpay',
             'webhooks/cashfree',
             'webhooks/whatsapp/*',

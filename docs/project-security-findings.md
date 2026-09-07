@@ -373,6 +373,13 @@ These were tested and found **sound**; recorded so future changes do not regress
 ## SEC-022 — Webhook signature verification is correct
 28 uses of `hash_equals` across 14 files covering Stripe, PayPal, Paddle, Razorpay, Paymob, MercadoPago, Tap, Cashfree, Square, Paystack, Meta, WhatsApp, SMS, and e-commerce webhooks. Only `app/Models/WebhookEndpoint.php` uses `hash_hmac` without `hash_equals`, and inspection confirms it *generates* outbound signatures (line 41) rather than verifying — correct.
 
+> ⚠️ **SUPERSEDED 2026-09-07.** Nine gateways (Paddle, Tap, Paystack, Xendit, Paymob,
+> MyFatoorah, Mollie, Square, MercadoPago) were removed on `feature/payment-gateway-cleanup`.
+> **Four remain: Stripe, PayPal, Razorpay, Cashfree.** The counts and line totals above are the
+> measurement as taken on the date of this report and are left unedited as a record; they no
+> longer describe the codebase.
+
+
 ## SEC-023 — Third-party credentials encrypted at rest
 `encrypted` casts present in 10+ models: `PaymentGatewayConfig`, `SmtpConfiguration`, `SystemSetting`, `AiProviderConfig`, `SmsProviderConfig`, `WorkspaceSmtpConfig`, `EcommerceStore`, `IntegrationConfig`, `ChannelAccount`, `User`.
 

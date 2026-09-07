@@ -351,6 +351,13 @@ Full detail in [`project-security-findings.md`](project-security-findings.md). 2
 
 **AUD-QUAL-002 · Medium · Billing duplication.** 14 gateways, ~6,000 lines of near-parallel structure (Stripe 712, Paymob 567, Tap 544, Mollie 485, Square 483, MercadoPago 478, PayPal 469 …). No shared abstract base. Adding a gateway means copying a template; fixing a signature-verification bug means 14 edits. **Effort:** L.
 
+> ⚠️ **SUPERSEDED 2026-09-07.** Nine gateways (Paddle, Tap, Paystack, Xendit, Paymob,
+> MyFatoorah, Mollie, Square, MercadoPago) were removed on `feature/payment-gateway-cleanup`.
+> **Four remain: Stripe, PayPal, Razorpay, Cashfree.** The counts and line totals above are the
+> measurement as taken on the date of this report and are left unedited as a record; they no
+> longer describe the codebase.
+
+
 **AUD-QUAL-003 · Medium · Fat controllers.** `InboxController` 700, `InboxSetupController` 664, `CampaignController` 601, `MobileConversationController` 501 (69 PHPStan errors).
 
 **AUD-QUAL-004 · Medium · Static-analysis debt.** 722 errors at level 6 with a **310 KB baseline**. Dominated by `property.notFound` (245) and `missingType.iterableValue` (241). The baseline's size means new errors hide easily.

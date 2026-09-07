@@ -19,7 +19,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $interval
  * @property int $price_cents
  * @property string|null $stripe_price_id
- * @property string|null $paddle_price_id
  * @property bool $is_active
  */
 class AddOnPrice extends Model
@@ -49,7 +48,7 @@ class AddOnPrice extends Model
 
     protected $fillable = [
         'add_on_id', 'currency_code', 'interval', 'price_cents',
-        'stripe_price_id', 'paddle_price_id', 'is_active',
+        'stripe_price_id', 'is_active',
     ];
 
     protected function casts(): array
