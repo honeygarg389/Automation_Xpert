@@ -7,8 +7,8 @@ import { SocialBrandIcon } from '@/Components/BrandIcons';
 import { ArrowLeft, Clock, Trash2, Plus, Send, Calendar } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { browserTz, tzLocalToUtcIso, formatInTz } from '@/Utils/datetime';
+import { minCharLimit as minCharLimitFor } from '@/Utils/networkCapabilities';
 
-const CHAR_LIMITS = { twitter: 280, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
 
 const NETWORK_LABELS = {
     facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn',
@@ -32,7 +32,7 @@ function toLocalDatetime(utcStr, tz) {
     }
 }
 
-export default function EditPost({ post, accounts }) {
+export default function EditPost({ post, accounts, networkCapabilities = {} }) {
     const { t } = useTranslation();
     const { props } = usePage();
     const userTz = props.timezone || browserTz() || 'Asia/Dhaka';
@@ -60,7 +60,7 @@ export default function EditPost({ post, accounts }) {
         .filter(a => data.target_accounts.includes(a.id.toString()))
         .map(a => a.network);
     const minCharLimit = selectedNetworks.length > 0
-        ? Math.min(...selectedNetworks.map(n => CHAR_LIMITS[n] ?? 5000))
+        ? minCharLimitFor(networkCapabilities, selectedNetworks)
         : 5000;
 
     const handleSubmit = (e) => {
