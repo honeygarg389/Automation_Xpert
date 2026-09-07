@@ -6,6 +6,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Per-gateway bag on `gateway_metadata`: the array-cast column seven gateway
+ * classes use for ids they must recall later (Razorpay plan id, Paystack
+ * subscription code, Mollie customer id, …).
+ *
+ * @property array<string, mixed>|null $gateway_metadata
+ */
 class Subscription extends Model
 {
     protected $fillable = [
@@ -35,6 +42,7 @@ class Subscription extends Model
         ];
     }
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
