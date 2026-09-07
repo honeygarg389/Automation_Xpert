@@ -31,7 +31,8 @@ export default function AdminPaymentsIndex({ payments, filters = {} }) {
                         <option value="">{t('admin.all_gateways')}</option>
                         <option value="stripe">Stripe</option>
                         <option value="paypal">PayPal</option>
-                        <option value="paddle">Paddle</option>
+                        <option value="razorpay">Razorpay</option>
+                        <option value="cashfree">Cashfree</option>
                     </select>
                     <Button type="submit" variant="outline" size="sm">{t('common.filter')}</Button>
                 </form>

@@ -6650,48 +6650,6 @@ parameters:
 			path: app/Services/Billing/InvoiceService.php
 
 		-
-			message: '#^Method App\\Services\\Billing\\PaddleGateway\:\:changePlan\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Services/Billing/PaddleGateway.php
-
-		-
-			message: '#^Method App\\Services\\Billing\\PaddleGateway\:\:createCheckout\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Services/Billing/PaddleGateway.php
-
-		-
-			message: '#^Method App\\Services\\Billing\\PaddleGateway\:\:fulfillCheckoutSession\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Services/Billing/PaddleGateway.php
-
-		-
-			message: '#^Method App\\Services\\Billing\\PaddleGateway\:\:handleSubscriptionActivated\(\) has parameter \$data with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Services/Billing/PaddleGateway.php
-
-		-
-			message: '#^Method App\\Services\\Billing\\PaddleGateway\:\:handleSubscriptionCanceled\(\) has parameter \$data with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Services/Billing/PaddleGateway.php
-
-		-
-			message: '#^Method App\\Services\\Billing\\PaddleGateway\:\:handleTransactionCompleted\(\) has parameter \$data with no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Services/Billing/PaddleGateway.php
-
-		-
-			message: '#^Method App\\Services\\Billing\\PaddleGateway\:\:refund\(\) return type has no value type specified in iterable type array\.$#'
-			identifier: missingType.iterableValue
-			count: 1
-			path: app/Services/Billing/PaddleGateway.php
-
-		-
 			message: '#^Method App\\Services\\Billing\\PayPalGateway\:\:changePlan\(\) return type has no value type specified in iterable type array\.$#'
 			identifier: missingType.iterableValue
 			count: 1

@@ -95,7 +95,7 @@ class WebhookCsrfExemptionTest extends TestCase
     {
         app()->detectEnvironment(fn () => 'production');
 
-        foreach (['stripe', 'paypal', 'paddle'] as $gateway) {
+        foreach (['stripe', 'paypal'] as $gateway) {
             $this->postJson("/webhooks/{$gateway}", [])
                 ->assertStatus(503);
         }
@@ -115,7 +115,7 @@ class WebhookCsrfExemptionTest extends TestCase
         $middleware = app(VerifyCsrfToken::class);
         $inExceptArray = new \ReflectionMethod($middleware, 'inExceptArray');
 
-        foreach (['stripe', 'paypal', 'paddle', 'razorpay', 'cashfree'] as $gateway) {
+        foreach (['stripe', 'paypal', 'razorpay', 'cashfree'] as $gateway) {
             $request = Request::create("/webhooks/{$gateway}", 'POST');
 
             $this->assertTrue(

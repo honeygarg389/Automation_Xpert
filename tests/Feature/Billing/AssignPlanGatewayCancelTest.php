@@ -227,8 +227,8 @@ class AssignPlanGatewayCancelTest extends TestCase
     {
         ['client' => $client] = $this->createWorkspaceContext();
         $a = $this->gatewaySub($client, 'stripe');
-        $b = $this->gatewaySub($client, 'paddle');
-        $this->fakeGateways(['stripe' => true, 'paddle' => true]);
+        $b = $this->gatewaySub($client, 'razorpay');
+        $this->fakeGateways(['stripe' => true, 'razorpay' => true]);
 
         $this->assign($this->admin(), $client, Plan::factory()->create())->assertOk();
 
@@ -242,9 +242,9 @@ class AssignPlanGatewayCancelTest extends TestCase
     {
         ['client' => $client] = $this->createWorkspaceContext();
         $ok = $this->gatewaySub($client, 'stripe');
-        $bad = $this->gatewaySub($client, 'paddle');
+        $bad = $this->gatewaySub($client, 'razorpay');
         $rowsBefore = ClientSubscription::count();
-        $this->fakeGateways(['stripe' => true, 'paddle' => false]);
+        $this->fakeGateways(['stripe' => true, 'razorpay' => false]);
 
         $this->assign($this->admin(), $client, Plan::factory()->create())->assertStatus(422);
 
@@ -355,19 +355,5 @@ class AssignPlanGatewayCancelTest extends TestCase
 
         $meta = $this->auditMeta('client.plan_assign_failed');
         $this->assertFalse($meta['gateway_cancellations'][0]['cancelled']);
-    }
-
-    /** The caveat that a `true` from Tap means "local only, nothing was called". */
-    #[Test]
-    public function local_only_gateways_are_flagged_in_the_audit_meta(): void
-    {
-        ['client' => $client] = $this->createWorkspaceContext();
-        $this->gatewaySub($client, 'tap');
-        $this->fakeGateways(['tap' => true]);
-
-        $this->assign($this->admin(), $client, Plan::factory()->create())->assertOk();
-
-        $meta = $this->auditMeta('client.plan_assigned');
-        $this->assertStringContainsString('local_only', $meta['gateway_cancellations'][0]['note']);
     }
 }
