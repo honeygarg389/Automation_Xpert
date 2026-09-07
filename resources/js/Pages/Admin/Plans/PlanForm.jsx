@@ -14,11 +14,34 @@ export default function PlanForm({
     currencies = [],
 }) {
     const { t } = useTranslation();
-    const yearlyEnabled = data.yearly_price_cents != null && data.yearly_price_cents !== '';
 
-    const toggleYearly = (on) => {
-        if (!on) setData('yearly_price_cents', null);
-        else setData('yearly_price_cents', data.yearly_price_cents ?? 0);
+    /**
+     * ⚠️ MONTHLY IS NOT IN THIS LIST, deliberately — it is required and always
+     * shown, which is the existing behaviour and what `price_cents` falls back
+     * to server-side. The optional cycles all share one enable/disable shape, so
+     * they are data rather than three copies of the same JSX.
+     *
+     * Mirrors App\Support\BillingCycle::ALL order (shortest first).
+     */
+    const OPTIONAL_CYCLES = [
+        { key: 'quarterly', priceField: 'quarterly_price_cents', toggleLabel: 'admin.enable_quarterly_pricing', priceLabel: 'admin.quarterly_price_cents' },
+        { key: 'half_yearly', priceField: 'half_yearly_price_cents', toggleLabel: 'admin.enable_half_yearly_pricing', priceLabel: 'admin.half_yearly_price_cents' },
+        { key: 'yearly', priceField: 'yearly_price_cents', toggleLabel: 'admin.enable_yearly_pricing', priceLabel: 'admin.yearly_price_cents' },
+    ];
+
+    const STRIPE_PRICE_IDS = [
+        { field: 'stripe_monthly_id', label: 'admin.price_id_monthly' },
+        { field: 'stripe_quarterly_id', label: 'admin.price_id_quarterly' },
+        { field: 'stripe_half_yearly_id', label: 'admin.price_id_half_yearly' },
+        { field: 'stripe_yearly_id', label: 'admin.price_id_yearly' },
+    ];
+
+    const isEnabled = (field) => data[field] != null && data[field] !== '';
+
+    // Toggling off clears the price, which is what makes the plan stop being
+    // sold on that cycle — a null price is how the server says "not offered".
+    const toggleCycle = (field, on) => {
+        setData(field, on ? (data[field] ?? 0) : null);
     };
 
     return (
@@ -103,29 +126,31 @@ export default function PlanForm({
                         error={errors.monthly_price_cents}
                         required
                     />
-                    <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
-                            {t('admin.enable_yearly_pricing')}
-                        </span>
-                        <Toggle
-                            checked={yearlyEnabled}
-                            onChange={toggleYearly}
-                        />
-                    </div>
-                    {yearlyEnabled && (
-                        <Input
-                            type="number"
-                            min={0}
-                            label={t('admin.yearly_price_cents')}
-                            value={data.yearly_price_cents ?? ''}
-                            onChange={(e) =>
-                                setData(
-                                    'yearly_price_cents',
-                                    e.target.value ? parseInt(e.target.value, 10) : null
-                                )
-                            }
-                        />
-                    )}
+                    {OPTIONAL_CYCLES.map(({ key, priceField, toggleLabel, priceLabel }) => (
+                        <div key={key} className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                                    {t(toggleLabel)}
+                                </span>
+                                <Toggle
+                                    checked={isEnabled(priceField)}
+                                    onChange={(on) => toggleCycle(priceField, on)}
+                                />
+                            </div>
+                            {isEnabled(priceField) && (
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    label={t(priceLabel)}
+                                    value={data[priceField] ?? ''}
+                                    onChange={(e) =>
+                                        setData(priceField, e.target.value ? parseInt(e.target.value, 10) : null)
+                                    }
+                                    error={errors[priceField]}
+                                />
+                            )}
+                        </div>
+                    ))}
                     <Input
                         type="number"
                         min={0}
@@ -146,18 +171,16 @@ export default function PlanForm({
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">
                         {t('admin.stripe_ids_hint')}
                     </p>
-                    <Input
-                        label={t('admin.price_id_monthly')}
-                        value={data.stripe_monthly_id ?? ''}
-                        onChange={(e) => setData('stripe_monthly_id', e.target.value)}
-                        placeholder={t('admin.price_id_placeholder')}
-                    />
-                    <Input
-                        label={t('admin.price_id_yearly')}
-                        value={data.stripe_yearly_id ?? ''}
-                        onChange={(e) => setData('stripe_yearly_id', e.target.value)}
-                        placeholder={t('admin.price_id_placeholder')}
-                    />
+                    {STRIPE_PRICE_IDS.map(({ field, label }) => (
+                        <Input
+                            key={field}
+                            label={t(label)}
+                            value={data[field] ?? ''}
+                            onChange={(e) => setData(field, e.target.value)}
+                            placeholder={t('admin.price_id_placeholder')}
+                            error={errors[field]}
+                        />
+                    ))}
                     {/*
                       * ⚠️ Says "on save", not "as you type", because the browser
                       * cannot resolve a Price ID to an amount — only Stripe can.

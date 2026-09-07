@@ -16,6 +16,27 @@ function ChangePlanModal({ subscription, plans, onClose }) {
         billing_cycle: subscription?.billing_cycle ?? 'month',
     });
 
+    // ⚠️ String comparison: the <select> yields a string id while the prop is a
+    // number, so a strict === would never match and every badge would vanish.
+    const selectedPlan = plans.find(p => String(p.id) === String(data.plan_id)) ?? null;
+
+    /**
+     * Only the cycles THIS plan is sold on.
+     *
+     * Same rule as Pricing.jsx — a cycle with no price is refused by the gateway
+     * ("New plan has no price for this billing cycle") after the customer has
+     * already chosen it. But the check is per-plan here, deliberately: Pricing
+     * filters across every plan on the page and keeps `month` unconditionally as
+     * the baseline, whereas this modal is choosing a cycle for ONE plan, so
+     * offering a cycle that plan does not sell would be wrong even for month.
+     *
+     * Falls back to every cycle when no plan resolves, which keeps the selector
+     * usable rather than empty if the id ever fails to match.
+     */
+    const offeredCycles = selectedPlan
+        ? CYCLE_ORDER.filter(c => (selectedPlan.available_cycles ?? []).includes(c))
+        : CYCLE_ORDER;
+
     const [couponCode, setCouponCode] = useState('');
     const [couponStatus, setCouponStatus] = useState(null);
 
@@ -56,14 +77,19 @@ function ChangePlanModal({ subscription, plans, onClose }) {
                     <div>
                         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">{t('subscription.billing_cycle')}</label>
                         <div className="flex gap-2">
-                            {['month', 'year'].map(cycle => (
+                            {offeredCycles.map(cycle => (
                                 <button
                                     key={cycle}
                                     type="button"
                                     onClick={() => setData('billing_cycle', cycle)}
                                     className={`flex-1 py-2 px-3 text-sm rounded-soft border ${data.billing_cycle === cycle ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300' : 'border-neutral-300 dark:border-neutral-600'}`}
                                 >
-                                    {cycle === 'month' ? t('subscription.cycle_monthly') : t('subscription.cycle_annual')}
+                                    {t(CYCLE_LABEL_KEY[cycle] ?? cycle)}
+                                    {savingPercent(selectedPlan, cycle) !== null && (
+                                        <span className="block text-xs text-green-600 dark:text-green-400">
+                                            {t('pricing.save_percent', { percent: savingPercent(selectedPlan, cycle) })}
+                                        </span>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -103,6 +129,48 @@ function ChangePlanModal({ subscription, plans, onClose }) {
             </div>
         </div>
     );
+}
+
+/**
+ * Cycle labels, keyed by the `subscriptions` vocabulary.
+ *
+ * ⚠️ Replaces two separate bugs: a `month ? 'Monthly' : 'Annual'` ternary that
+ * labelled every non-month cycle "Annual", and a `{billing_cycle}ly` STRING
+ * CONCATENATION that produced "half_yearly" — stray underscore and all — for
+ * anything the author had not anticipated.
+ */
+const CYCLE_LABEL_KEY = {
+    month: 'subscription.cycle_monthly',
+    quarter: 'subscription.cycle_quarterly',
+    half_year: 'subscription.cycle_half_yearly',
+    // ⚠️ `cycle_yearly`, NOT the retired `cycle_annual`. That key read
+    // "Annual (Save ~17%)" — a percentage baked into a LABEL, so it could not be
+    // wrong loudly. It was asserted, never computed, and stayed 17% whatever the
+    // plan was actually priced at. All four labels are now plain nouns and the
+    // saving is computed beside them, the same way Pricing.jsx does it.
+    year: 'subscription.cycle_yearly',
+};
+
+const CYCLE_ORDER = ['month', 'quarter', 'half_year', 'year'];
+
+/** Months per cycle — mirrors App\Support\BillingCycle::MONTHS. */
+const CYCLE_MONTHS = { month: 1, quarter: 3, half_year: 6, year: 12 };
+
+/**
+ * Real saving against the monthly-equivalent price, or null when there is none.
+ *
+ * Identical in shape to Pricing.jsx's `savingPercent`, but scoped to the ONE
+ * plan the customer has selected rather than the best across all plans — this
+ * modal is choosing a cycle for a specific plan, so the best-across-plans figure
+ * would be a number that does not apply to what they are about to buy.
+ */
+function savingPercent(plan, cycle) {
+    if (!plan || cycle === 'month') return null;
+    const monthly = plan.prices_cents?.month;
+    const cycleCents = plan.prices_cents?.[cycle];
+    if (!monthly || !cycleCents) return null;
+    const pct = Math.round((1 - cycleCents / (monthly * CYCLE_MONTHS[cycle])) * 100);
+    return pct > 0 ? pct : null;
 }
 
 export default function SubscriptionShow({ subscription, canCancel, canUpgrade, plans = [], transactions = [] }) {
@@ -154,7 +222,7 @@ export default function SubscriptionShow({ subscription, canCancel, canUpgrade, 
                                         {subscription.plan.name}
                                         {subscription.billing_cycle && (
                                             <span className="ml-2 text-xs font-normal text-neutral-500 dark:text-neutral-400 capitalize">
-                                                ({subscription.billing_cycle}ly)
+                                                ({t(CYCLE_LABEL_KEY[subscription.billing_cycle] ?? subscription.billing_cycle)})
                                             </span>
                                         )}
                                     </h2>
