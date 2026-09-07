@@ -203,6 +203,13 @@ class PayPalGateway implements BillingGatewayInterface
             };
         } catch (\Throwable $e) {
             Log::error('PayPal webhook handler failed', ['type' => $eventType, 'error' => $e->getMessage()]);
+            // BUG-034. Release the idempotency lock so PayPal's automatic retry can
+            // reprocess; otherwise a transient failure is permanently deduped and the
+            // renewal is lost silently — the event never arrives again and nothing is
+            // recorded as failed.
+            if ($eventId) {
+                app(WebhookIdempotencyService::class)->release('paypal', $eventId);
+            }
 
             return new Response('Handler error', 500);
         }

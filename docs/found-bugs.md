@@ -2335,14 +2335,37 @@ the question was already answered.
 
 ---
 
-## BUG-034 — Paddle and PayPal never release the idempotency lock on failure
+## BUG-034 — Paddle and PayPal never release the idempotency lock on failure — ✅ FIXED
 
-**Severity: HIGH — live, and it loses money silently. Recorded 2026-08-13. NOT fixed.**
+**Severity: HIGH — was live, and lost money silently. Recorded 2026-08-13. FIXED 2026-09-07 on
+`feature/payment-gateway-cleanup`.**
 
-⚠️ **This finding CLOSES BY DELETION.** Paddle and PayPal are the only two offenders, and
-both are on the billing-gateway removal list (`docs/billing-gateway-cleanup.md`). If that
-removal lands first no code fix is needed — the defect leaves with the gateways. Do not spend
-a branch fixing it before checking whether the removal is scheduled.
+⚠️ **IT DID NOT CLOSE BY DELETION, AND THE NOTE THAT SAID IT WOULD WAS ACTED ON TOO LATE TO BE
+HARMLESS.** This entry previously carried a banner reading *"This finding CLOSES BY DELETION —
+Paddle and PayPal are the only two offenders, and both are on the billing-gateway removal
+list."* That was true only under the removal scope recorded at the time (keep Razorpay +
+Cashfree, remove eleven). **The executed scope keeps four gateways, PayPal among them**, so
+half the defect survived the removal — and the banner told the next reader not to bother
+fixing it.
+
+**Both offenders are now resolved, by different means:**
+
+| Gateway | Resolution |
+|---|---|
+| **Paddle** | deleted with the other eight removed gateways |
+| **PayPal** | **fixed** — `release()` added to its `handleWebhook()` catch block, mirroring `StripeGateway:171`, `RazorpayGateway:160` and `CashfreeGateway:178` exactly |
+
+⚠️ The lesson is not about PayPal. **A "closes by deletion" note is a bet on a scope that has
+not happened yet**, and this one was written into a document that outlived the decision behind
+it. Where a finding depends on planned work, record the dependency, not the conclusion.
+
+**A regression guard now enforces it structurally.**
+`WebhookIdempotencyReleaseTest::every_gateway_that_claims_an_event_also_releases_it` scans
+`app/Services/Billing/*Gateway.php` and fails if any gateway calls `isNewEvent()` without also
+calling `release()`. A text scan is the right tool here: the defect is a MISSING call, and no
+behavioural test can be written for a gateway nobody remembered to consider. It is paired with
+a behavioural test that drives PayPal's real handler to a genuine failure and asserts the claim
+is gone afterwards.
 
 `WebhookIdempotencyService::isNewEvent()` claims an event id before the handler runs. If the
 handler then throws, the claim must be **released** so the gateway's automatic retry can
@@ -2373,12 +2396,17 @@ access and stops being charged, or is charged and not credited, depending on whi
 lost. Nothing surfaces: the gateway sees a 500, retries, gets a 200 from the dedup path, and
 considers the matter closed.
 
-### Not fixed here
+### The open question, decided
 
-The fix is small — mirror Stripe's `catch` block — but it belongs on a billing branch alongside
-BUG-032, and it wants one decision first: whether the release should be unconditional or limited
-to specific exception types. Releasing on a *permanent* failure means retrying something that
-will fail identically every time, which is its own kind of noise.
+The fix was held pending one decision: whether the release should be unconditional or limited to
+specific exception types, since releasing on a *permanent* failure means retrying something that
+will fail identically every time.
+
+**Decided: unconditional**, matching all three gateways that already did it. A permanent failure
+retried is noise — a bounded amount, since gateways cap their own retries. A transient failure
+NOT retried is lost money, and it is lost silently. The asymmetry is not close, and diverging
+from the three existing implementations to chase the smaller cost would have made four gateways
+behave in two different ways for no measurable gain.
 
 ---
 
