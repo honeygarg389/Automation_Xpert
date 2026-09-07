@@ -11,6 +11,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\WebhookIdempotencyService;
+use App\Support\BillingCycle;
 use Carbon\Carbon;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Request;
@@ -74,8 +75,13 @@ class RazorpayGateway implements BillingGatewayInterface
             return ['error' => 'Plan has no price for this billing cycle.'];
         }
 
-        // Razorpay requires a finite cycle count; use a long horizon to emulate open-ended.
-        $totalCount = $billingCycle === 'year' ? 10 : 120;
+        // Razorpay requires a finite cycle count; use a long horizon to emulate
+        // open-ended. ⚠️ Counted in CYCLES, not months — the old `? 10 : 120`
+        // meant 120 months, which applied to quarterly would have been 30 years.
+        $totalCount = BillingCycle::horizonCycles($billingCycle);
+        if ($totalCount === null) {
+            return ['error' => "Unsupported billing cycle '{$billingCycle}'."];
+        }
 
         // 1) Create a plan (item.amount in paise).
         $planResult = $this->createRazorpayPlan($plan, $billingCycle, $priceCents);
@@ -344,9 +350,16 @@ class RazorpayGateway implements BillingGatewayInterface
      */
     private function createRazorpayPlan(Plan $plan, string $billingCycle, int $priceCents): array
     {
+        // ⚠️ Razorpay is the only one of the four with a NATIVE `quarterly`
+        // period; half_year has no native form and is monthly x 6.
+        $mapping = BillingCycle::razorpay($billingCycle);
+        if ($mapping === null) {
+            return ['error' => "Unsupported billing cycle '{$billingCycle}'."];
+        }
+
         $res = $this->http()->post(self::BASE_URL.'/plans', [
-            'period' => $billingCycle === 'year' ? 'yearly' : 'monthly',
-            'interval' => 1,
+            'period' => $mapping['period'],
+            'interval' => $mapping['interval'],
             'item' => [
                 'name' => $plan->name,
                 'amount' => $priceCents,

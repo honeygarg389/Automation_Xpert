@@ -6,6 +6,7 @@ use App\Models\Currency;
 use App\Models\Plan;
 use App\Services\Billing\BillingGatewayRegistry;
 use App\Services\CurrencyService;
+use App\Support\BillingCycle;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -29,8 +30,18 @@ class PricingController extends Controller
             ->orderBy('sort_order')
             ->get()
             ->map(function (Plan $plan) use ($displayCurrency) {
-                $monthlyCents = $plan->priceCentsForCycle('month');
-                $yearlyCents = $plan->priceCentsForCycle('year');
+                $centsByCycle = [];
+                $displayByCycle = [];
+                foreach (BillingCycle::ALL as $cycle) {
+                    $cents = $plan->priceCentsForCycle($cycle);
+                    $centsByCycle[$cycle] = $cents;
+                    $displayByCycle[$cycle] = $cents !== null
+                        ? $this->currency->formatConverted($cents, $plan->currency_code, $displayCurrency)
+                        : null;
+                }
+
+                $monthlyCents = $centsByCycle[BillingCycle::MONTH];
+                $yearlyCents = $centsByCycle[BillingCycle::YEAR];
 
                 return [
                     'id' => $plan->id,
@@ -45,6 +56,11 @@ class PricingController extends Controller
                         : null,
                     'monthly_price_cents' => $monthlyCents,
                     'yearly_price_cents' => $yearlyCents,
+                    // Per-cycle maps — the two pairs above are kept because other
+                    // callers still read them; new UI should use these.
+                    'prices_cents' => $centsByCycle,
+                    'prices_display' => $displayByCycle,
+                    'available_cycles' => $plan->availableCycles(),
                     'features' => is_array($plan->features) ? $plan->features : [],
                     // ⚠️ CATALOG, NOT ENTITLEMENT — do not route this through the facade.
                     //

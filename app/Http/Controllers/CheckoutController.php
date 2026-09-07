@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Plan;
 use App\Services\Billing\BillingGatewayRegistry;
+use App\Support\BillingCycle;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -23,7 +24,7 @@ class CheckoutController extends Controller
     {
         $validated = $request->validate([
             'plan_id' => ['required', 'integer', Rule::exists('plans', 'id')],
-            'billing_cycle' => ['required', 'string', Rule::in(['month', 'year'])],
+            'billing_cycle' => ['required', 'string', Rule::in(BillingCycle::ALL)],
             'gateway' => ['required', 'string', Rule::in(['stripe', 'paypal', 'razorpay', 'cashfree'])],
         ]);
 

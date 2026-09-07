@@ -19,6 +19,48 @@ export default function Pricing({
     checkout_url = null,
 }) {
     const { t } = useTranslation();
+
+    /**
+     * Mirrors App\Support\BillingCycle::ALL. `months` drives the savings
+     * calculation below; `perLabel` is the "/ month" suffix.
+     */
+    const CYCLES = [
+        { key: 'month', months: 1, label: 'pricing.monthly', perLabel: 'pricing.per_month' },
+        { key: 'quarter', months: 3, label: 'pricing.quarterly', perLabel: 'pricing.per_quarter' },
+        { key: 'half_year', months: 6, label: 'pricing.half_yearly', perLabel: 'pricing.per_half_year' },
+        { key: 'year', months: 12, label: 'pricing.yearly', perLabel: 'pricing.per_year' },
+    ];
+
+    // Only offer cycles at least one plan is actually sold on — a cycle with no
+    // price sends the customer to a checkout that refuses.
+    const offeredCycles = CYCLES.filter(
+        (c) => c.key === 'month' || plans.some((p) => (p.available_cycles ?? []).includes(c.key))
+    );
+
+    /**
+     * ⚠️ THE SAVINGS BADGE IS COMPUTED, NOT ASSERTED.
+     *
+     * It used to read a hardcoded "Save 15%" on the yearly button — a marketing
+     * claim that was true only if whoever configured the prices happened to make
+     * it true, and silently false otherwise. With four cycles that would be three
+     * more unverifiable claims.
+     *
+     * This derives the real best saving against the monthly-equivalent price and
+     * shows a badge only when there IS one. A cycle priced at or above monthly
+     * simply gets no badge rather than a false one.
+     */
+    const savingPercent = (cycleKey, months) => {
+        if (cycleKey === 'month') return null;
+        const best = plans.reduce((acc, p) => {
+            const monthly = p.prices_cents?.month;
+            const cycleCents = p.prices_cents?.[cycleKey];
+            if (!monthly || !cycleCents) return acc;
+            const pct = Math.round((1 - cycleCents / (monthly * months)) * 100);
+            return pct > acc ? pct : acc;
+        }, 0);
+        return best > 0 ? best : null;
+    };
+
     const [billingCycle, setBillingCycle]     = useState('month');
     const [loadingGateway, setLoadingGateway] = useState(null);
     const { url } = usePage();
@@ -64,20 +106,24 @@ export default function Pricing({
                         </p>
                     </div>
                     <div className="flex items-center gap-2 rounded-soft-lg border border-soft border-neutral-200 bg-neutral-50 p-1 dark:bg-neutral-800 dark:border-neutral-700">
-                        <button
-                            type="button"
-                            onClick={() => setBillingCycle('month')}
-                            className={`rounded-soft px-3 py-1.5 text-sm font-medium transition ${billingCycle === 'month' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-soft' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}
-                        >
-                            {t('pricing.monthly')}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setBillingCycle('year')}
-                            className={`rounded-soft px-3 py-1.5 text-sm font-medium transition ${billingCycle === 'year' ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-soft' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}
-                        >
-                            {t('pricing.yearly')} <span className="text-xs text-green-600 dark:text-green-400 ml-0.5">{t('pricing.save_15')}</span>
-                        </button>
+                        {offeredCycles.map(({ key, months, label }) => {
+                            const saving = savingPercent(key, months);
+                            return (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => setBillingCycle(key)}
+                                    className={`rounded-soft px-3 py-1.5 text-sm font-medium transition ${billingCycle === key ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-neutral-100 shadow-soft' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100'}`}
+                                >
+                                    {t(label)}
+                                    {saving !== null && (
+                                        <span className="text-xs text-green-600 dark:text-green-400 ml-0.5">
+                                            {t('pricing.save_percent', { percent: saving })}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })}
                     </div>
                 </div>
 
@@ -94,7 +140,7 @@ export default function Pricing({
 
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {plans.map((plan) => {
-                        const priceDisplay = billingCycle === 'year' ? plan.yearly_price_display : plan.monthly_price_display;
+                        const priceDisplay = plan.prices_display?.[billingCycle] ?? null;
                         const isFree       = plan.is_free;
                         const isPopular    = plan.popular;
 
@@ -121,7 +167,7 @@ export default function Pricing({
                                             {isFree ? t('pricing.free') : (priceDisplay ?? '—')}
                                         </span>
                                         {! isFree && (
-                                            <span className="ml-1 text-sm text-neutral-500">/ {billingCycle === 'year' ? t('pricing.per_year') : t('pricing.per_month')}</span>
+                                            <span className="ml-1 text-sm text-neutral-500">/ {t(CYCLES.find((c) => c.key === billingCycle)?.perLabel ?? 'pricing.per_month')}</span>
                                         )}
                                     </div>
                                     {plan.trial_days > 0 && (

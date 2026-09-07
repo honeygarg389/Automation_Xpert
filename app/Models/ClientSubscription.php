@@ -15,7 +15,27 @@ class ClientSubscription extends Model
 
     public const BILLING_MONTHLY = 'monthly';
 
+    public const BILLING_QUARTERLY = 'quarterly';
+
+    public const BILLING_HALF_YEARLY = 'half_yearly';
+
     public const BILLING_YEARLY = 'yearly';
+
+    /**
+     * ⚠️ THE LONG VOCABULARY, WHICH IS THIS TABLE'S ONLY. The `subscriptions`
+     * table uses the SHORT forms (month|quarter|half_year|year) — see
+     * App\Support\BillingCycle, which also carries the translation helpers.
+     * Mixing them silently disabled a guard once; SubscriptionBillingCycleVocabularyTest
+     * now fails the build if either vocabulary appears on the wrong table.
+     *
+     * @var list<string>
+     */
+    public const BILLING_CYCLES = [
+        self::BILLING_MONTHLY,
+        self::BILLING_QUARTERLY,
+        self::BILLING_HALF_YEARLY,
+        self::BILLING_YEARLY,
+    ];
 
     protected $fillable = [
         'client_id',

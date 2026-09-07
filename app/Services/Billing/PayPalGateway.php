@@ -10,6 +10,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Services\WebhookIdempotencyService;
+use App\Support\BillingCycle;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -76,7 +77,13 @@ class PayPalGateway implements BillingGatewayInterface
         }
 
         $amount = number_format($priceCents / 100, 2, '.', '');
-        $interval = $billingCycle === 'year' ? 'YEAR' : 'MONTH';
+        // ⚠️ PayPal accepts DAY|WEEK|MONTH|YEAR with an interval_count (MONTH
+        // capped at 12), so quarter/half_year are MONTH x 3 / x 6.
+        $mapping = BillingCycle::paypal($billingCycle);
+        if ($mapping === null) {
+            return ['error' => "Unsupported billing cycle '{$billingCycle}'."];
+        }
+        $interval = $mapping['interval_unit'];
         $currency = $plan->currency_code ?? 'USD';
 
         // 1) Create product
@@ -107,7 +114,7 @@ class PayPalGateway implements BillingGatewayInterface
                 'description' => $plan->name,
                 'billing_cycles' => [
                     [
-                        'frequency' => ['interval_unit' => $interval, 'interval_count' => 1],
+                        'frequency' => ['interval_unit' => $interval, 'interval_count' => $mapping['interval_count']],
                         'tenure_type' => 'REGULAR',
                         'sequence' => 1,
                         'total_cycles' => 0,

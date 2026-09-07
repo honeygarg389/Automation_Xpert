@@ -10,6 +10,7 @@ use App\Models\Plan;
 use App\Models\Subscription;
 use App\Services\Billing\BillingGatewayRegistry;
 use App\Services\Billing\InvoiceService;
+use App\Support\BillingCycle;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
@@ -68,12 +69,23 @@ class SubscriptionController extends Controller
             ];
         }
 
-        $plans = Plan::where('enabled', true)->orderBy('sort_order')->get()->map(fn ($p) => [
+        // ⚠️ THIS READ TWO PROPERTIES THAT DO NOT EXIST. `monthly_price` and
+        // `annual_price` are neither columns nor accessors on Plan, so both
+        // resolved to null and the change-plan modal listed every plan with no
+        // price at all. PricingController had the correct pattern all along —
+        // priceCentsForCycle() — and this now matches it, across all four cycles.
+        $plans = Plan::where('enabled', true)->orderBy('sort_order')->get()->map(fn (Plan $p) => [
             'id' => $p->id,
             'name' => $p->name,
             'slug' => $p->slug,
-            'monthly_price' => $p->monthly_price,
-            'annual_price' => $p->annual_price,
+            'currency_code' => $p->currency_code,
+            // Only the cycles this plan is actually sold on — offering one
+            // without a price sends the customer to a checkout that refuses.
+            'available_cycles' => $p->availableCycles(),
+            'prices_cents' => array_combine(
+                BillingCycle::ALL,
+                array_map(fn (string $c) => $p->priceCentsForCycle($c), BillingCycle::ALL)
+            ),
         ]);
 
         $transactions = $user->paymentTransactions()
@@ -104,7 +116,7 @@ class SubscriptionController extends Controller
     {
         $validated = $request->validate([
             'plan_id' => ['required', 'integer', Rule::exists('plans', 'id')],
-            'billing_cycle' => ['required', Rule::in(['month', 'year'])],
+            'billing_cycle' => ['required', Rule::in(BillingCycle::ALL)],
         ]);
 
         $user = $request->user();

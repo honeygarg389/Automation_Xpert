@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Modules\Entitlements\Models\AddOn;
+use App\Support\BillingCycle;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -52,9 +53,13 @@ class Plan extends Model
         'sort_order',
         'enabled',
         'monthly_price_cents',
+        'quarterly_price_cents',
+        'half_yearly_price_cents',
         'yearly_price_cents',
         'trial_days',
         'stripe_monthly_id',
+        'stripe_quarterly_id',
+        'stripe_half_yearly_id',
         'stripe_yearly_id',
         'features',
         'limits',
@@ -70,6 +75,8 @@ class Plan extends Model
             'sort_order' => 'integer',
             'enabled' => 'boolean',
             'monthly_price_cents' => 'integer',
+            'quarterly_price_cents' => 'integer',
+            'half_yearly_price_cents' => 'integer',
             'yearly_price_cents' => 'integer',
             'trial_days' => 'integer',
             'features' => 'array',
@@ -83,13 +90,43 @@ class Plan extends Model
     /**
      * Price in cents for the given billing cycle.
      */
+    /**
+     * Price in cents for the given billing cycle, or null when this plan is not
+     * sold on that cycle.
+     *
+     * ⚠️ ONLY `month` FALLS BACK TO `price_cents`, and the asymmetry is
+     * deliberate rather than an oversight. `price_cents` is the legacy single-
+     * price column from before per-cycle pricing existed, and its meaning is
+     * "the monthly price" — there is no cycle recorded alongside it. Extending
+     * that fallback to quarter, half_year or year would silently sell a yearly
+     * subscription at a monthly price, which is the failure this method exists
+     * to prevent. A cycle with no price returns null and every gateway refuses.
+     */
     public function priceCentsForCycle(string $cycle): ?int
     {
         return match ($cycle) {
-            'month' => $this->monthly_price_cents ?? $this->price_cents,
-            'year' => $this->yearly_price_cents,
+            BillingCycle::MONTH => $this->monthly_price_cents ?? $this->price_cents,
+            BillingCycle::QUARTER => $this->quarterly_price_cents,
+            BillingCycle::HALF_YEAR => $this->half_yearly_price_cents,
+            BillingCycle::YEAR => $this->yearly_price_cents,
             default => null,
         };
+    }
+
+    /**
+     * The cycles this plan is actually sold on, in canonical order.
+     *
+     * Drives the pricing page's cycle selector — a cycle with no price must not
+     * be offered, or checkout refuses after the customer has chosen it.
+     *
+     * @return list<string>
+     */
+    public function availableCycles(): array
+    {
+        return array_values(array_filter(
+            BillingCycle::ALL,
+            fn (string $c) => ($this->priceCentsForCycle($c) ?? 0) > 0
+        ));
     }
 
     public function currency(): BelongsTo

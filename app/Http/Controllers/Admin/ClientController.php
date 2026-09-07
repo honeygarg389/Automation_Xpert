@@ -267,7 +267,9 @@ class ClientController extends Controller
 
         $validated = $request->validate([
             'plan_id' => ['required', 'exists:plans,id'],
-            'billing_cycle' => ['required', 'string', 'in:monthly,yearly'],
+            // ⚠️ ClientSubscription's LONG vocabulary — this endpoint writes
+            // `client_subscriptions`, not `subscriptions`. See App\Support\BillingCycle.
+            'billing_cycle' => ['required', 'string', Rule::in(ClientSubscription::BILLING_CYCLES)],
         ]);
 
         $plan = Plan::findOrFail($validated['plan_id']);

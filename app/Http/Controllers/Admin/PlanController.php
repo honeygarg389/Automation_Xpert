@@ -8,6 +8,7 @@ use App\Models\Plan;
 use App\Modules\Entitlements\Support\PlanLimitKinds;
 use App\Services\Billing\BillingGatewayRegistry;
 use App\Services\Billing\StripeGateway;
+use App\Support\BillingCycle;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -90,9 +91,13 @@ class PlanController extends Controller
             'description' => $p->description,
             'currency_code' => $p->currency_code,
             'monthly_price_cents' => $p->monthly_price_cents,
+            'quarterly_price_cents' => $p->quarterly_price_cents,
+            'half_yearly_price_cents' => $p->half_yearly_price_cents,
             'yearly_price_cents' => $p->yearly_price_cents,
             'trial_days' => (int) ($p->trial_days ?? 0),
             'stripe_monthly_id' => $p->stripe_monthly_id,
+            'stripe_quarterly_id' => $p->stripe_quarterly_id,
+            'stripe_half_yearly_id' => $p->stripe_half_yearly_id,
             'stripe_yearly_id' => $p->stripe_yearly_id,
             'features' => is_array($p->features) ? $p->features : [],
             'limits' => $limits,
@@ -196,9 +201,13 @@ class PlanController extends Controller
             'description' => ['nullable', 'string', 'max:1000'],
             'currency_code' => ['required', 'string', 'max:10', Rule::exists('currencies', 'code')],
             'monthly_price_cents' => ['required', 'integer', 'min:0'],
+            'quarterly_price_cents' => ['nullable', 'integer', 'min:0'],
+            'half_yearly_price_cents' => ['nullable', 'integer', 'min:0'],
             'yearly_price_cents' => ['nullable', 'integer', 'min:0'],
             'trial_days' => ['nullable', 'integer', 'min:0', 'max:365'],
             'stripe_monthly_id' => ['nullable', 'string', 'max:255'],
+            'stripe_quarterly_id' => ['nullable', 'string', 'max:255'],
+            'stripe_half_yearly_id' => ['nullable', 'string', 'max:255'],
             'stripe_yearly_id' => ['nullable', 'string', 'max:255'],
             'features' => ['nullable', 'array'],
             'features.*' => ['string', 'max:500'],
@@ -228,9 +237,13 @@ class PlanController extends Controller
             'price_cents' => $monthly,
             'interval' => 'month',
             'monthly_price_cents' => $monthly,
+            'quarterly_price_cents' => isset($validated['quarterly_price_cents']) ? (int) $validated['quarterly_price_cents'] : null,
+            'half_yearly_price_cents' => isset($validated['half_yearly_price_cents']) ? (int) $validated['half_yearly_price_cents'] : null,
             'yearly_price_cents' => isset($validated['yearly_price_cents']) ? (int) $validated['yearly_price_cents'] : null,
             'trial_days' => (int) ($validated['trial_days'] ?? 0),
             'stripe_monthly_id' => $validated['stripe_monthly_id'] ?? null,
+            'stripe_quarterly_id' => $validated['stripe_quarterly_id'] ?? null,
+            'stripe_half_yearly_id' => $validated['stripe_half_yearly_id'] ?? null,
             'stripe_yearly_id' => $validated['stripe_yearly_id'] ?? null,
             'features' => $validated['features'] ?? [],
             'limits' => $validated['limits'] ?? null,
@@ -262,12 +275,19 @@ class PlanController extends Controller
      */
     private function stripePriceWarning(Plan $plan): ?string
     {
-        $pairs = [
-            ['month', $plan->stripe_monthly_id, $plan->monthly_price_cents],
-            ['year', $plan->stripe_yearly_id, $plan->yearly_price_cents],
-        ];
+        // Derived from BillingCycle so a fifth cycle needs no edit here.
+        $pairs = array_map(
+            fn (string $cycle) => [
+                $cycle,
+                $plan->{BillingCycle::stripePriceIdColumn($cycle)},
+                $plan->priceCentsForCycle($cycle),
+            ],
+            BillingCycle::ALL
+        );
 
-        if (! collect($pairs)->contains(fn ($p) => ! empty($p[1]))) {
+        $hasAnyPriceId = array_filter($pairs, fn (array $pair) => ! empty($pair[1])) !== [];
+
+        if (! $hasAnyPriceId) {
             return null;
         }
 
