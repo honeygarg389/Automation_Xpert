@@ -3335,7 +3335,6 @@
         "network_desc_linkedin": "Connect your LinkedIn profile or company page.",
         "network_desc_twitter": "Connect your X / Twitter account.",
         "network_desc_youtube": "Connect your YouTube channel to upload videos.",
-        "network_desc_tiktok": "Connect your TikTok account to publish videos.",
         "token_expired": "Token expired",
         "disconnect": "Disconnect",
         "disconnect_confirm": "Disconnect \"{{name}}\"?",

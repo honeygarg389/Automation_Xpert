@@ -11,7 +11,6 @@ use App\Modules\Social\Services\Drivers\FacebookDriver;
 use App\Modules\Social\Services\Drivers\InstagramSocialDriver;
 use App\Modules\Social\Services\Drivers\LinkedInDriver;
 use App\Modules\Social\Services\Drivers\SocialNetworkInterface;
-use App\Modules\Social\Services\Drivers\TikTokDriver;
 use App\Modules\Social\Services\Drivers\TwitterDriver;
 use App\Modules\Social\Services\Drivers\YoutubeDriver;
 use Illuminate\Support\Facades\Log;
@@ -29,7 +28,6 @@ class SocialPublisher
             'linkedin' => new LinkedInDriver,
             'twitter' => new TwitterDriver,
             'youtube' => new YoutubeDriver,
-            'tiktok' => new TikTokDriver,
         ];
     }
 

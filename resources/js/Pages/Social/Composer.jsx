@@ -9,20 +9,19 @@ import TimezonePicker from '@/Components/TimezonePicker';
 import { DatePicker } from '@/Components/ui';
 import { browserTz, tzLocalToUtcIso, formatInTz } from '@/Utils/datetime';
 
-const CHAR_LIMITS = { twitter: 280, tiktok: 2200, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
+const CHAR_LIMITS = { twitter: 280, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
 
 const NETWORK_COLORS = {
     twitter:   '#000000',
     facebook:  '#1877F2',
     instagram: '#E1306C',
     linkedin:  '#0A66C2',
-    tiktok:    '#000000',
     youtube:   '#FF0000',
 };
 
 const NETWORK_LABELS = {
     twitter: 'X (Twitter)', facebook: 'Facebook', instagram: 'Instagram',
-    linkedin: 'LinkedIn',   tiktok: 'TikTok',     youtube: 'YouTube',
+    linkedin: 'LinkedIn',   youtube: 'YouTube',
 };
 
 /* ── per-network preview cards ─────────────────────────────── */
@@ -153,32 +152,6 @@ function LinkedInPreview({ body, mediaUrls, accountName, pictureUrl }) {
     );
 }
 
-function TikTokPreview({ body, mediaUrls, accountName }) {
-    const { t } = useTranslation();
-    const handle = accountName ? `@${accountName.toLowerCase().replace(/\s+/g, '')}` : '@youraccount';
-    return (
-        <div className="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-black text-sm font-[system-ui] overflow-hidden">
-            <div className="relative">
-                {mediaUrls?.[0]
-                    ? <img src={mediaUrls[0]} alt="" className="w-full object-cover max-h-64" />
-                    : <div className="w-full h-52 bg-neutral-900 flex items-center justify-center text-neutral-600 text-xs">{t('social.preview_video')}</div>
-                }
-                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
-                    <p className="text-white font-semibold text-xs mb-1">{handle}</p>
-                    <p className="text-white/90 text-xs whitespace-pre-wrap break-words line-clamp-2">
-                        {body || <span className="text-white/50 italic">{t('social.preview_caption_short')}</span>}
-                    </p>
-                </div>
-                <div className="absolute right-2 bottom-10 flex flex-col items-center gap-3 text-white text-xs">
-                    <div className="flex flex-col items-center"><Heart className="h-5 w-5" /><span>0</span></div>
-                    <div className="flex flex-col items-center"><MessageCircle className="h-5 w-5" /><span>0</span></div>
-                    <div className="flex flex-col items-center"><Share2 className="h-5 w-5" /><span>0</span></div>
-                </div>
-            </div>
-        </div>
-    );
-}
-
 function YouTubePreview({ body, mediaUrls, accountName }) {
     const { t } = useTranslation();
     return (
@@ -206,7 +179,6 @@ const PREVIEW_COMPONENTS = {
     facebook:  FacebookPreview,
     instagram: InstagramPreview,
     linkedin:  LinkedInPreview,
-    tiktok:    TikTokPreview,
     youtube:   YouTubePreview,
 };
 

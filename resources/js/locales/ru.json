@@ -3305,7 +3305,6 @@
         "network_desc_linkedin": "Подключите свой профиль или страницу компании в LinkedIn.",
         "network_desc_twitter": "Подключите свой аккаунт X / Twitter.",
         "network_desc_youtube": "Подключите свой канал YouTube, чтобы загружать видео.",
-        "network_desc_tiktok": "Подключите свой аккаунт TikTok, чтобы публиковать видео.",
         "token_expired": "Токен истёк",
         "disconnect": "Отключить",
         "disconnect_confirm": "Отключить «{{name}}»?",

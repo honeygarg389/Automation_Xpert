@@ -18,7 +18,6 @@ use Illuminate\Support\Facades\Session;
  *   linkedin  – LinkedIn OAuth 2.0
  *   twitter   – X/Twitter OAuth 2.0 PKCE
  *   youtube   – Google OAuth 2.0
- *   tiktok    – TikTok Content Posting API OAuth 2.0
  */
 class OAuthManager
 {
@@ -37,7 +36,6 @@ class OAuthManager
             'linkedin' => $this->linkedinAuthUrl($creds, $callbackUrl),
             'twitter' => $this->twitterAuthUrl($creds, $callbackUrl),
             'youtube' => $this->googleAuthUrl($creds, $callbackUrl),
-            'tiktok' => $this->tiktokAuthUrl($creds, $callbackUrl),
             default => throw new \InvalidArgumentException("Unsupported network: {$network}"),
         };
     }
@@ -59,7 +57,6 @@ class OAuthManager
             'linkedin' => $this->linkedinExchange($creds, $code, $callbackUrl),
             'twitter' => $this->twitterExchange($creds, $code, $callbackUrl, $storedState),
             'youtube' => $this->googleExchange($creds, $code, $callbackUrl),
-            'tiktok' => $this->tiktokExchange($creds, $code, $callbackUrl),
             default => throw new \InvalidArgumentException("Unsupported network: {$network}"),
         };
     }
@@ -75,7 +72,6 @@ class OAuthManager
         return match ($network) {
             'twitter' => $this->twitterRefresh($creds, $refreshToken),
             'youtube' => $this->googleRefresh($creds, $refreshToken),
-            'tiktok' => $this->tiktokRefresh($creds, $refreshToken),
             'linkedin' => $this->linkedinRefresh($creds, $refreshToken),
             'facebook',
             'instagram' => throw new \RuntimeException('Facebook/Instagram tokens are long-lived; use token extension instead.'),
@@ -209,34 +205,6 @@ class OAuthManager
         return ['access_token' => $res['access_token'] ?? null, 'refresh_token' => $res['refresh_token'] ?? null, 'expires_in' => $res['expires_in'] ?? null];
     }
 
-    // ── TikTok ──────────────────────────────────────────────────────────────
-
-    private function tiktokAuthUrl($creds, string $redirect): string
-    {
-        $state = $this->storeState(['network' => 'tiktok']);
-
-        return 'https://www.tiktok.com/v2/auth/authorize?'.http_build_query([
-            'client_key' => $creds->clientId() ?? '',
-            'redirect_uri' => $redirect,
-            'response_type' => 'code',
-            'scope' => 'user.info.basic,video.publish',
-            'state' => $state,
-        ]);
-    }
-
-    private function tiktokExchange($creds, string $code, string $redirect): array
-    {
-        $res = Http::post('https://open.tiktokapis.com/v2/oauth/token/', [
-            'client_key' => $creds->clientId() ?? '',
-            'client_secret' => $creds->clientSecret() ?? '',
-            'grant_type' => 'authorization_code',
-            'auth_code' => $code,
-            'redirect_uri' => $redirect,
-        ])->json();
-
-        return ['access_token' => $res['data']['access_token'] ?? null, 'refresh_token' => $res['data']['refresh_token'] ?? null, 'expires_in' => $res['data']['expires_in'] ?? null];
-    }
-
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private function twitterRefresh($creds, string $refreshToken): array
@@ -268,23 +236,6 @@ class OAuthManager
         }
 
         return ['access_token' => $res['access_token'], 'refresh_token' => $refreshToken, 'expires_in' => $res['expires_in'] ?? 3600];
-    }
-
-    private function tiktokRefresh($creds, string $refreshToken): array
-    {
-        $res = Http::post('https://open.tiktokapis.com/v2/oauth/token/', [
-            'client_key' => $creds->clientId() ?? '',
-            'client_secret' => $creds->clientSecret() ?? '',
-            'grant_type' => 'refresh_token',
-            'refresh_token' => $refreshToken,
-        ])->json();
-
-        $token = $res['data']['access_token'] ?? null;
-        if (! $token) {
-            throw new \RuntimeException('TikTok token refresh failed: '.json_encode($res));
-        }
-
-        return ['access_token' => $token, 'refresh_token' => $res['data']['refresh_token'] ?? $refreshToken, 'expires_in' => $res['data']['expires_in'] ?? null];
     }
 
     private function linkedinRefresh($creds, string $refreshToken): array

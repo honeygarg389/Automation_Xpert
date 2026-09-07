@@ -10,7 +10,6 @@ const NETWORKS = [
     { id: 'linkedin',  label: 'LinkedIn',  descriptionKey: 'social.network_desc_linkedin' },
     { id: 'twitter',   label: 'X (Twitter)', descriptionKey: 'social.network_desc_twitter' },
     { id: 'youtube',   label: 'YouTube',   descriptionKey: 'social.network_desc_youtube' },
-    { id: 'tiktok',    label: 'TikTok',    descriptionKey: 'social.network_desc_tiktok' },
 ];
 
 const STATUS_DOT = {

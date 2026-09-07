@@ -36,7 +36,7 @@ class RefreshSocialTokensJob implements ShouldQueue
     public function handle(OAuthManager $oauthManager): void
     {
         // Networks that support programmatic refresh
-        $refreshable = ['twitter', 'youtube', 'tiktok', 'linkedin'];
+        $refreshable = ['twitter', 'youtube', 'linkedin'];
 
         SocialAccount::where('active', true)
             ->whereIn('network', $refreshable)

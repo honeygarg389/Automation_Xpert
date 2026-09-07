@@ -237,18 +237,6 @@ const SETUP_GUIDES = {
         link: 'https://console.cloud.google.com/apis/credentials',
         linkLabel: 'Open Google Cloud Console',
     },
-    oauth_tiktok: {
-        title: 'TikTok OAuth Setup',
-        steps: [
-            'Go to developers.tiktok.com and sign in.',
-            'Create an app under "Manage apps".',
-            'Add the callback URL: {your-domain}/auth/tiktok/callback',
-            'Request the user.info.basic scope.',
-            'Copy the Client Key and Client Secret.',
-        ],
-        link: 'https://developers.tiktok.com',
-        linkLabel: 'Open TikTok Developers',
-    },
     llm_openai_default: {
         title: 'OpenAI API Setup',
         steps: [
@@ -447,7 +435,6 @@ const BRAND = {
     oauth_linkedin:  { bg: null, color: '#0A66C2', logo: 'linkedin' },
     oauth_twitter:   { bg: null, color: '#000000', logo: 'x' },
     oauth_youtube:   { bg: null, color: '#FF0000', logo: 'youtube' },
-    oauth_tiktok:    { bg: null, color: '#000000', logo: 'tiktok' },
     llm_openai_default:     { bg: null, color: '#10a37f', logo: 'openai' },
     llm_anthropic_default:  { bg: null, color: '#d4793b', logo: 'anthropic' },
     llm_gemini_default:     { bg: null, color: '#4285F4', logo: 'googlegemini' },

@@ -2636,7 +2636,6 @@
         "network_desc_linkedin": "আপনার LinkedIn প্রোফাইল বা কোম্পানি পেজ সংযুক্ত করুন।",
         "network_desc_twitter": "আপনার X / Twitter অ্যাকাউন্ট সংযুক্ত করুন।",
         "network_desc_youtube": "ভিডিও আপলোড করতে আপনার YouTube চ্যানেল সংযুক্ত করুন।",
-        "network_desc_tiktok": "ভিডিও প্রকাশ করতে আপনার TikTok অ্যাকাউন্ট সংযুক্ত করুন।",
         "token_expired": "টোকেনের মেয়াদ শেষ",
         "disconnect": "সংযোগ বিচ্ছিন্ন করুন",
         "disconnect_confirm": "\"{{name}}\"-এর সংযোগ বিচ্ছিন্ন করবেন?",

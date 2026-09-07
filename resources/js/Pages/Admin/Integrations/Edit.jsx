@@ -254,18 +254,6 @@ const SETUP_GUIDES = {
         link: 'https://devtools.bigcommerce.com/my/apps',
         linkLabel: 'Open BigCommerce Dev Portal',
     },
-    oauth_tiktok: {
-        title: 'TikTok OAuth Setup',
-        steps: [
-            'Go to developers.tiktok.com and sign in.',
-            'Create an app under "Manage apps".',
-            'Add the callback URL: {your-domain}/auth/tiktok/callback',
-            'Request the user.info.basic scope.',
-            'Copy the Client Key and Client Secret.',
-        ],
-        link: 'https://developers.tiktok.com',
-        linkLabel: 'Open TikTok Developers',
-    },
     llm_openai_default: {
         title: 'OpenAI API Setup',
         steps: [
@@ -509,7 +497,6 @@ const BRAND = {
     oauth_linkedin:          { bg: 'bg-sky-100 dark:bg-sky-900/30', color: '#0A66C2', icon: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M4.5 3C3.67 3 3 3.67 3 4.5S3.67 6 4.5 6 6 5.33 6 4.5 5.33 3 4.5 3zM3 7.5h3V17H3V7.5zm4.5 0H10v1.3c.45-.78 1.45-1.5 2.75-1.5 2.95 0 3.5 1.94 3.5 4.47V17H13v-4.73c0-1.13-.02-2.58-1.57-2.58-1.57 0-1.81 1.23-1.81 2.5V17H7.5V7.5z" /></svg> },
     oauth_twitter:           { bg: 'bg-neutral-200 dark:bg-neutral-700/60', color: '#0f0f0f', icon: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M3.5 3h3.1l2.9 4.1L12.6 3h2.3l-4 5 4.6 6h-3.1L9.2 9.7 5.9 14H3.6l4.3-5.3L3.5 3zm2.3 1.2l8 10.4h1.2L7 4.2H5.8z" /></svg> },
     oauth_youtube:           { bg: 'bg-red-100 dark:bg-red-900/30', color: '#FF0000', icon: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M17.5 6.2S17.25 4.8 16.6 4.1c-.67-.72-1.43-.73-1.78-.77C12.6 3.2 10 3.2 10 3.2s-2.6 0-4.82.13c-.35.04-1.1.05-1.78.77C2.75 4.8 2.5 6.2 2.5 6.2S2.25 7.86 2.25 9.5v1.5c0 1.64.25 3.3.25 3.3s.25 1.4.9 2.1c.68.72 1.57.7 1.97.77 1.43.14 6.08.19 6.08.19s2.6 0 4.82-.15c.35-.04 1.1-.05 1.78-.77.65-.7.9-2.1.9-2.1S17.75 12.64 17.75 11V9.5c0-1.64-.25-3.3-.25-3.3zM8.5 12.75v-5.5l5 2.75-5 2.75z" /></svg> },
-    oauth_tiktok:            { bg: 'bg-neutral-200 dark:bg-neutral-700/60', color: '#000000', icon: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M13.5 2h-2.25v9.5A2.25 2.25 0 119 9.2V7a4.5 4.5 0 104.5 4.5V6.25A6.24 6.24 0 0017 7V4.75A4.25 4.25 0 0113.5 2z" /></svg> },
     llm_openai_default:      { bg: 'bg-emerald-100 dark:bg-emerald-900/30', color: '#10a37f', icon: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M10 2a3.9 3.9 0 00-3.68 2.6A3.9 3.9 0 003.6 8.32a3.9 3.9 0 000 3.36 3.9 3.9 0 002.72 3.72A3.9 3.9 0 0010 18a3.9 3.9 0 003.68-2.6 3.9 3.9 0 002.72-3.72 3.9 3.9 0 000-3.36A3.9 3.9 0 0013.68 4.6 3.9 3.9 0 0010 2zm0 4a2 2 0 110 4 2 2 0 010-4z" /></svg> },
     llm_anthropic_default:   { bg: 'bg-orange-100 dark:bg-orange-900/30', color: '#d4793b', icon: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M10 2.5L3.5 17h3.2l1.1-2.8h4.4l1.1 2.8h3.2L10 2.5zm0 4.3l1.6 4.2H8.4L10 6.8z" /></svg> },
     llm_gemini_default:      { bg: 'bg-blue-100 dark:bg-blue-900/30', color: '#4285F4', icon: <svg viewBox="0 0 20 20" fill="currentColor" className="h-5 w-5"><path d="M10 2l2 6h6l-5 3.6 1.9 5.9L10 14l-4.9 3.5L7 11.6 2 8h6l2-6z" /></svg> },

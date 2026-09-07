@@ -15,11 +15,11 @@ const TONES = [
     { value: 'educational',   labelKey: 'social.tone_educational' },
 ];
 
-const CHAR_LIMITS = { twitter: 280, tiktok: 2200, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
+const CHAR_LIMITS = { twitter: 280, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
 
 const NETWORK_LABELS = {
     facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn',
-    twitter: 'X (Twitter)', youtube: 'YouTube', tiktok: 'TikTok',
+    twitter: 'X (Twitter)', youtube: 'YouTube',
 };
 
 function utcToLocalInput(utcIso) {

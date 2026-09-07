@@ -294,7 +294,7 @@ class LandingPageController extends Controller
             'landing.intcat_6_title' => 'Developer Tools',
             'landing.intcat_6_items' => "REST API\nWebhooks\nOAuth 2.0\nFirebase",
             'landing.intcat_7_title' => 'Social Media',
-            'landing.intcat_7_items' => "Facebook\nInstagram\nLinkedIn\nX (Twitter)\nYouTube\nTikTok",
+            'landing.intcat_7_items' => "Facebook\nInstagram\nLinkedIn\nX (Twitter)\nYouTube",
         ];
     }
 
