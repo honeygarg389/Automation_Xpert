@@ -9,12 +9,6 @@ import { useTranslation } from 'react-i18next';
 import { browserTz, tzLocalToUtcIso, formatInTz } from '@/Utils/datetime';
 import { minCharLimit as minCharLimitFor } from '@/Utils/networkCapabilities';
 
-
-const NETWORK_LABELS = {
-    facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn',
-    twitter: 'X (Twitter)', youtube: 'YouTube',
-};
-
 /** Convert a UTC datetime string to a `datetime-local` value in the given timezone. */
 function toLocalDatetime(utcStr, tz) {
     if (!utcStr) return '';
