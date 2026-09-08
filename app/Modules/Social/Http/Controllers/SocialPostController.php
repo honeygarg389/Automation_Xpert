@@ -7,11 +7,13 @@ use App\Modules\AI\Services\LlmGateway;
 use App\Modules\Social\Jobs\PublishSocialPostJob;
 use App\Modules\Social\Models\SocialAccount;
 use App\Modules\Social\Models\SocialPost;
+use App\Modules\Social\Support\NetworkCapabilities;
 use App\Support\WorkspaceContext;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -56,6 +58,8 @@ class SocialPostController extends Controller
         return Inertia::render('Social/Posts/Index', [
             'posts' => $posts,
             'accounts' => $accounts,
+            // AiPlannerModal is rendered from this page and needs the limits.
+            'networkCapabilities' => NetworkCapabilities::forFrontend(),
             'filters' => ['status' => $status, 'network' => $network],
         ]);
     }
@@ -65,7 +69,10 @@ class SocialPostController extends Controller
         $wid = $this->workspaceId($request);
         $accounts = SocialAccount::where('workspace_id', $wid)->where('active', true)->get(['id', 'network', 'name', 'picture_url']);
 
-        return Inertia::render('Social/Composer', ['accounts' => $accounts]);
+        return Inertia::render('Social/Composer', [
+            'accounts' => $accounts,
+            'networkCapabilities' => NetworkCapabilities::forFrontend(),
+        ]);
     }
 
     public function calendar(Request $request): Response
@@ -155,6 +162,8 @@ class SocialPostController extends Controller
             ]);
         }
 
+        $this->assertBodyFitsEveryNetwork($validated['body'], $requestedIds);
+
         // scheduled_at arrives as UTC ISO from the frontend (already converted).
         // Allow a 30-second buffer to account for form submission latency.
         if (! empty($validated['scheduled_at']) && now()->subSeconds(30)->gt($validated['scheduled_at'])) {
@@ -200,6 +209,7 @@ class SocialPostController extends Controller
         return Inertia::render('Social/Posts/Edit', [
             'post' => $post,
             'accounts' => $accounts,
+            'networkCapabilities' => NetworkCapabilities::forFrontend(),
         ]);
     }
 
@@ -241,6 +251,16 @@ class SocialPostController extends Controller
                 'target_accounts' => ['One or more selected accounts do not belong to your workspace.'],
             ]);
         }
+
+        // Ownership is checked BEFORE the char-limit rule, matching store().
+        // assertBodyFitsEveryNetwork() resolves ids -> networks with an UNSCOPED
+        // SocialAccount query, so running it first would let a foreign account id
+        // shape the error message ("... but twitter allows 280") and turn
+        // validation into an oracle for which network an arbitrary id belongs to.
+        // A foreign id has to die at the guard above, before anything reads it.
+        //
+        // Reuses $requestedIds rather than recomputing collect(), also per store().
+        $this->assertBodyFitsEveryNetwork($validated['body'], $requestedIds);
 
         if (! empty($validated['scheduled_at']) && now()->subSeconds(30)->gt($validated['scheduled_at'])) {
             throw ValidationException::withMessages([
@@ -348,8 +368,12 @@ class SocialPostController extends Controller
         string $timezone
     ): array {
         $networksStr = implode(', ', $networks);
-        $limits = ['twitter' => 280, 'linkedin' => 3000, 'facebook' => 63206, 'instagram' => 2200, 'youtube' => 5000];
-        $limitLines = collect($networks)->map(fn ($n) => "- {$n}: ".($limits[$n] ?? 5000).' characters')->implode("\n");
+        // ⚠️ The fourth copy of this map used to live here. The AI prompt and
+        // the composer must quote the SAME limit, or the model writes to one
+        // number while the UI counts against another.
+        $limitLines = collect($networks)
+            ->map(fn ($n) => "- {$n}: ".NetworkCapabilities::charLimit($n).' characters')
+            ->implode("\n");
 
         $system = <<<SYSTEM
 You are an expert social media strategist. Generate a content calendar as JSON.
@@ -482,6 +506,50 @@ SYSTEM;
             return response()->json(['body' => $response->content]);
         } catch (\Throwable $e) {
             return response()->json(['error' => $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Refuse a body longer than the strictest selected network allows.
+     *
+     * ⚠️ THIS IS A NEW RULE, NOT A REFACTOR. Before this, `body` was validated
+     * only as `max:5000` regardless of destination, so a 1,000-character post
+     * addressed to X was accepted here and then failed at publish time — after
+     * scheduling, with the failure surfacing on the link row rather than on the
+     * form the author could still edit. The four duplicated limit maps existed
+     * to WARN in the UI; nothing enforced them.
+     *
+     * ⚠️ It can therefore reject drafts that were previously accepted. That is
+     * the intent — the alternative is discovering the truncation from a failed
+     * publish — but it only applies to new saves. Existing rows are untouched.
+     *
+     * The limit comes from NetworkCapabilities, the single source that replaced
+     * those four maps, so the number enforced here, the number counted down in
+     * the composer, and the number quoted to the AI planner cannot drift apart.
+     *
+     * @param  Collection<int, int>  $accountIds
+     */
+    private function assertBodyFitsEveryNetwork(string $body, $accountIds): void
+    {
+        $networks = SocialAccount::whereIn('id', $accountIds)->pluck('network')->all();
+        if ($networks === []) {
+            return;
+        }
+
+        $limit = NetworkCapabilities::minCharLimit($networks);
+        $length = mb_strlen($body);
+
+        if ($length > $limit) {
+            // Name the network that set the limit — "too long" without saying
+            // which destination caused it leaves the author guessing.
+            $strictest = collect($networks)
+                ->unique()
+                ->sortBy(fn (string $n) => NetworkCapabilities::charLimit($n))
+                ->first();
+
+            throw ValidationException::withMessages([
+                'body' => ["The post is {$length} characters, but {$strictest} allows {$limit}."],
+            ]);
         }
     }
 }

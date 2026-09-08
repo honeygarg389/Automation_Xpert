@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Sparkles, Loader2, ChevronLeft, Calendar, CheckSquare, Square, AlertCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { minCharLimit as minCharLimitFor } from '@/Utils/networkCapabilities';
 import { SocialBrandIcon } from '@/Components/BrandIcons';
 import { browserTz, tzLocalToUtcIso } from '@/Utils/datetime';
 import TimezonePicker from '@/Components/TimezonePicker';
@@ -15,7 +16,6 @@ const TONES = [
     { value: 'educational',   labelKey: 'social.tone_educational' },
 ];
 
-const CHAR_LIMITS = { twitter: 280, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
 
 const NETWORK_LABELS = {
     facebook: 'Facebook', instagram: 'Instagram', linkedin: 'LinkedIn',
@@ -184,9 +184,11 @@ function BriefStep({ brief, setBrief, accounts, onGenerate, loading, error }) {
 
 function ReviewStep({ editedPosts, setEditedPosts, approved, setApproved, selectedAccounts, error }) {
     const { t } = useTranslation();
-    const minLimit = selectedAccounts.length > 0
-        ? Math.min(...selectedAccounts.map(a => CHAR_LIMITS[a.network] ?? 5000))
-        : 5000;
+    // ⚠️ Read straight off the Inertia page props rather than threading the
+    // capabilities through three levels of props — this is an inner step of the
+    // planner modal, and Posts/Index (which renders it) supplies the prop.
+    const { networkCapabilities = {} } = usePage().props;
+    const minLimit = minCharLimitFor(networkCapabilities, selectedAccounts.map(a => a.network));
 
     const toggleAll = () => {
         if (approved.size === editedPosts.length) {

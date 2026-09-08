@@ -2,6 +2,7 @@ import { Head, usePage, useForm } from '@inertiajs/react';
 import ClientLayout from '@/Layouts/ClientLayout';
 import { Send, Sparkles, Clock, Plus, Trash2, ThumbsUp, MessageCircle, Share2, Heart, Bookmark, Repeat2 } from 'lucide-react';
 import { useState } from 'react';
+import { minCharLimit as minCharLimitFor } from '@/Utils/networkCapabilities';
 import { useTranslation } from 'react-i18next';
 import { SocialBrandIcon } from '@/Components/BrandIcons';
 import MediaUpload from '@/Components/MediaUpload';
@@ -9,7 +10,6 @@ import TimezonePicker from '@/Components/TimezonePicker';
 import { DatePicker } from '@/Components/ui';
 import { browserTz, tzLocalToUtcIso, formatInTz } from '@/Utils/datetime';
 
-const CHAR_LIMITS = { twitter: 280, linkedin: 3000, facebook: 63206, instagram: 2200, youtube: 5000 };
 
 const NETWORK_COLORS = {
     twitter:   '#000000',
@@ -184,7 +184,7 @@ const PREVIEW_COMPONENTS = {
 
 /* ── main component ─────────────────────────────────────────── */
 
-export default function SocialComposer({ accounts }) {
+export default function SocialComposer({ accounts, networkCapabilities = {} }) {
     const { t } = useTranslation();
     const { props } = usePage();
     const flash = props.flash ?? {};
@@ -205,7 +205,7 @@ export default function SocialComposer({ accounts }) {
 
     const selectedAccounts = accounts.filter(a => data.target_accounts.includes(a.id.toString()));
     const selectedNetworks  = selectedAccounts.map(a => a.network);
-    const minCharLimit = selectedNetworks.length > 0 ? Math.min(...selectedNetworks.map(n => CHAR_LIMITS[n] ?? 5000)) : 5000;
+    const minCharLimit = minCharLimitFor(networkCapabilities, selectedNetworks);
 
     const toggleAccount = (id) => {
         const sid = id.toString();
