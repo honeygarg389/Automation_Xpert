@@ -7,6 +7,7 @@ use App\Modules\AI\Services\LlmGateway;
 use App\Modules\Social\Jobs\PublishSocialPostJob;
 use App\Modules\Social\Models\SocialAccount;
 use App\Modules\Social\Models\SocialPost;
+use App\Modules\Social\Support\DriverCapabilities;
 use App\Modules\Social\Support\NetworkCapabilities;
 use App\Support\WorkspaceContext;
 use Carbon\Carbon;
@@ -60,6 +61,7 @@ class SocialPostController extends Controller
             'accounts' => $accounts,
             // AiPlannerModal is rendered from this page and needs the limits.
             'networkCapabilities' => NetworkCapabilities::forFrontend(),
+            'driverCapabilities' => DriverCapabilities::forFrontend(),
             'filters' => ['status' => $status, 'network' => $network],
         ]);
     }
@@ -72,6 +74,7 @@ class SocialPostController extends Controller
         return Inertia::render('Social/Composer', [
             'accounts' => $accounts,
             'networkCapabilities' => NetworkCapabilities::forFrontend(),
+            'driverCapabilities' => DriverCapabilities::forFrontend(),
         ]);
     }
 
@@ -147,6 +150,8 @@ class SocialPostController extends Controller
             'media_urls.*' => ['nullable', 'url', 'max:2048'],
             'target_accounts' => ['required', 'array', 'min:1'],
             'target_accounts.*' => ['integer'],
+            'post_type' => ['nullable', 'string', 'in:image,video,text'],
+            'media_type' => ['nullable', 'string', 'in:single,carousel'],
             'scheduled_at' => ['nullable', 'date'],
             'timezone' => ['nullable', 'string', 'max:64'],
         ]);
@@ -163,6 +168,18 @@ class SocialPostController extends Controller
         }
 
         $this->assertBodyFitsEveryNetwork($validated['body'], $requestedIds);
+
+        $validated['post_type'] = $validated['post_type'] ?? DriverCapabilities::TYPE_TEXT;
+        $validated['media_type'] = $validated['post_type'] === DriverCapabilities::TYPE_IMAGE
+            ? ($validated['media_type'] ?? DriverCapabilities::MEDIA_SINGLE)
+            : null;
+
+        $this->assertPostTypeIsDeliverable(
+            $validated['post_type'],
+            $validated['media_type'],
+            $requestedIds,
+            array_values(array_filter($validated['media_urls'] ?? [], fn ($v) => $v !== null && $v !== ''))
+        );
 
         // scheduled_at arrives as UTC ISO from the frontend (already converted).
         // Allow a 30-second buffer to account for form submission latency.
@@ -210,6 +227,7 @@ class SocialPostController extends Controller
             'post' => $post,
             'accounts' => $accounts,
             'networkCapabilities' => NetworkCapabilities::forFrontend(),
+            'driverCapabilities' => DriverCapabilities::forFrontend(),
         ]);
     }
 
@@ -225,6 +243,8 @@ class SocialPostController extends Controller
             'media_urls.*' => ['nullable', 'url', 'max:2048'],
             'target_accounts' => ['required', 'array', 'min:1'],
             'target_accounts.*' => ['integer'],
+            'post_type' => ['nullable', 'string', 'in:image,video,text'],
+            'media_type' => ['nullable', 'string', 'in:single,carousel'],
             'scheduled_at' => ['nullable', 'date'],
             'timezone' => ['nullable', 'string', 'max:64'],
         ]);
@@ -261,6 +281,22 @@ class SocialPostController extends Controller
         //
         // Reuses $requestedIds rather than recomputing collect(), also per store().
         $this->assertBodyFitsEveryNetwork($validated['body'], $requestedIds);
+
+        // ⚠️ Falls back to the post's CURRENT type, not to 'text'. An edit form
+        // that does not resend post_type must not silently downgrade a carousel
+        // to a text post — the same absent-nullable-key trap that made
+        // scheduled_at throw "Undefined array key" here before.
+        $validated['post_type'] = $validated['post_type'] ?? $post->post_type ?? DriverCapabilities::TYPE_TEXT;
+        $validated['media_type'] = $validated['post_type'] === DriverCapabilities::TYPE_IMAGE
+            ? ($validated['media_type'] ?? $post->media_type ?? DriverCapabilities::MEDIA_SINGLE)
+            : null;
+
+        $this->assertPostTypeIsDeliverable(
+            $validated['post_type'],
+            $validated['media_type'],
+            $requestedIds,
+            array_values(array_filter($validated['media_urls'] ?? [], fn ($v) => $v !== null && $v !== ''))
+        );
 
         if (! empty($validated['scheduled_at']) && now()->subSeconds(30)->gt($validated['scheduled_at'])) {
             throw ValidationException::withMessages([
@@ -460,6 +496,28 @@ SYSTEM;
             if (! empty($postData['scheduled_at']) && $now->copy()->addMinute()->gt($postData['scheduled_at'])) {
                 return response()->json(['errors' => ["posts.{$i}.scheduled_at" => ['Must be at least 1 minute in the future.']]], 422);
             }
+
+            // ⚠️ THE CHAR LIMIT WAS NEVER ENFORCED ON THIS PATH. store() and
+            // update() both call assertBodyFitsEveryNetwork(); bulkStore()
+            // enforced it only by ASKING THE MODEL NICELY — buildPlanMessages()
+            // says "Primary body must fit the SHORTEST character limit", and an
+            // LLM returning 400 characters for an X account was persisted
+            // without objection. A prompt instruction is not a validation.
+            //
+            // Third occurrence of one rule reaching some write paths and not
+            // others (char limit, then the ownership guard on update(), now
+            // this), which is why post_type validation below is a single shared
+            // method rather than a fourth copy.
+            try {
+                $this->assertBodyFitsEveryNetwork(
+                    $postData['body'],
+                    array_map('intval', $postData['target_accounts'])
+                );
+            } catch (ValidationException $e) {
+                return response()->json([
+                    'errors' => ["posts.{$i}.body" => $e->validator->errors()->get('body')],
+                ], 422);
+            }
         }
 
         $created = [];
@@ -471,6 +529,16 @@ SYSTEM;
                     'title' => $postData['title'] ?? null,
                     'body' => $postData['body'],
                     'media_urls' => [],
+                    // AI-planned posts are text-only BY CONSTRUCTION, not by
+                    // default-and-hope: buildPlanMessages() asks the model for
+                    // title/body/suggested_time/rationale/platform_notes and no
+                    // media field, parsePlanResponse() maps only those five, and
+                    // media_urls is [] immediately above. Neither the request nor
+                    // the LLM is asked to declare a type, because neither is in a
+                    // position to know one. 'text' is deliverable on every driver,
+                    // so these posts are never blocked by the rules above.
+                    'post_type' => DriverCapabilities::TYPE_TEXT,
+                    'media_type' => null,
                     'target_accounts' => array_map('intval', $postData['target_accounts']),
                     'scheduled_at' => $scheduledAt,
                     'timezone' => $postData['timezone'] ?? 'UTC',
@@ -529,7 +597,268 @@ SYSTEM;
      *
      * @param  Collection<int, int>  $accountIds
      */
-    private function assertBodyFitsEveryNetwork(string $body, $accountIds): void
+    /**
+     * The post_type / media_type rules, shared by store(), update() AND
+     * bulkStore().
+     *
+     * ⚠️ ONE DEFINITION ON PURPOSE. The char-limit rule reached store() and
+     * update() but never bulkStore(), and the workspace-ownership guard reached
+     * store() and the API controller but never update(). That is the same defect
+     * twice: a rule written per-call-site gets forgotten at the call site nobody
+     * was looking at. This one is a single method that every write path calls,
+     * so forgetting it means deleting a line rather than failing to add one.
+     *
+     * @param  Collection<int, int>  $accountIds  ints, already
+     *                                            ownership-checked by the caller
+     * @param  list<string>  $mediaUrls
+     */
+    private function assertPostTypeIsDeliverable(
+        string $postType,
+        ?string $mediaType,
+        Collection $accountIds,
+        array $mediaUrls
+    ): void {
+        if ($postType === DriverCapabilities::TYPE_TEXT) {
+            return; // deliverable everywhere; nothing to check
+        }
+
+        $networks = SocialAccount::whereIn('id', $accountIds)
+            ->pluck('network', 'id')
+            ->all();
+
+        if ($networks === []) {
+            return;
+        }
+
+        $capability = DriverCapabilities::requiredCapability($postType, $mediaType);
+
+        // ⚠️ Gated on DRIVER reality, not on NetworkCapabilities. Instagram's API
+        // accepts carousels; InstagramSocialDriver sends mediaUrls[0] and drops
+        // the rest with no error. Allowing the selection because the platform
+        // permits it is how media disappears silently between save and publish.
+        $blocked = [];
+        foreach (array_unique($networks) as $network) {
+            if (! DriverCapabilities::supports($network, $capability)) {
+                $blocked[] = $network;
+            }
+        }
+
+        if ($blocked !== []) {
+            $label = $postType === DriverCapabilities::TYPE_VIDEO
+                ? 'video'
+                : ($mediaType === DriverCapabilities::MEDIA_CAROUSEL ? 'carousel' : 'image');
+
+            sort($blocked);
+
+            throw ValidationException::withMessages([
+                'target_accounts' => [sprintf(
+                    'Cannot publish a %s post to: %s. Remove %s, or change the post type.',
+                    $label,
+                    implode(', ', $blocked),
+                    count($blocked) === 1 ? 'that account' : 'those accounts'
+                )],
+            ]);
+        }
+
+        if ($postType === DriverCapabilities::TYPE_IMAGE && $mediaType === DriverCapabilities::MEDIA_CAROUSEL) {
+            $this->assertCarouselCountFits(array_values(array_unique($networks)), $mediaUrls);
+        }
+
+        $this->assertMediaMatchesDeclaredType($postType, $mediaUrls);
+
+        if ($postType === DriverCapabilities::TYPE_IMAGE) {
+            $this->assertImageRatiosFit(array_values(array_unique($networks)), $mediaUrls);
+        }
+    }
+
+    /**
+     * A declared image post must not carry a video file, and vice versa.
+     *
+     * ⚠️ Caught AT SAVE, not at publish. Discovering the mismatch in the driver
+     * means it surfaces in a queued job, where the user is not present: the post
+     * goes to `failed` minutes later with a provider error, or worse publishes
+     * wrong. The composer knows the answer while the author is still looking at
+     * the form.
+     *
+     * Uses mime_content_type() on locally stored files only — the same call
+     * YoutubeDriver already makes. Remote URLs are skipped rather than fetched;
+     * see localPathForMediaUrl().
+     *
+     * @param  list<string>  $mediaUrls
+     */
+    private function assertMediaMatchesDeclaredType(string $postType, array $mediaUrls): void
+    {
+        if ($postType === DriverCapabilities::TYPE_TEXT) {
+            return;
+        }
+
+        $expected = $postType === DriverCapabilities::TYPE_VIDEO ? 'video' : 'image';
+
+        foreach ($mediaUrls as $url) {
+            $path = $this->localPathForMediaUrl($url);
+            if ($path === null) {
+                continue;
+            }
+
+            // mime_content_type() returns string|false — never null, so a
+            // null check here was a branch that could not be taken.
+            $mime = @mime_content_type($path);
+            if ($mime === false) {
+                continue;
+            }
+
+            $actual = explode('/', $mime)[0];
+            if ($actual !== 'image' && $actual !== 'video') {
+                continue; // not a media file we classify; other rules cover it
+            }
+
+            if ($actual !== $expected) {
+                throw ValidationException::withMessages([
+                    'media_urls' => [sprintf(
+                        'This is declared as %s post, but %s is %s.',
+                        $expected === 'video' ? 'a video' : 'an image',
+                        basename($path),
+                        $actual === 'video' ? 'a video' : 'an image'
+                    )],
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @param  list<string>  $networks
+     * @param  list<string>  $mediaUrls
+     */
+    private function assertCarouselCountFits(array $networks, array $mediaUrls): void
+    {
+        $range = NetworkCapabilities::carouselRange($networks);
+        $count = count($mediaUrls);
+
+        // ⚠️ An EMPTY carousel is an unfinished draft, not an invalid one.
+        // Enforcing the minimum at zero would trap a post the author saved
+        // before attaching images: every later edit — even fixing a typo in the
+        // body — would be refused, with no way to reach a valid state except
+        // abandoning the post. The floor applies once media exists; publishing
+        // an empty carousel still fails at the driver, where the author is not
+        // mid-edit.
+        if ($count === 0) {
+            return;
+        }
+
+        if ($count < $range['min']) {
+            throw ValidationException::withMessages([
+                'media_urls' => ["A carousel needs at least {$range['min']} images; this post has {$count}."],
+            ]);
+        }
+
+        // ⚠️ A null max is "not verified", NEVER "unlimited" — see
+        // NetworkCapabilities::carouselRange(). Nothing is enforced above the
+        // floor when no bound is known, but the uncertainty is not laundered
+        // into a silent pass either: the UI is told which networks are
+        // unverified so it can say so.
+        if ($range['max'] !== null && $count > $range['max']) {
+            throw ValidationException::withMessages([
+                'media_urls' => ["The strictest selected network allows {$range['max']} images; this post has {$count}."],
+            ]);
+        }
+    }
+
+    /**
+     * Aspect-ratio validation for LOCAL image files only.
+     *
+     * ⚠️ VIDEO RATIO IS DELIBERATELY OUT OF SCOPE ON THIS BRANCH. It is not a
+     * matter of effort: reading a video's dimensions needs ffprobe or Imagick,
+     * and this machine has neither (GD and exif only, measured). Adding a binary
+     * dependency is a deployment decision, not a code one. NetworkCapabilities
+     * already carries video_ratio_min/max and max_video_seconds, so the data is
+     * ready and unused.
+     *
+     * TODO(Branch 4 — existing-platform video/carousel work): revisit together
+     * with real driver video support. Enforcing a video ratio is pointless while
+     * DriverCapabilities says only YouTube can receive a video at all.
+     *
+     * Remote URLs are skipped rather than fetched — downloading arbitrary
+     * user-supplied URLs server-side to measure them is an SSRF surface, and
+     * this codebase has already had one.
+     *
+     * @param  list<string>  $networks
+     * @param  list<string>  $mediaUrls
+     */
+    private function assertImageRatiosFit(array $networks, array $mediaUrls): void
+    {
+        $range = NetworkCapabilities::imageRatioRange($networks);
+
+        // Nothing verified among the selected networks -> nothing to enforce.
+        if ($range['min'] === null && $range['max'] === null) {
+            return;
+        }
+
+        foreach ($mediaUrls as $url) {
+            $path = $this->localPathForMediaUrl($url);
+            if ($path === null) {
+                continue;
+            }
+
+            $size = @getimagesize($path);
+            if ($size === false || empty($size[1])) {
+                continue; // unreadable: not this rule's job to reject
+            }
+
+            $ratio = round($size[0] / $size[1], 4);
+
+            if ($range['min'] !== null && $ratio < $range['min'] - 0.001) {
+                throw ValidationException::withMessages([
+                    'media_urls' => [sprintf(
+                        'Image is %s:1, narrower than the %s:1 minimum for the selected networks.',
+                        $ratio, $range['min']
+                    )],
+                ]);
+            }
+
+            if ($range['max'] !== null && $ratio > $range['max'] + 0.001) {
+                throw ValidationException::withMessages([
+                    'media_urls' => [sprintf(
+                        'Image is %s:1, wider than the %s:1 maximum for the selected networks.',
+                        $ratio, $range['max']
+                    )],
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Resolve a media URL to a readable local file, or null when it is remote.
+     *
+     * Only files this application stored are inspected. Anything else — an
+     * absolute URL to another host, a path that escapes the media root — returns
+     * null and is skipped.
+     */
+    private function localPathForMediaUrl(string $url): ?string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+        if (! is_string($path) || $path === '') {
+            return null;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+        if ($host !== null && $host !== parse_url(config('app.url'), PHP_URL_HOST)) {
+            return null;
+        }
+
+        $relative = ltrim(str_replace('/storage/', '', $path), '/');
+        if (str_contains($relative, '..')) {
+            return null;
+        }
+
+        $full = storage_path('app/public/'.$relative);
+
+        return is_file($full) && is_readable($full) ? $full : null;
+    }
+
+    /**
+     * @param  Collection<int, int>|list<int>  $accountIds
+     */
+    private function assertBodyFitsEveryNetwork(string $body, Collection|array $accountIds): void
     {
         $networks = SocialAccount::whereIn('id', $accountIds)->pluck('network')->all();
         if ($networks === []) {

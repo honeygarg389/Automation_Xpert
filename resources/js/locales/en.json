@@ -3445,7 +3445,18 @@
         "network_error": "Network error. Please try again.",
         "select_one_post": "Select at least one post to schedule.",
         "plan_limit_reached": "Plan limit reached. Please upgrade your plan.",
-        "scheduling_failed": "Scheduling failed. Please try again."
+        "scheduling_failed": "Scheduling failed. Please try again.",
+        "post_type": "Post Type",
+        "post_type_image": "Image",
+        "post_type_video": "Video",
+        "media_type_single": "Single Image",
+        "media_type_carousel": "Carousel",
+        "post_type_unavailable": "No connected account can publish a {{kind}} post yet",
+        "account_cannot_deliver": "{{network}} can't deliver this post type yet ({{reason}})",
+        "accounts_removed": "{{count}} account(s) removed \u2014 {{networks}} cannot publish this post type",
+        "carousel_range": "Add {{min}}\u2013{{max}} images",
+        "carousel_range_partial": "Add {{min}}\u2013{{max}} images (the limit for {{networks}} is not documented)",
+        "carousel_range_open": "Add at least {{min}} images \u2014 the maximum for {{networks}} is not documented, so it is not enforced"
     },
     "leads": {
         "title": "Lead Scraper",
