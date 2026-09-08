@@ -2,7 +2,8 @@ import { Head, usePage, useForm } from '@inertiajs/react';
 import ClientLayout from '@/Layouts/ClientLayout';
 import { Send, Sparkles, Clock, Plus, Trash2, ThumbsUp, MessageCircle, Share2, Heart, Bookmark, Repeat2 } from 'lucide-react';
 import { useState } from 'react';
-import { minCharLimit as minCharLimitFor } from '@/Utils/networkCapabilities';
+import { minCharLimit as minCharLimitFor, accountIsEligible, driverReason, POST_TYPE_TEXT } from '@/Utils/networkCapabilities';
+import PostTypeSelector from '@/Components/Social/PostTypeSelector';
 import { useTranslation } from 'react-i18next';
 import { SocialBrandIcon } from '@/Components/BrandIcons';
 import MediaUpload from '@/Components/MediaUpload';
@@ -184,7 +185,7 @@ const PREVIEW_COMPONENTS = {
 
 /* ── main component ─────────────────────────────────────────── */
 
-export default function SocialComposer({ accounts, networkCapabilities = {} }) {
+export default function SocialComposer({ accounts, networkCapabilities = {}, driverCapabilities = {} }) {
     const { t } = useTranslation();
     const { props } = usePage();
     const flash = props.flash ?? {};
@@ -195,9 +196,15 @@ export default function SocialComposer({ accounts, networkCapabilities = {} }) {
         title:           '',
         media_urls:      [''],
         target_accounts: [],
+        post_type:       POST_TYPE_TEXT,
+        media_type:      null,
         scheduled_at:    '',
         timezone:        userTz,
     });
+
+    // What the last post-type change removed, so the user is TOLD rather than
+    // left to notice their selection shrank. Cleared on the next manual toggle.
+    const [prunedNotice, setPrunedNotice] = useState(null);
 
     const [aiLoading, setAiLoading] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
@@ -209,7 +216,46 @@ export default function SocialComposer({ accounts, networkCapabilities = {} }) {
 
     const toggleAccount = (id) => {
         const sid = id.toString();
+        setPrunedNotice(null);
         setData('target_accounts', data.target_accounts.includes(sid) ? data.target_accounts.filter(a => a !== sid) : [...data.target_accounts, sid]);
+    };
+
+    const isEligible = (account, type = data.post_type, media = data.media_type) =>
+        accountIsEligible(driverCapabilities, account.network, type, media);
+
+    /**
+     * ⚠️ PRUNES, rather than only hiding the chip.
+     *
+     * The billing Change-Plan modal is the precedent for gating options on a
+     * derived list, and it is INCOMPLETE for this case: it filters the rendered
+     * buttons but leaves the stale value in form state, which is survivable only
+     * because a billing cycle is single-valued and the server revalidates.
+     * target_accounts is a multi-select, so a hidden-but-selected account would
+     * still be submitted — the user would see three chips and post to five.
+     *
+     * So incompatible ids are removed from form state AND named back to the
+     * user. Silently dropping someone's selection is its own bug, even when the
+     * resulting post is valid.
+     */
+    const changePostType = (nextType, nextMedia) => {
+        const removed = accounts.filter(a =>
+            data.target_accounts.includes(a.id.toString()) && !isEligible(a, nextType, nextMedia));
+
+        setData(prev => ({
+            ...prev,
+            post_type: nextType,
+            media_type: nextMedia,
+            target_accounts: prev.target_accounts.filter(sid => {
+                const account = accounts.find(a => a.id.toString() === sid);
+
+                return account ? isEligible(account, nextType, nextMedia) : true;
+            }),
+        }));
+
+        setPrunedNotice(removed.length === 0 ? null : {
+            count: removed.length,
+            networks: [...new Set(removed.map(a => a.network))].join(', '),
+        });
     };
 
     const generateWithAI = async () => {
@@ -262,13 +308,38 @@ export default function SocialComposer({ accounts, networkCapabilities = {} }) {
 
                     {flash.success && <div className="rounded-lg bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-4 py-2 text-sm">{flash.success}</div>}
 
+                    <PostTypeSelector
+                        accounts={accounts}
+                        driverCapabilities={driverCapabilities}
+                        networkCapabilities={networkCapabilities}
+                        postType={data.post_type}
+                        mediaType={data.media_type}
+                        selectedNetworks={selectedNetworks}
+                        onChange={changePostType}
+                    />
+
+                    {prunedNotice && (
+                        <div
+                            data-testid="pruned-notice"
+                            className="rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-2 text-sm"
+                        >
+                            {t('social.accounts_removed', { count: prunedNotice.count, networks: prunedNotice.networks })}
+                        </div>
+                    )}
+
                     {/* Account selector */}
                     <div className={`rounded-xl border bg-white dark:bg-neutral-900 p-4 ${errors.target_accounts ? 'border-red-400 ring-2 ring-red-300 dark:ring-red-700' : 'border-neutral-200 dark:border-neutral-700'}`}>
                         <p className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 uppercase mb-3">{t('social.post_to')}</p>
                         <div className="flex flex-wrap gap-2">
-                            {accounts.map(account => (
+                            {accounts.map(account => {
+                                const eligible = isEligible(account);
+
+                                return (
                                 <button key={account.id} type="button" onClick={() => toggleAccount(account.id)}
-                                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border transition ${data.target_accounts.includes(account.id.toString()) ? 'bg-brand-600 border-brand-600 text-white' : 'border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-brand-300'}`}>
+                                    disabled={!eligible}
+                                    data-testid={`account-chip-${account.id}`}
+                                    title={eligible ? undefined : t('social.account_cannot_deliver', { network: account.network, reason: driverReason(driverCapabilities, account.network) })}
+                                    className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm border transition ${!eligible ? 'cursor-not-allowed opacity-40 border-neutral-200 dark:border-neutral-700 text-neutral-400' : data.target_accounts.includes(account.id.toString()) ? 'bg-brand-600 border-brand-600 text-white' : 'border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-brand-300'}`}>
                                     <div className="relative shrink-0">
                                         {account.picture_url
                                             ? <img src={account.picture_url} alt={account.name} className="h-5 w-5 rounded-full object-cover" />
@@ -282,7 +353,8 @@ export default function SocialComposer({ accounts, networkCapabilities = {} }) {
                                     </div>
                                     {account.name}
                                 </button>
-                            ))}
+                                );
+                            })}
                             {accounts.length === 0 && <p className="text-sm text-neutral-400">{t('social.no_accounts_connected')} <a href={route('client.social.accounts.index')} className="text-brand-600 hover:underline">{t('social.add_one')}</a></p>}
                         </div>
                         {errors.target_accounts && <p className="mt-1 text-xs text-red-500">{errors.target_accounts}</p>}

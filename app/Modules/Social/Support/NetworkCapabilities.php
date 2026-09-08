@@ -61,6 +61,12 @@ final class NetworkCapabilities
         self::YOUTUBE,
     ];
 
+    /**
+     * A carousel is two or more items by definition on every platform that has
+     * one, so the intersection starts here rather than at zero.
+     */
+    public const CAROUSEL_FLOOR = 2;
+
     /** @var list<string> */
     public const PLANNED = [
         self::PINTEREST,
@@ -284,5 +290,98 @@ final class NetworkCapabilities
         }
 
         return $out;
+    }
+
+    /**
+     * The tightest carousel range satisfying EVERY given network at once.
+     *
+     * One post carries one media_urls array to every target account, so the
+     * count must satisfy all of them simultaneously: the highest minimum and the
+     * lowest maximum.
+     *
+     * ─── ⚠️ AN UNVERIFIED BOUND IS SKIPPED, NOT TREATED AS INFINITY ──────────
+     *
+     * Facebook's carousel_max is null — Meta does not document a cap for
+     * attached_media. Folding that into a min() as PHP_INT_MAX would make
+     * Facebook silently non-constraining, which reads identically to "Facebook
+     * allows unlimited" and is exactly the misreading the class header forbids.
+     * So null contributes nothing to the bound AND is reported back in
+     * `unverified`, so the caller can say "we do not know" rather than
+     * inventing a number or pretending there is no limit.
+     *
+     * A null `max` in the return therefore means "no verified upper bound among
+     * these networks" — never "unlimited".
+     *
+     * @param  iterable<string>  $networks
+     * @return array{min: int, max: int|null, unverified: list<string>}
+     */
+    public static function carouselRange(iterable $networks): array
+    {
+        $min = self::CAROUSEL_FLOOR;
+        $max = null;
+        $unverified = [];
+
+        foreach ($networks as $network) {
+            $caps = self::NETWORKS[$network] ?? null;
+            if ($caps === null) {
+                continue;
+            }
+
+            if (isset($caps['carousel_min'])) {
+                $min = max($min, (int) $caps['carousel_min']);
+            }
+
+            if (isset($caps['carousel_max'])) {
+                $max = $max === null ? (int) $caps['carousel_max'] : min($max, (int) $caps['carousel_max']);
+            } else {
+                $unverified[] = $network;
+            }
+        }
+
+        return ['min' => $min, 'max' => $max, 'unverified' => array_values(array_unique($unverified))];
+    }
+
+    /**
+     * The tightest image aspect-ratio window satisfying every given network.
+     *
+     * Same null discipline as carouselRange(): a network documenting no bound
+     * (Facebook documents none for Page photos) constrains nothing and is
+     * reported in `unverified`. A null min AND max means nothing is enforceable
+     * — the caller must then skip ratio validation rather than reject anything.
+     *
+     * @param  iterable<string>  $networks
+     * @return array{min: float|null, max: float|null, unverified: list<string>}
+     */
+    public static function imageRatioRange(iterable $networks): array
+    {
+        $min = null;
+        $max = null;
+        $unverified = [];
+
+        foreach ($networks as $network) {
+            $caps = self::NETWORKS[$network] ?? null;
+            if ($caps === null) {
+                continue;
+            }
+
+            $lo = $caps['image_ratio_min'] ?? null;
+            $hi = $caps['image_ratio_max'] ?? null;
+
+            if ($lo === null && $hi === null) {
+                $unverified[] = $network;
+
+                continue;
+            }
+
+            if ($lo !== null) {
+                $min = $min === null ? (float) $lo : max($min, (float) $lo);
+            }
+
+            if ($hi !== null) {
+                $max = $max === null ? (float) $hi : min($max, (float) $hi);
+            }
+        }
+
+        return ['min' => $min, 'max' => $max, 'unverified' => array_values(array_unique($unverified))];
     }
 }

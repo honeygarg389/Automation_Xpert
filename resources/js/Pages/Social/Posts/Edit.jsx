@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import ClientLayout from '@/Layouts/ClientLayout';
 import MediaUpload from '@/Components/MediaUpload';
@@ -7,7 +8,8 @@ import { SocialBrandIcon } from '@/Components/BrandIcons';
 import { ArrowLeft, Clock, Trash2, Plus, Send, Calendar } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { browserTz, tzLocalToUtcIso, formatInTz } from '@/Utils/datetime';
-import { minCharLimit as minCharLimitFor } from '@/Utils/networkCapabilities';
+import { minCharLimit as minCharLimitFor, accountIsEligible, driverReason, POST_TYPE_TEXT } from '@/Utils/networkCapabilities';
+import PostTypeSelector from '@/Components/Social/PostTypeSelector';
 
 /** Convert a UTC datetime string to a `datetime-local` value in the given timezone. */
 function toLocalDatetime(utcStr, tz) {
@@ -26,7 +28,7 @@ function toLocalDatetime(utcStr, tz) {
     }
 }
 
-export default function EditPost({ post, accounts, networkCapabilities = {} }) {
+export default function EditPost({ post, accounts, networkCapabilities = {}, driverCapabilities = {} }) {
     const { t } = useTranslation();
     const { props } = usePage();
     const userTz = props.timezone || browserTz() || 'Asia/Dhaka';
@@ -39,15 +41,47 @@ export default function EditPost({ post, accounts, networkCapabilities = {} }) {
                             ? post.media_urls.filter(Boolean)
                             : [''],
         target_accounts: (post.target_accounts ?? []).map(String),
+        // Seeded from the row, so an edit that never touches the selector
+        // resubmits the type it already had rather than downgrading to text.
+        post_type:       post.post_type ?? POST_TYPE_TEXT,
+        media_type:      post.media_type ?? null,
         scheduled_at:    toLocalDatetime(post.scheduled_at, postTz),
         timezone:        postTz,
     });
 
+    const [prunedNotice, setPrunedNotice] = useState(null);
+
     const toggleAccount = (id) => {
         const sid = id.toString();
+        setPrunedNotice(null);
         setData('target_accounts', data.target_accounts.includes(sid)
             ? data.target_accounts.filter(a => a !== sid)
             : [...data.target_accounts, sid]);
+    };
+
+    const isEligible = (account, type = data.post_type, media = data.media_type) =>
+        accountIsEligible(driverCapabilities, account.network, type, media);
+
+    // Same prune-and-tell contract as the Composer; see the comment there.
+    const changePostType = (nextType, nextMedia) => {
+        const removed = accounts.filter(a =>
+            data.target_accounts.includes(a.id.toString()) && !isEligible(a, nextType, nextMedia));
+
+        setData(prev => ({
+            ...prev,
+            post_type: nextType,
+            media_type: nextMedia,
+            target_accounts: prev.target_accounts.filter(sid => {
+                const account = accounts.find(a => a.id.toString() === sid);
+
+                return account ? isEligible(account, nextType, nextMedia) : true;
+            }),
+        }));
+
+        setPrunedNotice(removed.length === 0 ? null : {
+            count: removed.length,
+            networks: [...new Set(removed.map(a => a.network))].join(', '),
+        });
     };
 
     const selectedNetworks = accounts
@@ -102,16 +136,41 @@ export default function EditPost({ post, accounts, networkCapabilities = {} }) {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
 
+                    <PostTypeSelector
+                        accounts={accounts}
+                        driverCapabilities={driverCapabilities}
+                        networkCapabilities={networkCapabilities}
+                        postType={data.post_type}
+                        mediaType={data.media_type}
+                        selectedNetworks={selectedNetworks}
+                        onChange={changePostType}
+                    />
+
+                    {prunedNotice && (
+                        <div
+                            data-testid="pruned-notice"
+                            className="rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-2 text-sm"
+                        >
+                            {t('social.accounts_removed', { count: prunedNotice.count, networks: prunedNotice.networks })}
+                        </div>
+                    )}
+
                     {/* Account selector */}
                     <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 space-y-3">
                         <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">{t('social.post_to')}</h3>
                         <div className="flex flex-wrap gap-2">
                             {accounts.map(acct => {
                                 const selected = data.target_accounts.includes(acct.id.toString());
+                                const eligible = isEligible(acct);
                                 return (
                                     <button key={acct.id} type="button" onClick={() => toggleAccount(acct.id)}
+                                        disabled={!eligible}
+                                        data-testid={`account-chip-${acct.id}`}
+                                        title={eligible ? undefined : t('social.account_cannot_deliver', { network: acct.network, reason: driverReason(driverCapabilities, acct.network) })}
                                         className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-sm border transition ${
-                                            selected
+                                            !eligible
+                                                ? 'cursor-not-allowed opacity-40 border-neutral-200 dark:border-neutral-700 text-neutral-400'
+                                                : selected
                                                 ? 'bg-brand-600 border-brand-600 text-white'
                                                 : 'border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:border-brand-400'
                                         }`}>

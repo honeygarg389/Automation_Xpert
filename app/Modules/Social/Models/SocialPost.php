@@ -8,7 +8,7 @@ class SocialPost extends Model
 {
     protected $table = 'social_media_posts';
 
-    protected $fillable = ['workspace_id', 'title', 'body', 'media_urls', 'target_accounts', 'status', 'scheduled_at', 'timezone', 'published_at', 'provider_post_id', 'post_url', 'publish_results', 'ai_generated', 'ai_prompt'];
+    protected $fillable = ['workspace_id', 'title', 'body', 'media_urls', 'post_type', 'media_type', 'target_accounts', 'status', 'scheduled_at', 'timezone', 'published_at', 'provider_post_id', 'post_url', 'publish_results', 'ai_generated', 'ai_prompt'];
 
     protected function casts(): array
     {
