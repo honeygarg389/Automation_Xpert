@@ -56,6 +56,23 @@ class Contact extends Model
      */
     use BelongsToWorkspace, HasFactory, MasksDemoData, SoftDeletes;
 
+    public const CONSENT_PURPOSE_MARKETING = 'marketing';
+
+    public const CONSENT_PURPOSE_PROFILE = 'profile';
+
+    /**
+     * Deliberately narrow. These are the ONLY values whatsapp_consent_purpose
+     * may hold — marketing/profile-building consent. This does NOT gate
+     * transactional or feedback messages; those are not consent-scoped the
+     * same way, and reading this column to authorize them would either
+     * over-block operational sends or quietly launder marketing consent into
+     * cover for messages the contact never agreed to.
+     */
+    public const WHATSAPP_CONSENT_PURPOSES = [
+        self::CONSENT_PURPOSE_MARKETING,
+        self::CONSENT_PURPOSE_PROFILE,
+    ];
+
     protected static function newFactory()
     {
         return ContactFactory::new();
@@ -77,6 +94,12 @@ class Contact extends Model
             'custom_fields' => 'array',
             'avatar' => 'null',
             'avatar_url' => 'null',
+            // Unstructured, like custom_fields: whatever captured the consent
+            // (a web form, an in-app prompt) may have snapshotted the
+            // contact's name/phone/IP into this blob. The other 8 consent/
+            // opt-out columns are plain enums, short source codes or
+            // timestamps with no PII risk and are not masked.
+            'whatsapp_consent_evidence' => 'array',
         ];
     }
 
@@ -101,6 +124,10 @@ class Contact extends Model
         'workspace_id', 'phone_e164', 'email', 'first_name', 'last_name',
         'avatar', 'country', 'language', 'opt_in_whatsapp', 'opt_in_sms', 'opt_in_email',
         'custom_fields', 'last_seen_at', 'source', 'lead_id',
+        'whatsapp_consent_at', 'whatsapp_consent_source', 'whatsapp_consent_purpose',
+        'whatsapp_consent_text_version', 'whatsapp_consent_evidence',
+        'whatsapp_opted_out_at', 'whatsapp_opt_out_source',
+        'digital_bill_opted_out_at', 'digital_bill_opt_out_source',
     ];
 
     protected function casts(): array
@@ -111,6 +138,10 @@ class Contact extends Model
             'opt_in_email' => 'boolean',
             'custom_fields' => 'array',
             'last_seen_at' => 'datetime',
+            'whatsapp_consent_at' => 'datetime',
+            'whatsapp_consent_evidence' => 'array',
+            'whatsapp_opted_out_at' => 'datetime',
+            'digital_bill_opted_out_at' => 'datetime',
         ];
     }
 
