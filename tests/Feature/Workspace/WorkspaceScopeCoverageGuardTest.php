@@ -96,6 +96,31 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
         //
         // ────────────────────────────────────────────────────────────────────
 
+        // ── Restaurant foundation — lifecycle/trust-boundary exceptions, NOT a to-do ──
+        //
+        // Both carry `workspace_id` as a real data column but are deliberately left
+        // unscoped, for two DIFFERENT reasons — neither is "not yet gotten to":
+        //
+        // PosConnection    findActiveByProviderAndRef() must resolve a connection for
+        //                  an UNAUTHENTICATED inbound POS webhook, before any tenant
+        //                  context exists. Scoped, that lookup fails closed for every
+        //                  request — the same shape as ChannelAccountRouting's
+        //                  findForInbound() above. It carries a plain workspace()
+        //                  BelongsTo for convenience only; see the model docblock for
+        //                  why that must not be confused with being scoped.
+        //
+        // PosWebhookEvent  workspace_id is populated ONLY after a successful
+        //                  findActiveByProviderAndRef() lookup, and must stay NULL
+        //                  (and the row still writable/visible) for quarantined events
+        //                  that cannot be matched to any connection at all. Scoping it
+        //                  would make an unresolved event invisible to the admin
+        //                  screen that exists to triage exactly those rows.
+        //
+        // Neither has a bypass call to add to WorkspaceScopeBypassGuardTest: both
+        // simply carry no global scope to bypass in the first place.
+        'App\Modules\Restaurant\Models\PosConnection',
+        'App\Modules\Restaurant\Models\PosWebhookEvent',
+
         // ── slices 7-8 — the remaining modules ──
         'App\Modules\Leads\Models\LeadScrapeJob',
         'App\Modules\Broadcasting\Models\Campaign',
@@ -195,6 +220,19 @@ class WorkspaceScopeCoverageGuardTest extends TestCase
      */
     private const NEVER_SCOPED = [
         'App\Models\User',
+
+        // Restaurant foundation, Task 7: audit_logs gained a workspace_id
+        // column so restaurant/POS events can be ATTRIBUTED to a workspace.
+        // It is a REFERENCE, not ownership — audit_logs is the platform's own
+        // admin-facing audit trail (AuditLogService::logAdmin(), the admin
+        // audit screen), already carrying client_id and actor_admin_id as
+        // unscoped reference columns for the same reason. Scoping this model
+        // would make the admin audit trail disappear behind whatever
+        // workspace happens to be ambient — usually none, since audit
+        // viewing is an admin-guard capability and the scope's admin
+        // exception aside, there is no tenant "current workspace" for a
+        // platform-wide log.
+        'App\Models\AuditLog',
     ];
 
     // ── The guard ──────────────────────────────────────────────────────────
