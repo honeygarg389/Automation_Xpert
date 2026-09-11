@@ -149,6 +149,25 @@ class PosConnection extends Model
     }
 
     /**
+     * Resolves a connection by (provider, external_ref) REGARDLESS of
+     * status — unlike findActiveByProviderAndRef(), which folds "doesn't
+     * exist" and "exists but not active" into the same null result.
+     *
+     * A central inbound webhook needs those two outcomes to stay
+     * distinguishable (unknown_restid vs inactive_connection are different
+     * rejection-audit reasons, even though both external responses are
+     * identical) — so this is the helper the ingress controller calls, one
+     * query, still safe with no ambient workspace context.
+     */
+    public static function findByProviderAndRef(string $provider, string $externalRef): ?self
+    {
+        return static::query()
+            ->where('provider', $provider)
+            ->where('external_ref', $externalRef)
+            ->first();
+    }
+
+    /**
      * Constant-time verification of a plaintext webhook token against the
      * connection's stored SHA-256 digest. A null/absent hash never matches,
      * including against an empty-string token.
