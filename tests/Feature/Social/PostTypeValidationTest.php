@@ -44,7 +44,11 @@ class PostTypeValidationTest extends TestCase
     {
         $expected = [
             'facebook' => ['image' => true, 'carousel' => true, 'video' => false],
-            'instagram' => ['image' => true, 'carousel' => false, 'video' => false],
+            // Branch 4 (feature/instagram-reels-carousel): image-only carousel
+            // and single-Reel video are now implemented. Still false for
+            // mixed image+video carousels — the driver refuses that combination
+            // (post_type is post-level, not per-item; see the driver docblock).
+            'instagram' => ['image' => true, 'carousel' => true, 'video' => true],
             'linkedin' => ['image' => false, 'carousel' => false, 'video' => false],
             'twitter' => ['image' => false, 'carousel' => false, 'video' => false],
             'youtube' => ['image' => false, 'carousel' => false, 'video' => true],
@@ -72,8 +76,8 @@ class PostTypeValidationTest extends TestCase
     public function eligible_networks_reflect_driver_reality_not_the_platform_matrix(): void
     {
         $this->assertSame(['facebook', 'instagram'], DriverCapabilities::eligibleNetworks('image', 'single'));
-        $this->assertSame(['facebook'], DriverCapabilities::eligibleNetworks('image', 'carousel'));
-        $this->assertSame(['youtube'], DriverCapabilities::eligibleNetworks('video'));
+        $this->assertSame(['facebook', 'instagram'], DriverCapabilities::eligibleNetworks('image', 'carousel'));
+        $this->assertSame(['instagram', 'youtube'], DriverCapabilities::eligibleNetworks('video'));
 
         // text is deliverable everywhere, which is why AI posts default to it.
         $this->assertSame(NetworkCapabilities::DRIVER_BACKED, DriverCapabilities::eligibleNetworks('text'));
@@ -97,16 +101,24 @@ class PostTypeValidationTest extends TestCase
             ->assertSessionHasErrors('target_accounts');
     }
 
+    /**
+     * ⚠️ SUPERSEDED BY feature/instagram-reels-carousel. This test used to
+     * assert the driver-reality GAP: the platform allowed carousels but the
+     * driver sent mediaUrls[0] only. That gap is now closed — the driver
+     * builds real carousel children — so the correct assertion flipped from
+     * "rejected" to "accepted". Keeping the method name's history in this
+     * comment rather than silently deleting the test, since a future reader
+     * diffing test names would otherwise wonder where it went.
+     */
     #[Test]
-    public function a_carousel_to_instagram_is_rejected_even_though_instagram_supports_carousels(): void
+    public function a_carousel_to_instagram_is_now_accepted_since_the_driver_implements_it(): void
     {
         [$user, $account] = $this->clientWithAccount('instagram');
 
-        // The PLATFORM allows this: NetworkCapabilities says 2-10.
         $this->assertTrue(NetworkCapabilities::supports('instagram', 'supports_carousel'));
+        $this->assertTrue(DriverCapabilities::supports('instagram', 'carousel'));
 
         $this->actingAs($user)
-            ->from(route('client.social.composer'))
             ->post(route('client.social.posts.store'), [
                 'body' => 'hello',
                 'target_accounts' => [$account->id],
@@ -114,7 +126,7 @@ class PostTypeValidationTest extends TestCase
                 'media_type' => 'carousel',
                 'media_urls' => ['https://cdn.example.com/a.jpg', 'https://cdn.example.com/b.jpg'],
             ])
-            ->assertSessionHasErrors('target_accounts');
+            ->assertSessionHasNoErrors();
     }
 
     #[Test]

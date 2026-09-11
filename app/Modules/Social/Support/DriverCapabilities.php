@@ -59,13 +59,18 @@ final class DriverCapabilities
 
         NetworkCapabilities::INSTAGRAM => [
             'image' => true,
-            // ⚠️ The PLATFORM supports carousels (NetworkCapabilities says 2-10).
-            // InstagramSocialDriver::createContainer() sends
-            // 'image_url' => $mediaUrls[0] and nothing else, so images 2..n are
-            // discarded with no error and no failed row.
-            'carousel' => false,
-            'video' => false,
-            'why' => 'createContainer() sends image_url => mediaUrls[0] only',
+            // Branch 4 (feature/instagram-reels-carousel): createCarouselParent()
+            // now creates N child containers (is_carousel_item=true) then one
+            // parent (media_type=CAROUSEL, children=...). IMAGE-ONLY — see the
+            // driver's class docblock for why a mixed image+video carousel is
+            // still out of scope (post_type is post-level, not per-item).
+            'carousel' => true,
+            // createReelsContainer() now sends media_type=REELS + video_url,
+            // polled with a wider budget (config/social.php,
+            // video_poll_max_attempts) than images. A single Reel, not a
+            // video INSIDE a carousel — the driver refuses that combination.
+            'video' => true,
+            'why' => 'image-only carousel and single-Reel video implemented (feature/instagram-reels-carousel)',
         ],
 
         NetworkCapabilities::LINKEDIN => [
