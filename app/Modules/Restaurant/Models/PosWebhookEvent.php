@@ -53,6 +53,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon $received_at
  * @property string $processing_status
  * @property array<string, mixed> $raw_payload
+ * @property string|null $raw_body
  * @property string|null $failure_reason
  * @property int $attempts
  */
@@ -67,10 +68,19 @@ class PosWebhookEvent extends Model
 
     public const STATUS_FAILED = 'failed';
 
+    /**
+     * An authenticated event whose event_type Phase 1B does not process
+     * (anything other than 'orderdetails'). Distinct from STATUS_FAILED:
+     * nothing was attempted and failed — the event was deliberately set
+     * aside, unprocessed, because this phase has no handler for it.
+     */
+    public const STATUS_QUARANTINED = 'quarantined';
+
     public const STATUSES = [
         self::STATUS_PENDING,
         self::STATUS_PROCESSED,
         self::STATUS_FAILED,
+        self::STATUS_QUARANTINED,
     ];
 
     protected $fillable = [
@@ -82,6 +92,7 @@ class PosWebhookEvent extends Model
         'received_at',
         'processing_status',
         'raw_payload',
+        'raw_body',
         'failure_reason',
         'attempts',
     ];
