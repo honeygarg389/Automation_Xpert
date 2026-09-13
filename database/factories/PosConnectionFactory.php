@@ -20,6 +20,7 @@ class PosConnectionFactory extends Factory
             'provider' => PosConnection::PROVIDER_PETPOOJA,
             'external_ref' => 'ext-'.fake()->unique()->numberBetween(1, 1000000),
             'status' => PosConnection::STATUS_PENDING,
+            'environment' => PosConnection::ENVIRONMENT_SANDBOX,
             'last_test_status' => 'untested',
         ];
     }

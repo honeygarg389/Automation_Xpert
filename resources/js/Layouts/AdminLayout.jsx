@@ -29,6 +29,8 @@ import {
     Layers,
     Link2,
     LogOut,
+    Utensils,
+    Store,
 } from 'lucide-react';
 
 /** Nav item: { labelKey, route, href, icon, permission } - show only if user has permission (or no permission required). Order follows typical admin usage frequency. */
@@ -67,6 +69,8 @@ const ADMIN_NAV_ITEMS = [
     { labelKey: 'admin.nav.settings', route: 'admin.settings.index', href: () => route('admin.settings.index'), icon: Settings, permission: 'view_settings' },
     { labelKey: 'admin.audit_log', route: 'admin.audit-log.index', href: () => route('admin.audit-log.index'), icon: FileText, permission: 'view_settings' },
     { labelKey: 'admin.nav.integrations', route: 'admin.integrations.index', href: () => route('admin.integrations.index'), icon: Plug, permission: 'manage_integrations' },
+    { labelKey: 'admin.nav.restaurant_integrations', route: 'admin.restaurant.connections.index', href: () => route('admin.restaurant.connections.index'), icon: Utensils, permission: 'view_pos_connections' },
+    { labelKey: 'admin.nav.restaurant_outlets', route: 'admin.restaurant.outlets.index', href: () => route('admin.restaurant.outlets.index'), icon: Store, permission: 'view_pos_connections' },
     { labelKey: 'admin.nav.ai', route: 'admin.ai.index', href: () => route('admin.ai.index'), icon: Brain, permission: 'view_settings' },
 ];
 

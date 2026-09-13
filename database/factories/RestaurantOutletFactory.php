@@ -20,7 +20,11 @@ class RestaurantOutletFactory extends Factory
             'name' => fake()->company().' Outlet',
             'address' => fake()->address(),
             'timezone' => 'Asia/Kolkata',
-            'status' => RestaurantOutlet::STATUS_PENDING,
+            // Phase 1C: both outlet-creation paths (standalone "Add Outlet"
+            // and the inline create-during-connection flow) create outlets
+            // as ACTIVE — STATUS_PENDING predates that rule and is no
+            // longer what a real outlet normally starts as.
+            'status' => RestaurantOutlet::STATUS_ACTIVE,
         ];
     }
 }

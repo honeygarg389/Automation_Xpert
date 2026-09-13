@@ -26,6 +26,17 @@ class RestaurantOutletTest extends TestCase
         $this->assertInstanceOf(HasMany::class, $outlet->posConnections());
     }
 
+    /**
+     * ⚠️ Phase 1C addendum: `pos_connections` now enforces "one non-archived
+     * connection per outlet at a time" at the DB layer (UNIQUE on
+     * (outlet_id, active_slot), active_slot NULL only when archived — see
+     * the migration that added it). So the OLD connection here must be
+     * STATUS_ARCHIVED, not the legacy STATUS_DISCONNECTED this test
+     * originally used — archived is what actually represents "prior
+     * connection history that no longer occupies the outlet's slot" under
+     * the current lifecycle model, which is exactly the scenario this test
+     * exists to prove (a restID rotation, a reconnect after disconnection).
+     */
     #[Test]
     public function an_outlet_can_retain_two_pos_connections_and_both_are_retrievable(): void
     {
@@ -35,7 +46,7 @@ class RestaurantOutletTest extends TestCase
         $old = PosConnection::factory()->create([
             'workspace_id' => $workspace->id,
             'outlet_id' => $outlet->id,
-            'status' => PosConnection::STATUS_DISCONNECTED,
+            'status' => PosConnection::STATUS_ARCHIVED,
             'external_ref' => 'rest-id-old',
         ]);
         $current = PosConnection::factory()->create([

@@ -385,6 +385,11 @@ class HandleInertiaRequests extends Middleware
                 'openEditPlanId' => $request->session()->get('openEditPlanId'),
                 'upgrade_required' => $request->session()->get('upgrade_required'),
                 'upgrade_reason' => $request->session()->get('upgrade_reason'),
+                // Section H: RestaurantOutletController::store() flashes this
+                // after "Add Outlet Only" so the Outlets directory can render
+                // a "Connect Petpooja now" CTA preselecting the workspace/
+                // outlet just created — {workspace_id, outlet_id, outlet_name}.
+                'connectCta' => $request->session()->get('connectCta'),
             ],
             'auth' => $auth,
             'unreadNotificationsCount' => $unreadNotificationsCount,
