@@ -7,6 +7,7 @@ use Database\Factories\PosConnectionFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -29,6 +30,8 @@ use Illuminate\Support\Str;
  * @property Carbon|null $webhook_secret_rotated_at
  * @property array<int, string>|null $allowed_ips
  * @property string $status
+ * @property int|null $active_slot
+ * @property string $environment
  * @property array<string, mixed>|null $meta_json
  * @property Carbon|null $last_tested_at
  * @property string $last_test_status
@@ -48,14 +51,75 @@ class PosConnection extends Model
 
     public const STATUS_PENDING = 'pending';
 
+    /**
+     * The ONE canonical persisted "ingress accepted" value. Do NOT introduce
+     * a `STATUS_ACTIVE` constant — Phase 1B's PetpoojaWebhookController
+     * checks this exact constant (`$connection->status !== self::STATUS_CONNECTED`)
+     * and always has; "Activate"/"Resume" in the admin UI are labels over
+     * this same value, not a second status meaning the same thing.
+     */
     public const STATUS_CONNECTED = 'connected';
 
+    /**
+     * Superseded by STATUS_PAUSED/STATUS_ARCHIVED for the Phase 1C lifecycle
+     * model, but kept — not removed — because it is still a legitimate
+     * schema value and at least one existing test constructs a row with it.
+     * No new code should write it going forward.
+     */
     public const STATUS_DISCONNECTED = 'disconnected';
+
+    /**
+     * Deliberately rejected by Phase 1B's status check (which only accepts
+     * STATUS_CONNECTED) — a paused connection stops accepting webhooks
+     * immediately, with no change needed to the ingress controller itself.
+     */
+    public const STATUS_PAUSED = 'paused';
+
+    /**
+     * Terminal for ingress purposes (also rejected by the same check) but
+     * NOT a deletion: rows, webhook history and audit trail are retained.
+     * `active_slot` is NULL for an archived connection — see the class
+     * docblock and the migration that added it — which is what actually
+     * frees the outlet up for a new connection; archiving is the only status
+     * transition that does.
+     */
+    public const STATUS_ARCHIVED = 'archived';
 
     public const STATUSES = [
         self::STATUS_PENDING,
         self::STATUS_CONNECTED,
         self::STATUS_DISCONNECTED,
+        self::STATUS_PAUSED,
+        self::STATUS_ARCHIVED,
+    ];
+
+    /**
+     * "Non-archived" is the business rule's actual boundary — see the class
+     * docblock: an outlet may have only one connection whose status is in
+     * this set at a time, enforced at the DB layer via `active_slot`. Does
+     * NOT include STATUS_DISCONNECTED, which predates this lifecycle model
+     * and no current code path produces.
+     */
+    public const NON_ARCHIVED_STATUSES = [
+        self::STATUS_PENDING,
+        self::STATUS_CONNECTED,
+        self::STATUS_PAUSED,
+    ];
+
+    public const ENVIRONMENT_SANDBOX = 'sandbox';
+
+    public const ENVIRONMENT_PRODUCTION = 'production';
+
+    /**
+     * Phase 1C only ever writes ENVIRONMENT_SANDBOX. ENVIRONMENT_PRODUCTION
+     * exists as a named constant so the column's contract is documented and
+     * so nothing has to invent a magic string when the later compliance/
+     * activation-gate phase adds the production path — but no code in this
+     * phase creates, activates, or offers a production connection.
+     */
+    public const ENVIRONMENTS = [
+        self::ENVIRONMENT_SANDBOX,
+        self::ENVIRONMENT_PRODUCTION,
     ];
 
     protected $fillable = [
@@ -66,6 +130,7 @@ class PosConnection extends Model
         'credentials',
         'allowed_ips',
         'status',
+        'environment',
         'meta_json',
         'last_tested_at',
         'last_test_status',
@@ -102,6 +167,15 @@ class PosConnection extends Model
             if (empty($model->uuid)) {
                 $model->uuid = (string) Str::uuid();
             }
+        });
+
+        // `active_slot` is FULLY DERIVED from `status` — recomputed
+        // unconditionally on every save, the same "never independently
+        // settable" pattern as legal_document_versions.content_sha256
+        // (Phase 1B). A caller cannot set it correctly or incorrectly by
+        // hand; it simply is not a fillable attribute at all.
+        static::saving(function (self $connection) {
+            $connection->active_slot = $connection->status === self::STATUS_ARCHIVED ? null : 1;
         });
     }
 
@@ -179,5 +253,30 @@ class PosConnection extends Model
         }
 
         return hash_equals($connection->webhook_secret_hash, hash('sha256', $plaintextToken));
+    }
+
+    /** @return HasMany<PosWebhookEvent, $this> */
+    public function webhookEvents(): HasMany
+    {
+        return $this->hasMany(PosWebhookEvent::class, 'connection_id');
+    }
+
+    /** @return HasMany<PosWebhookRejection, $this> */
+    public function webhookRejections(): HasMany
+    {
+        return $this->hasMany(PosWebhookRejection::class, 'connection_id');
+    }
+
+    /**
+     * Whether ANY webhook activity — accepted or rejected — has ever been
+     * recorded against this connection. This is the gate for both "Delete
+     * test connection" (only ever offered with zero history) and the
+     * guarded workspace-move flow (blocked once history exists) — a
+     * connection that has actually talked to Petpooja is no longer
+     * "test data" that can be silently discarded or relocated.
+     */
+    public function hasWebhookHistory(): bool
+    {
+        return $this->webhookEvents()->exists() || $this->webhookRejections()->exists();
     }
 }

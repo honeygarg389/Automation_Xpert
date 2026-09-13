@@ -7,6 +7,9 @@ use Illuminate\Database\Seeder;
 
 class PermissionSeeder extends Seeder
 {
+    /**
+     * @return list<array{key: string, name: string, category: string, description: string}>
+     */
     public static function permissionSet(): array
     {
         return [
@@ -78,6 +81,29 @@ class PermissionSeeder extends Seeder
             // tenant out of it — that is a different, more consequential act,
             // and it deserves to be granted deliberately.
             ['key' => 'lock_qr_assignments', 'name' => 'Lock QR Assignments', 'category' => 'QR Management', 'description' => 'Lock a QR assignment\'s active status so the customer cannot change it. Requires a written reason and is audit-logged.'],
+
+            // Restaurant Integrations (Phase 1C — Petpooja sandbox connections)
+            //
+            // ⚠️ `rotate_pos_webhook_secret` and `activate_pos_connections` are
+            // deliberately SEPARATE from `manage_pos_connections`, same
+            // reasoning as `lock_qr_assignments` above: generating a token
+            // hands out the one secret Petpooja needs to submit orders as this
+            // outlet, and activating a connection opens the ingress endpoint to
+            // it. Everyone who may create a connection record should not
+            // automatically be able to do either — they are more consequential
+            // acts and are audit-logged on their own.
+            ['key' => 'view_pos_connections', 'name' => 'View POS Connections', 'category' => 'Restaurant Integrations', 'description' => 'View Restaurant/POS connections, outlets and webhook health'],
+            ['key' => 'manage_pos_connections', 'name' => 'Manage POS Connections', 'category' => 'Restaurant Integrations', 'description' => 'Create/edit/archive outlets, create sandbox connections, update the IP allowlist, archive a connection, and delete a zero-history test connection'],
+            ['key' => 'rotate_pos_webhook_secret', 'name' => 'Rotate POS Webhook Secret', 'category' => 'Restaurant Integrations', 'description' => 'Generate or rotate a connection\'s webhook token. The plaintext is shown once and is audit-logged without the secret value.'],
+            ['key' => 'activate_pos_connections', 'name' => 'Activate POS Connections', 'category' => 'Restaurant Integrations', 'description' => 'Activate/resume or pause a sandbox connection\'s ingress. Production activation is not implemented.'],
+
+            // Separate from `manage_pos_connections` for the same reason as
+            // the other splits above: the guarded move flow reassigns a
+            // connection's workspace/outlet AND rotates its token in one
+            // action. It is already blocked once webhook history exists, but
+            // even the pre-history case is consequential enough to gate on
+            // its own rather than folding into general "manage".
+            ['key' => 'move_pos_connections', 'name' => 'Move POS Connections', 'category' => 'Restaurant Integrations', 'description' => 'Correct an accidental workspace/outlet mapping via the guarded move flow. Blocked once the connection has any webhook history.'],
         ];
     }
 

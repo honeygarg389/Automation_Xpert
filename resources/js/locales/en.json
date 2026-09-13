@@ -310,6 +310,8 @@
             "queue": "Queue",
             "settings": "Settings",
             "integrations": "Integrations",
+            "restaurant_integrations": "Restaurant Integrations",
+            "restaurant_outlets": "Outlets",
             "ai": "Ai",
             "qr_batches": "QR Batches",
             "qr_inventory": "QR Inventory",
