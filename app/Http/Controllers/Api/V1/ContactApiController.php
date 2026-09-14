@@ -7,6 +7,7 @@ use App\Modules\Shared\Models\Contact;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Validation\Rule;
 
 class ContactApiController extends WorkspaceScopedController
 {
@@ -65,6 +66,7 @@ class ContactApiController extends WorkspaceScopedController
             'first_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'country' => ['nullable', 'string', 'size:2'],
+            ...$this->profileValidationRules('nullable'),
             'language' => ['nullable', 'string', 'max:10'],
             'opt_in_whatsapp' => ['nullable', 'boolean'],
             'opt_in_sms' => ['nullable', 'boolean'],
@@ -115,6 +117,7 @@ class ContactApiController extends WorkspaceScopedController
             'first_name' => ['sometimes', 'string', 'max:100'],
             'last_name' => ['sometimes', 'string', 'max:100'],
             'country' => ['sometimes', 'string', 'size:2'],
+            ...$this->profileValidationRules('sometimes'),
             'language' => ['sometimes', 'string', 'max:10'],
             'opt_in_whatsapp' => ['sometimes', 'boolean'],
             'opt_in_sms' => ['sometimes', 'boolean'],
@@ -144,5 +147,18 @@ class ContactApiController extends WorkspaceScopedController
         $contact->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    /** @return array<string, array<int, mixed>> */
+    private function profileValidationRules(string $presence): array
+    {
+        return [
+            'gender' => [$presence, 'nullable', 'string', 'max:32', Rule::in(Contact::GENDERS)],
+            'birthday' => [$presence, 'nullable', 'date', 'after_or_equal:1900-01-01', 'before_or_equal:today'],
+            'anniversary_date' => [$presence, 'nullable', 'date', 'before_or_equal:today'],
+            'city' => [$presence, 'nullable', 'string', 'max:128'],
+            'state' => [$presence, 'nullable', 'string', 'max:128'],
+            'postal_code' => [$presence, 'nullable', 'string', 'max:20'],
+        ];
     }
 }

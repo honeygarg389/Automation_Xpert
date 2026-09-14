@@ -2,10 +2,12 @@
 
 namespace App\Http\Resources\Api\V1;
 
+use App\Modules\Shared\Models\Contact;
 use App\Support\Demo;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
+/** @property-read Contact $resource */
 class ContactResource extends JsonResource
 {
     public function toArray(Request $request): array
@@ -21,6 +23,12 @@ class ContactResource extends JsonResource
             'last_name' => Demo::name($this->last_name),
             'full_name' => Demo::name($this->full_name),
             'country' => $this->country,
+            'gender' => $demo ? Demo::maskValue($this->resource->gender, 'redact') : $this->resource->gender,
+            'birthday' => $demo ? Demo::maskValue($this->resource->birthday?->toDateString(), 'redact') : $this->resource->birthday?->toDateString(),
+            'anniversary_date' => $demo ? Demo::maskValue($this->resource->anniversary_date?->toDateString(), 'redact') : $this->resource->anniversary_date?->toDateString(),
+            'city' => $demo ? Demo::maskValue($this->resource->city, 'redact') : $this->resource->city,
+            'state' => $demo ? Demo::maskValue($this->resource->state, 'redact') : $this->resource->state,
+            'postal_code' => $demo ? Demo::maskValue($this->resource->postal_code, 'redact') : $this->resource->postal_code,
             'language' => $this->language,
             'opt_in_whatsapp' => (bool) $this->opt_in_whatsapp,
             'opt_in_sms' => (bool) $this->opt_in_sms,

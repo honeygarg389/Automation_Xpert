@@ -1,9 +1,17 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import ClientLayout from '@/Layouts/ClientLayout';
 import EmptyState from '@/Components/EmptyState';
-import { useState, useRef, useCallback } from 'react';
+import PhoneCountrySelect from '@/Components/PhoneCountrySelect';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { UserPlus, Upload, Search, Tag, Trash2, Eye, Users, Table2, Download, CheckSquare, Square, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+// ⚠️ NOT a static top-level import. bulkImportExcel.js pulls in ExcelJS (a
+// large library), and this is the main Contacts LIST page — every visitor
+// loads it, not just the ones who open the CSV import panel. A static
+// `import { downloadSampleCsv } from '...'` here would put ExcelJS in every
+// visit's module graph for a feature most visits never touch. Loaded
+// on-demand instead, inside the click handler below, the same way the button
+// itself is already hidden until the import panel is opened.
 
 function ContactAvatar({ contact, size = 8 }) {
     const { t } = useTranslation();
@@ -84,17 +92,28 @@ function ContactRow({ contact, selected, onToggle, onDelete }) {
     );
 }
 
-export default function ContactsIndex({ contacts, filters, segments = [] }) {
+export default function ContactsIndex({ contacts, filters, segments = [], phoneCountries = [], defaultPhoneCountry = null }) {
     const { t } = useTranslation();
     const { props } = usePage();
     const flash = props.flash ?? {};
     const [search, setSearch] = useState(filters.search ?? '');
     const [showAddModal, setShowAddModal] = useState(false);
     const [selected, setSelected] = useState(new Set());
+    // The CSV import panel is a disclosure rather than a bare file picker, so
+    // the default phone country is SEEN and set before a file is chosen —
+    // requirement 1. Previously "Import CSV" opened the OS file dialog
+    // immediately and there was nowhere for this choice to live.
+    const [showImportPanel, setShowImportPanel] = useState(false);
+    const [importCountry, setImportCountry] = useState(defaultPhoneCountry ?? '');
+    const selectedImportCountry = useMemo(
+        () => phoneCountries.find((c) => c.code === importCountry) ?? null,
+        [phoneCountries, importCountry],
+    );
     const fileInput = useRef();
 
-    const { data, setData, post, processing, reset } = useForm({
+    const { data, setData, post, processing, reset, errors } = useForm({
         first_name: '', last_name: '', phone_e164: '', email: '',
+        gender: '', birthday: '', anniversary_date: '', city: '', state: '', postal_code: '',
         opt_in_whatsapp: true, opt_in_sms: true, opt_in_email: true,
         segment_ids: [],
     });
@@ -138,7 +157,7 @@ export default function ContactsIndex({ contacts, filters, segments = [] }) {
     };
 
     const handleExport = (selectedOnly = false) => {
-        const params = new URLSearchParams();
+        const params = new globalThis.URLSearchParams();
         if (selectedOnly && someSelected) {
             params.set('uuids', [...selected].join(','));
         } else if (filters.search) {
@@ -152,7 +171,16 @@ export default function ContactsIndex({ contacts, filters, segments = [] }) {
         if (!file) return;
         const formData = new FormData();
         formData.append('file', file);
-        router.post(route('client.contacts.import'), formData, { preserveScroll: true });
+        // Only sent when a country was actually chosen. An absent value is
+        // meaningful — the backend then accepts fully-qualified +… numbers and
+        // refuses local ones by name, rather than guessing a country.
+        if (importCountry) {
+            formData.append('default_country', importCountry);
+        }
+        router.post(route('client.contacts.import'), formData, {
+            preserveScroll: true,
+            onFinish: () => { if (fileInput.current) fileInput.current.value = ''; },
+        });
     };
 
     const handlePhoneChange = (value) => {
@@ -175,7 +203,7 @@ export default function ContactsIndex({ contacts, filters, segments = [] }) {
     const submitAdd = (e) => {
         e.preventDefault();
         if (!data.phone_e164.trim() && !data.email.trim()) {
-            alert(t('contacts_page.alert_phone_or_email'));
+            globalThis.alert(t('contacts_page.alert_phone_or_email'));
             return;
         }
         post(route('client.contacts.store'), { onSuccess: () => { reset(); setShowAddModal(false); } });
@@ -197,7 +225,7 @@ export default function ContactsIndex({ contacts, filters, segments = [] }) {
                             </Link>
                         )}
                         {(
-                            <button type="button" onClick={() => fileInput.current?.click()} className="flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-600 px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition">
+                            <button type="button" onClick={() => setShowImportPanel(v => !v)} aria-expanded={showImportPanel} className="flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-600 px-3 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition">
                                 <Upload className="h-4 w-4" /> {t('contacts_page.import_csv')}
                             </button>
                         )}
@@ -216,7 +244,60 @@ export default function ContactsIndex({ contacts, filters, segments = [] }) {
                     </div>
                 </div>
 
+                {showImportPanel && (
+                    <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 space-y-4">
+                        <PhoneCountrySelect
+                            countries={phoneCountries}
+                            value={importCountry}
+                            onChange={setImportCountry}
+                            id="csv-default-phone-country"
+                        />
+
+                        {/* Requirement A4: a phone number is not marketing
+                            consent — shown next to the WhatsApp/SMS/Email
+                            Opt-in columns the sample file and the CSV both
+                            support. */}
+                        <p
+                            className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+                            data-testid="csv-consent-hint"
+                        >
+                            {t('contacts_page.bulk_consent_hint')}
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => fileInput.current?.click()}
+                                className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition"
+                            >
+                                <Upload className="h-4 w-4" /> {t('contacts_page.import_csv_choose')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => import('@/Pages/Contacts/bulkImportExcel').then((m) => m.downloadSampleCsv(selectedImportCountry))}
+                                className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-600 px-4 py-2 text-sm text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition"
+                            >
+                                <Download className="h-4 w-4" /> {t('contacts_page.csv_sample_download')}
+                            </button>
+                        </div>
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400">
+                            {t('contacts_page.csv_header_hint')}
+                        </p>
+                    </div>
+                )}
+
                 {flash.success && <div className="rounded-lg bg-green-50 dark:bg-green-900/30 text-green-800 dark:text-green-200 px-4 py-2 text-sm">{flash.success}</div>}
+                {flash.error && <div className="rounded-lg bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-4 py-2 text-sm">{flash.error}</div>}
+                {flash.import_errors && flash.import_errors.length > 0 && (
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-2 text-sm">
+                        <p className="font-medium">{t('contacts_page.import_rows_skipped')}</p>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                            {flash.import_errors.map((message, index) => (
+                                <li key={index}>{message}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 {/* Search */}
                 <form onSubmit={handleSearch} className="flex gap-2">
@@ -309,7 +390,7 @@ export default function ContactsIndex({ contacts, filters, segments = [] }) {
             {/* Add Contact Modal */}
             {showAddModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-                    <div className="w-full max-w-md rounded-xl bg-white dark:bg-neutral-900 p-6 shadow-xl space-y-4">
+                    <div className="w-full max-w-md max-h-[90vh] overflow-y-auto rounded-xl bg-white dark:bg-neutral-900 p-6 shadow-xl space-y-4">
                         <h3 className="text-lg font-semibold text-neutral-900 dark:text-neutral-100">{t('contacts_page.add_contact')}</h3>
                         <form onSubmit={submitAdd} className="space-y-3">
                             <div className="grid grid-cols-2 gap-3">
@@ -330,6 +411,49 @@ export default function ContactsIndex({ contacts, filters, segments = [] }) {
                                 <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{t('common.email')}</label>
                                 <input type="email" value={data.email} onChange={e => handleEmailChange(e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
                             </div>
+                            <fieldset className="space-y-3 border-t border-neutral-200 pt-4 dark:border-neutral-700">
+                                <legend className="pr-2 text-sm font-medium text-neutral-800 dark:text-neutral-200">Personal details</legend>
+                                <div>
+                                    <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Gender (optional)</label>
+                                    <select value={data.gender} onChange={e => setData('gender', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm">
+                                        <option value="">Select / not provided</option>
+                                        <option value="male">Male</option>
+                                        <option value="female">Female</option>
+                                        <option value="non_binary">Non-binary / Other</option>
+                                        <option value="prefer_not_to_say">Prefer not to say</option>
+                                    </select>
+                                    {errors.gender && <p className="mt-1 text-xs text-red-600">{errors.gender}</p>}
+                                </div>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Date of Birth (optional)</label>
+                                        <input type="date" min="1900-01-01" max={new Date().toISOString().slice(0, 10)} value={data.birthday} onChange={e => setData('birthday', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                        {errors.birthday && <p className="mt-1 text-xs text-red-600">{errors.birthday}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Wedding Anniversary (optional)</label>
+                                        <input type="date" max={new Date().toISOString().slice(0, 10)} value={data.anniversary_date} onChange={e => setData('anniversary_date', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                        {errors.anniversary_date && <p className="mt-1 text-xs text-red-600">{errors.anniversary_date}</p>}
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                    <div>
+                                        <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">City (optional)</label>
+                                        <input type="text" value={data.city} onChange={e => setData('city', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                        {errors.city && <p className="mt-1 text-xs text-red-600">{errors.city}</p>}
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">State (optional)</label>
+                                        <input type="text" value={data.state} onChange={e => setData('state', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                        {errors.state && <p className="mt-1 text-xs text-red-600">{errors.state}</p>}
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Postal Code / PIN Code (optional)</label>
+                                    <input type="text" value={data.postal_code} onChange={e => setData('postal_code', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                    {errors.postal_code && <p className="mt-1 text-xs text-red-600">{errors.postal_code}</p>}
+                                </div>
+                            </fieldset>
                             <div className="flex gap-4">
                                 {[['opt_in_whatsapp', 'WhatsApp', !data.phone_e164.trim()], ['opt_in_sms', t('contacts_page.channel_sms'), !data.phone_e164.trim()], ['opt_in_email', t('common.email'), !data.email.trim()]].map(([key, label, disabled]) => (
                                     <label key={key} className={`flex items-center gap-1.5 text-sm ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>

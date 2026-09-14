@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Plus, Trash2, Filter, UserPlus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-const FIELDS = ['first_name', 'last_name', 'phone_e164', 'email', 'country', 'language', 'source', 'opt_in_whatsapp', 'opt_in_sms', 'opt_in_email'];
+const FIELDS = ['first_name', 'last_name', 'phone_e164', 'email', 'country', 'gender', 'city', 'state', 'postal_code', 'language', 'source', 'opt_in_whatsapp', 'opt_in_sms', 'opt_in_email'];
 const OPERATORS = ['=', '!=', 'like', 'not_like', 'is_null', 'is_not_null'];
 
 function RuleRow({ condition, onChange, onRemove }) {

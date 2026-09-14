@@ -12,6 +12,15 @@ function OptInBadge({ label, active }) {
     );
 }
 
+const GENDER_LABELS = {
+    male: 'Male',
+    female: 'Female',
+    non_binary: 'Non-binary / Other',
+    prefer_not_to_say: 'Prefer not to say',
+};
+
+const profileDate = (value) => value ? String(value).slice(0, 10) : '';
+
 function AvatarUploader({ contact }) {
     const { t } = useTranslation();
     const fileInput = useRef();
@@ -125,11 +134,17 @@ function AvatarUploader({ contact }) {
 
 export default function ContactShow({ contact, staticSegments = [] }) {
     const { t } = useTranslation();
-    const { data, setData, put, processing } = useForm({
+    const { data, setData, put, processing, errors } = useForm({
         first_name: contact.first_name ?? '',
         last_name: contact.last_name ?? '',
         email: contact.email ?? '',
         country: contact.country ?? '',
+        gender: contact.gender ?? '',
+        birthday: profileDate(contact.birthday),
+        anniversary_date: profileDate(contact.anniversary_date),
+        city: contact.city ?? '',
+        state: contact.state ?? '',
+        postal_code: contact.postal_code ?? '',
         language: contact.language ?? '',
         opt_in_whatsapp: contact.opt_in_whatsapp,
         opt_in_sms: contact.opt_in_sms,
@@ -141,6 +156,15 @@ export default function ContactShow({ contact, staticSegments = [] }) {
         e.preventDefault();
         put(route('client.contacts.update', contact.uuid), { preserveScroll: true });
     };
+
+    const personalDetails = [
+        ['Gender', GENDER_LABELS[contact.gender]],
+        ['Date of Birth', profileDate(contact.birthday)],
+        ['Wedding Anniversary', profileDate(contact.anniversary_date)],
+        ['City', contact.city],
+        ['State', contact.state],
+        ['Postal Code / PIN Code', contact.postal_code],
+    ].filter(([, value]) => value);
 
     return (
         <ClientLayout title={t('contacts_page.contact_alt')}>
@@ -176,6 +200,20 @@ export default function ContactShow({ contact, staticSegments = [] }) {
                     </div>
                 </div>
 
+                {personalDetails.length > 0 && (
+                    <section className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-700 dark:bg-neutral-900">
+                        <h3 className="font-medium text-neutral-800 dark:text-neutral-200">Personal details</h3>
+                        <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                            {personalDetails.map(([label, value]) => (
+                                <div key={label}>
+                                    <dt className="text-xs font-medium text-neutral-500 dark:text-neutral-400">{label}</dt>
+                                    <dd className="mt-0.5 text-neutral-800 dark:text-neutral-200">{value}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </section>
+                )}
+
                 {/* Edit form */}
                 <form onSubmit={handleSave} className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 space-y-3">
                     <h3 className="font-medium text-neutral-800 dark:text-neutral-200">{t('common.edit')}</h3>
@@ -185,6 +223,49 @@ export default function ContactShow({ contact, staticSegments = [] }) {
                             <input type="text" value={data[k]} onChange={e => setData(k, e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
                         </div>
                     ))}
+                    <fieldset className="space-y-3 border-t border-neutral-200 pt-4 dark:border-neutral-700">
+                        <legend className="pr-2 text-sm font-medium text-neutral-800 dark:text-neutral-200">Personal details</legend>
+                        <div>
+                            <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Gender (optional)</label>
+                            <select value={data.gender} onChange={e => setData('gender', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm">
+                                <option value="">Select / not provided</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="non_binary">Non-binary / Other</option>
+                                <option value="prefer_not_to_say">Prefer not to say</option>
+                            </select>
+                            {errors.gender && <p className="mt-1 text-xs text-red-600">{errors.gender}</p>}
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Date of Birth (optional)</label>
+                                <input type="date" min="1900-01-01" max={new Date().toISOString().slice(0, 10)} value={data.birthday} onChange={e => setData('birthday', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                {errors.birthday && <p className="mt-1 text-xs text-red-600">{errors.birthday}</p>}
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Wedding Anniversary (optional)</label>
+                                <input type="date" max={new Date().toISOString().slice(0, 10)} value={data.anniversary_date} onChange={e => setData('anniversary_date', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                {errors.anniversary_date && <p className="mt-1 text-xs text-red-600">{errors.anniversary_date}</p>}
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div>
+                                <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">City (optional)</label>
+                                <input type="text" value={data.city} onChange={e => setData('city', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                {errors.city && <p className="mt-1 text-xs text-red-600">{errors.city}</p>}
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">State (optional)</label>
+                                <input type="text" value={data.state} onChange={e => setData('state', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                                {errors.state && <p className="mt-1 text-xs text-red-600">{errors.state}</p>}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-xs font-medium text-neutral-500 dark:text-neutral-400">Postal Code / PIN Code (optional)</label>
+                            <input type="text" value={data.postal_code} onChange={e => setData('postal_code', e.target.value)} className="mt-1 w-full rounded border border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-1.5 text-sm" />
+                            {errors.postal_code && <p className="mt-1 text-xs text-red-600">{errors.postal_code}</p>}
+                        </div>
+                    </fieldset>
                     <div className="flex gap-3 flex-wrap">
                         {[['opt_in_whatsapp', t('contacts_page.channel_wa')], ['opt_in_sms', t('contacts_page.channel_sms')], ['opt_in_email', t('common.email')]].map(([key, label]) => (
                             <label key={key} className="flex items-center gap-1.5 text-sm cursor-pointer">
