@@ -689,22 +689,25 @@ class ContactImportPhoneNormalizationTest extends TestCase
 
     /**
      * ⚠️ THE DOUBLE-LISTENER-REGISTRATION FINDING — investigated, confirmed,
-     * and deliberately NOT fixed in this branch. Full detail in the PR
-     * report; summarised here because this is the test that proves it does
-     * not touch the import path.
+     * and, on `fix/event-listener-registration`, FIXED. This docblock
+     * originally recorded a deliberate non-fix ("needs its own branch"); this
+     * branch is that branch, so the finding below is now history, not a live
+     * defect. Kept in full because the reproduction steps are still the
+     * fastest way to re-diagnose this class of bug if it ever recurs (e.g. a
+     * future module listener directory being added to auto-discovery).
      *
      * ROOT CAUSE (confirmed, not inferred): `Illuminate\Foundation\
      * Application::configure()` calls `->withEvents()` — Laravel's event
      * auto-discovery, `discover: true` by default — UNCONDITIONALLY, before
      * `bootstrap/app.php`'s own `->withRouting()->withMiddleware()
-     * ->withExceptions()` chain runs. `bootstrap/app.php` never calls
-     * `->withEvents(discover: false)` to turn it back off. So Laravel scans
-     * `app/Listeners` and auto-registers every public `handle*`-prefixed
+     * ->withExceptions()` chain runs. `bootstrap/app.php` did not call
+     * `->withEvents(discover: false)` to turn it back off. So Laravel scanned
+     * `app/Listeners` and auto-registered every public `handle*`-prefixed
      * method whose single parameter is a dispatchable event — THE SAME
-     * listener methods `AppServiceProvider::boot()` ALSO registers explicitly
-     * via `Event::listen(...)`. Every one of them fires twice.
+     * listener methods `AppServiceProvider::boot()` ALSO registered
+     * explicitly via `Event::listen(...)`. Every one of them fired twice.
      *
-     * EXACT REPRODUCTION:
+     * EXACT REPRODUCTION (of the ORIGINAL bug, pre-fix):
      *
      *     php artisan tinker --execute='
      *         $r = new ReflectionClass(app("events"));
@@ -721,61 +724,69 @@ class ContactImportPhoneNormalizationTest extends TestCase
      *
      *     Confirmed as the mechanism, not a coincidence, via:
      *         Illuminate\Foundation\Events\DiscoverEvents::within(app_path('Listeners'), base_path())
-     *     which independently returns the exact same
+     *     which independently returned the exact same
      *     ContactCreated => [AutomationTriggerListener@handleContactCreated,
      *                         DispatchOutboundWebhookListener@handleContactCreated]
-     *     pair discovery would add on top of the explicit registration.
+     *     pair discovery was adding on top of the explicit registration.
      *
      * AFFECTED LISTENERS: every explicitly-registered `Event::listen(...)`
      * call in `AppServiceProvider::boot()` whose listener class has a
      * `handle*`-prefixed public method — confirmed for `ContactCreated`
      * (both listeners) and consistent with the elevated listener count
-     * measured on `MessageReceived` (9, where 5 are explicit). A full sweep
-     * checked every listener class has SOME explicit reference in
-     * `AppServiceProvider.php` (none rely on discovery alone), so disabling
-     * discovery would not silently remove a listener with no fallback.
+     * measured on `MessageReceived` (9, where 5 were explicit). A full sweep
+     * checked every listener class had SOME explicit reference in
+     * `AppServiceProvider.php`, with exactly ONE exception —
+     * `AutomationTriggerListener::handleCampaignCompleted`, discovery-only —
+     * which got its own explicit `Event::listen()` call in the same commit
+     * that disabled discovery, so nothing lost its only wiring.
      *
-     * IMPACT: every EXISTING (non-import) contact-creation path that still
-     * dispatches `ContactCreated` — `ContactController::store()`, WhatsApp/
-     * Instagram/Messenger inbound auto-creation, `ProcessEcommerceWebhookJob`,
-     * `LaunchCampaignJob`'s recipient upload — fires its `contact.created`
-     * automation TWICE and its outbound webhook TWICE per contact. A
-     * configured "send a WhatsApp welcome message" automation sends it twice
-     * to a real customer today, independent of anything in this branch.
+     * IMPACT (pre-fix): every EXISTING (non-import) contact-creation path
+     * that dispatches `ContactCreated` — `ContactController::store()`,
+     * WhatsApp/Instagram/Messenger inbound auto-creation,
+     * `ProcessEcommerceWebhookJob`, `LaunchCampaignJob`'s recipient upload —
+     * fired its `contact.created` automation TWICE and its outbound webhook
+     * TWICE per contact. A configured "send a WhatsApp welcome message"
+     * automation sent it twice to a real customer.
      *
-     * WHY NOT FIXED HERE: it is systemic (every `Event::listen()` call in the
-     * app, not one event), it is unrelated to contact import, and per
-     * CLAUDE.md ("one concern per branch") it needs its own branch with its
-     * own full-suite run — `bootstrap/app.php` adding
-     * `->withEvents(discover: false)` is the minimal fix, verified above as
-     * safe against every current listener, but that verification and the
-     * regression test for it belong to that dedicated fix, not here.
+     * THE FIX: `bootstrap/app.php` now calls `->withEvents(discover: false)`.
+     * See `tests/Feature/EventListenerRegistrationTest.php` for the
+     * application-wide regression coverage (registration-count assertions
+     * across contact AND non-contact events, plus an end-to-end "fires
+     * exactly once" proof for a real `ContactCreated` dispatch and a real
+     * `Login` dispatch).
      *
-     * WHAT THIS TEST PROVES INSTEAD: the import path is immune to the
-     * duplication REGARDLESS of whether that separate bug is ever fixed,
-     * because `Event::assertNotDispatched(ContactCreated::class)` in the test
-     * above is true at the EVENT level — zero dispatches has no "twice" to
+     * WHAT THIS TEST STILL PROVES: the import path was ALREADY immune to the
+     * duplication regardless of the listener-count bug, because
+     * `Event::assertNotDispatched(ContactCreated::class)` in the test above
+     * is true at the EVENT level — zero dispatches has no "twice" to
      * multiply. This test adds the automation-count half of that proof: even
      * with TWO automations that could each independently double-fire, still
-     * zero runs.
+     * zero runs. The assertion below now pins the FIXED count (exactly 2, one
+     * per real listener) rather than the old "at least 4" — a value change,
+     * not a weakening, since the test still fails loudly if either listener
+     * class stops being wired, or if the double-registration bug returns.
      */
     #[Test]
     public function double_listener_registration_cannot_manifest_as_duplicate_automation_runs_during_import(): void
     {
         Queue::fake();
 
-        // Confirm the defect is actually present in this run, so this test
-        // cannot pass vacuously if someone fixes it out from under it without
-        // updating this comment — if ContactCreated ever drops back to 2
-        // listeners, this assertion (not the ones below it) is what should
-        // start failing and prompt a re-read of this docblock.
+        // Pin the FIXED registration count for ContactCreated: exactly one
+        // entry per real listener (AutomationTriggerListener,
+        // DispatchOutboundWebhookListener) — 2, not the pre-fix 4. If this
+        // ever reads a number other than 2, either a listener was lost (< 2,
+        // a regression this suite must catch) or the double-registration bug
+        // has returned (> 2) — both are failures worth surfacing here, not
+        // just in EventListenerRegistrationTest, because THIS test's "zero
+        // automation runs" assertion below would stop being a meaningful
+        // proof against duplication if the count silently drifted.
         $listenerCount = count(app('events')->getListeners(ContactCreated::class));
-        $this->assertGreaterThanOrEqual(
-            4,
+        $this->assertSame(
+            2,
             $listenerCount,
-            'Expected the known double-registration (>=4 listeners on ContactCreated). '
-            .'If this now reads 2, the systemic bug may have been fixed — this test should '
-            .'still pass (it asserts zero regardless), but re-read the docblock above.'
+            'Expected exactly 2 listeners on ContactCreated post-fix (one per real '
+            .'listener class). A different count means either a listener was lost or '
+            .'the double-registration bug has returned — see EventListenerRegistrationTest.'
         );
 
         ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
@@ -795,7 +806,7 @@ class ContactImportPhoneNormalizationTest extends TestCase
         ])->assertOk();
 
         // Not "at most one" — exactly zero. Suppressing dispatch at the
-        // source means the listener-count multiplier is irrelevant: 0 x 4
+        // source means the listener-count multiplier is irrelevant: 0 x 2
         // is still 0.
         Queue::assertNotPushed(ExecuteAutomationRunJob::class);
         $this->assertSame(0, AutomationRun::count());

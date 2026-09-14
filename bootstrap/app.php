@@ -31,6 +31,29 @@ use Sentry\Laravel\Integration;
 use Sentry\State\Scope;
 
 return Application::configure(basePath: dirname(__DIR__))
+    // ⚠️ Event auto-discovery is DISABLED, deliberately and durably.
+    //
+    // Laravel's default (`Application::configure()` calls `->withEvents()`
+    // with `discover: true` even when bootstrap/app.php never calls it
+    // itself) scans app/Listeners and auto-registers every public
+    // `handle*`/`__invoke` method whose first parameter is a class. Every
+    // listener in app/Listeners ALSO has an explicit `Event::listen(...)`
+    // call in AppServiceProvider::boot() — so every one of them fired TWICE
+    // for every real event: two automation runs, two outbound webhook jobs,
+    // two audit-log rows per login, etc. Confirmed via
+    // `php artisan event:list` (each app/Listeners entry appeared twice) and
+    // via `app('events')->getListeners(...)` returning 2x the expected count
+    // per test-suite run.
+    //
+    // Before disabling, every listener method in app/Listeners was inventoried
+    // against AppServiceProvider::boot()'s explicit registrations. ONE method
+    // — AutomationTriggerListener::handleCampaignCompleted — had no explicit
+    // registration and relied on discovery alone; it now has one, added in
+    // the same commit as this line, so nothing loses its only wiring.
+    // Listeners under app/Modules/*/Listeners (RecordQrAttributionListener,
+    // InvalidateEntitlementCache) were never inside the discovery path
+    // (`app/Listeners` only) and are unaffected either way.
+    ->withEvents(discover: false)
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         api: __DIR__.'/../routes/api.php',
