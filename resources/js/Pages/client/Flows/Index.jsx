@@ -1,5 +1,5 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
-import { FileInput, Plus, SlidersHorizontal } from 'lucide-react';
+import { FileInput, KeyRound, Plus, SlidersHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import ClientLayout from '@/Layouts/ClientLayout';
 import EmptyState from '@/Components/EmptyState';
@@ -33,9 +33,7 @@ export default function FlowsIndex({ flows, categories }) {
                         <h2 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">WhatsApp Flows</h2>
                         <p className="mt-0.5 text-sm text-neutral-500 dark:text-neutral-400">Build static, multi-step forms for WhatsApp.</p>
                     </div>
-                    <button onClick={() => setCreating(true)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700">
-                        <Plus className="h-4 w-4" /> New flow
-                    </button>
+                    <div className="flex shrink-0 gap-2"><Link href={route('client.flows.keys.index')} className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:border-brand-400 hover:text-brand-700 dark:border-neutral-600 dark:text-neutral-200"><KeyRound className="h-4 w-4" /> Encryption keys</Link><button onClick={() => setCreating(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white transition hover:bg-brand-700"><Plus className="h-4 w-4" /> New flow</button></div>
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
