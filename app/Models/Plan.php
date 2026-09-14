@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * A live column that no longer decides anything is the trap this codebase keeps
  * finding, so it is labelled here rather than left to look authoritative.
  * @property bool $white_label_enabled
+ * @property bool $whatsapp_flows_enabled Legacy seed for the resolver-owned Flow entitlement.
  * @property bool $enabled
  */
 class Plan extends Model
@@ -66,6 +67,7 @@ class Plan extends Model
         'featured',
         'popular',
         'white_label_enabled',
+        'whatsapp_flows_enabled',
     ];
 
     protected function casts(): array
@@ -84,6 +86,7 @@ class Plan extends Model
             'featured' => 'boolean',
             'popular' => 'boolean',
             'white_label_enabled' => 'boolean',
+            'whatsapp_flows_enabled' => 'boolean',
         ];
     }
 

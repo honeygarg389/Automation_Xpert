@@ -2,9 +2,10 @@
 
 use App\Modules\Flows\Http\Controllers\Client\WhatsappFlowController;
 use App\Modules\Flows\Http\Controllers\Client\WhatsappFlowKeyPairController;
+use App\Modules\Flows\Http\Middleware\EnsureFlowsEnabled;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware(['web', 'client-app'])
+Route::middleware(['web', 'client-app', EnsureFlowsEnabled::class])
     ->prefix('app/flows')
     ->name('client.flows.')
     ->group(function (): void {

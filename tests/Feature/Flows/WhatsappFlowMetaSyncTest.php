@@ -4,6 +4,7 @@ namespace Tests\Feature\Flows;
 
 use App\Modules\Flows\Models\WhatsappFlow;
 use App\Modules\Flows\Services\WhatsappFlowMetaSyncService;
+use App\Models\Plan;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Support\WorkspaceContext;
@@ -142,7 +143,8 @@ class WhatsappFlowMetaSyncTest extends TestCase
     #[Test]
     public function publish_is_blocked_before_any_meta_sync_has_happened(): void
     {
-        ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->attachPlanToClient($client, Plan::factory()->create(['whatsapp_flows_enabled' => true]));
         $flow = WhatsappFlow::create([
             'workspace_id' => $workspace->id, 'name' => 'Not synced', 'category' => 'OTHER', 'status' => 'draft',
             'screens' => $this->screens(), 'submit_settings' => [],

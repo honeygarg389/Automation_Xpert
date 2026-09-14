@@ -313,8 +313,10 @@ class HandleInertiaRequests extends Middleware
                 $entitlement = app(Entitlements::class)
                     ->forWorkspace((int) $workspaceId);
                 $features['smart_qr'] = $entitlement->allows('smart_qr_enabled');
+                $features['whatsapp_flows'] = $entitlement->allows('whatsapp_flows_enabled');
             } catch (\Throwable $e) {
                 $features['smart_qr'] = false;
+                $features['whatsapp_flows'] = false;
             }
         }
 

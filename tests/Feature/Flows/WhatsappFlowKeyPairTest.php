@@ -4,6 +4,7 @@ namespace Tests\Feature\Flows;
 
 use App\Modules\Flows\Models\WhatsappFlowKeyPair;
 use App\Modules\Flows\Services\WhatsappFlowKeyPairService;
+use App\Models\Plan;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Support\WorkspaceContext;
@@ -33,7 +34,8 @@ class WhatsappFlowKeyPairTest extends TestCase
     /** @return array{user:\App\Models\User,workspace:\App\Models\Workspace,phone:WhatsappPhoneNumber} */
     private function connectedPhone(): array
     {
-        ['user' => $user, 'workspace' => $workspace] = $this->createWorkspaceContext();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->attachPlanToClient($client, Plan::factory()->create(['whatsapp_flows_enabled' => true]));
         $waba = WhatsappBusinessAccount::factory()->create([
             'workspace_id' => $workspace->id,
             'waba_id' => 'waba-keys-'.$workspace->id,
@@ -122,7 +124,8 @@ class WhatsappFlowKeyPairTest extends TestCase
     public function another_workspace_cannot_generate_or_view_a_phone_numbers_key_pair(): void
     {
         ['workspace' => $workspace, 'phone' => $phone] = $this->connectedPhone();
-        ['user' => $otherUser, 'workspace' => $otherWorkspace] = $this->createWorkspaceContext();
+        ['user' => $otherUser, 'workspace' => $otherWorkspace, 'client' => $otherClient] = $this->createWorkspaceContext();
+        $this->attachPlanToClient($otherClient, Plan::factory()->create(['whatsapp_flows_enabled' => true]));
 
         $this->actingAs($otherUser)->withSession(['current_workspace_id' => $otherWorkspace->id])
             ->post(route('client.flows.keys.generate', $phone->id))

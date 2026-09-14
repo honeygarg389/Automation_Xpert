@@ -224,6 +224,11 @@ export default function PlanForm({
                         checked={data.featured ?? false}
                         onChange={(v) => setData('featured', v)}
                     />
+                    <Toggle
+                        label={t('admin.whatsapp_flows_enabled')}
+                        checked={data.whatsapp_flows_enabled ?? true}
+                        onChange={(v) => setData('whatsapp_flows_enabled', v)}
+                    />
                 </div>
             </section>
 

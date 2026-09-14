@@ -130,7 +130,7 @@ export default function useClientNav() {
 
     const automationItems = [
         { label: t('nav.automations'), href: safeRoute('client.automations.index'), icon: <Zap className={iconClass} />, activePattern: 'client.automations.*' },
-        { label: t('nav.whatsapp_flows'), href: safeRoute('client.flows.index'), icon: <FileInput className={iconClass} />, activePattern: 'client.flows.*' },
+        ...(features?.whatsapp_flows ? [{ label: t('nav.whatsapp_flows'), href: safeRoute('client.flows.index'), icon: <FileInput className={iconClass} />, activePattern: 'client.flows.*' }] : []),
     ];
 
     const ecommerceItems = [

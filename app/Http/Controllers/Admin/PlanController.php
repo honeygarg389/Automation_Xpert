@@ -3,8 +3,12 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\ClientSubscription;
 use App\Models\Currency;
 use App\Models\Plan;
+use App\Models\Subscription;
+use App\Models\User;
+use App\Modules\Entitlements\Jobs\ReconcileWorkspaceEntitlements;
 use App\Modules\Entitlements\Support\PlanLimitKinds;
 use App\Services\Billing\BillingGatewayRegistry;
 use App\Services\Billing\StripeGateway;
@@ -106,6 +110,7 @@ class PlanController extends Controller
             'popular' => (bool) ($p->popular ?? false),
             'sort_order' => (int) $p->sort_order,
             'white_label_enabled' => (bool) ($p->white_label_enabled ?? false),
+            'whatsapp_flows_enabled' => (bool) ($p->whatsapp_flows_enabled ?? true),
         ];
     }
 
@@ -146,6 +151,7 @@ class PlanController extends Controller
     {
         $validated = $this->validatePlan($request, $plan);
         $plan->update($this->mapValidatedToAttributes($validated));
+        $this->refreshEntitlementsForPlan($plan);
 
         return redirect()->route('admin.plans.index')
             ->with('success', __('Plan updated successfully.'))
@@ -216,6 +222,7 @@ class PlanController extends Controller
             'popular' => ['boolean'],
             'sort_order' => ['nullable', 'integer', 'min:0'],
             'white_label_enabled' => ['boolean'],
+            'whatsapp_flows_enabled' => ['boolean'],
         ];
 
         foreach ($limitsKeys as $key) {
@@ -252,7 +259,27 @@ class PlanController extends Controller
             'popular' => (bool) ($validated['popular'] ?? false),
             'sort_order' => (int) ($validated['sort_order'] ?? 0),
             'white_label_enabled' => (bool) ($validated['white_label_enabled'] ?? false),
+            'whatsapp_flows_enabled' => (bool) ($validated['whatsapp_flows_enabled'] ?? true),
         ];
+    }
+
+    /**
+     * A plan edit changes the entitlement source for every client on that plan.
+     * Refresh those materialized workspace answers now; their source hash tracks
+     * subscriptions, not the mutable contents of a shared plan row.
+     */
+    private function refreshEntitlementsForPlan(Plan $plan): void
+    {
+        $assignedClientIds = ClientSubscription::query()
+            ->where('plan_id', $plan->id)
+            ->pluck('client_id');
+
+        $selfServeClientIds = User::query()
+            ->whereIn('id', Subscription::query()->where('plan_id', $plan->id)->select('user_id'))
+            ->pluck('client_id');
+
+        $assignedClientIds->merge($selfServeClientIds)->filter()->unique()
+            ->each(fn ($clientId) => ReconcileWorkspaceEntitlements::dispatch((int) $clientId));
     }
 
     /**

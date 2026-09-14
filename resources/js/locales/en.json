@@ -625,6 +625,7 @@
         "export_enabled": "Export enabled",
         "custom_domain_enabled": "Custom domain enabled",
         "white_label_enabled": "White label enabled",
+        "whatsapp_flows_enabled": "WhatsApp Flows",
         "total_roles": "Total Roles",
         "total_permissions": "Total Permissions",
         "tab_roles": "Roles",
