@@ -10,7 +10,8 @@ use Illuminate\Support\Facades\Log;
 
 class CloudApiClient
 {
-    private const BASE = 'https://graph.facebook.com/v20.0';
+    private const API_VERSION = 'v20.0';
+    private const BASE = 'https://graph.facebook.com/'.self::API_VERSION;
 
     public function __construct(
         private readonly string $phoneNumberId,
@@ -278,6 +279,49 @@ class CloudApiClient
         return Http::withToken($this->accessToken)
             ->timeout(30)
             ->delete(self::BASE."/{$wabaId}/message_templates", ['name' => $name]);
+    }
+
+    /** Create a draft WhatsApp Flow in the supplied WhatsApp Business Account. */
+    public function createFlow(string $wabaId, string $name, string $category): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->post(self::BASE."/{$wabaId}/flows", [
+                'name' => $name,
+                'categories' => [$category],
+            ]);
+    }
+
+    /** Upload a Flow JSON asset. Meta returns structural validation errors in this response. */
+    public function uploadFlowJson(string $flowId, array $flowJson): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->attach('file', json_encode($flowJson, JSON_THROW_ON_ERROR), 'flow.json', [
+                'Content-Type' => 'application/json',
+            ])
+            ->post(self::BASE."/{$flowId}/assets", [
+                'name' => 'flow.json',
+                'asset_type' => 'FLOW_JSON',
+            ]);
+    }
+
+    /** Publish a draft Flow. Published Flow assets are immutable on Meta. */
+    public function publishFlow(string $flowId): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->post(self::BASE."/{$flowId}/publish");
+    }
+
+    /** Fetch the current Meta Flow status, validation errors, versions, and health metadata. */
+    public function getFlow(string $flowId): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->get(self::BASE."/{$flowId}", [
+                'fields' => 'id,name,categories,preview,status,validation_errors,json_version,data_api_version,data_channel_uri,health_status,whatsapp_business_account,application',
+            ]);
     }
 
     /** Upload a media file to the WhatsApp media endpoint. Returns the media ID. */
