@@ -1,0 +1,188 @@
+<?php
+
+namespace App\Modules\Flows\Services;
+
+use App\Modules\Flows\Models\WhatsappFlow;
+use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
+use App\Modules\Whatsapp\Services\CloudApiClient;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Str;
+use Throwable;
+
+/**
+ * Persists a workspace-authored static Flow to Meta's create -> asset upload ->
+ * publish API. This service deliberately owns no HTTP implementation; all
+ * authenticated Graph calls remain in CloudApiClient.
+ */
+class WhatsappFlowMetaSyncService
+{
+    public const MISSING_MANAGEMENT_PERMISSION_MESSAGE = 'Your WhatsApp connection needs additional permissions to manage Flows. Please reconnect your WhatsApp Business Account.';
+
+    public function __construct(
+        private readonly WhatsappFlowJsonCompiler $compiler,
+    ) {}
+
+    /**
+     * @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>}
+     */
+    public function syncToMeta(WhatsappFlow $flow): array
+    {
+        $flow->update([
+            'meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_SYNCING,
+            'meta_sync_error' => null,
+            'meta_validation_errors' => null,
+        ]);
+
+        $waba = WhatsappBusinessAccount::query()
+            ->where('workspace_id', $flow->workspace_id)
+            ->where('status', 'active')
+            ->first();
+        $client = CloudApiClient::forWorkspace($flow->workspace_id);
+
+        if (! $waba || ! $client) {
+            return $this->fail($flow, 'Connect an active WhatsApp Business Account and phone number before syncing this Flow.');
+        }
+
+        try {
+            if (! $flow->meta_flow_id) {
+                $create = $client->createFlow(
+                    $waba->waba_id,
+                    $this->metaNameFor($flow),
+                    $flow->category ?: 'OTHER',
+                );
+
+                if (! $create->successful()) {
+                    return $this->failFromResponse($flow, $create);
+                }
+
+                $metaFlowId = (string) $create->json('id', '');
+                if ($metaFlowId === '') {
+                    return $this->fail($flow, 'Meta did not return a Flow ID. Please try syncing again.');
+                }
+
+                $flow->update(['meta_flow_id' => $metaFlowId]);
+            }
+
+            $upload = $client->uploadFlowJson((string) $flow->meta_flow_id, $this->compiler->compile($flow));
+            if (! $upload->successful()) {
+                return $this->failFromResponse($flow, $upload);
+            }
+
+            $validationErrors = $this->validationErrors($upload);
+            if ($validationErrors !== []) {
+                $flow->update([
+                    'meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_FAILED,
+                    'meta_validation_errors' => $validationErrors,
+                    'meta_sync_error' => 'Meta found validation errors in this Flow JSON.',
+                ]);
+
+                return [
+                    'success' => false,
+                    'message' => 'Meta found validation errors in this Flow JSON.',
+                    'validation_errors' => $validationErrors,
+                ];
+            }
+
+            $flow->update([
+                'meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_SYNCED_DRAFT,
+                'meta_validation_errors' => null,
+                'meta_sync_error' => null,
+            ]);
+
+            return ['success' => true, 'message' => 'Flow synced to Meta as a draft.', 'validation_errors' => []];
+        } catch (Throwable $exception) {
+            return $this->fail($flow, 'The Flow JSON could not be synced. Please review the Flow and try again.');
+        }
+    }
+
+    /**
+     * @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>}
+     */
+    public function publishToMeta(WhatsappFlow $flow): array
+    {
+        if (! $flow->meta_flow_id) {
+            return $this->fail($flow, 'Sync this Flow to Meta before publishing it.');
+        }
+
+        $client = CloudApiClient::forWorkspace($flow->workspace_id);
+        if (! $client) {
+            return $this->fail($flow, 'Connect an active WhatsApp Business Account and phone number before publishing this Flow.');
+        }
+
+        try {
+            $publish = $client->publishFlow($flow->meta_flow_id);
+            if (! $publish->successful() || ! $publish->json('success', false)) {
+                return $this->failFromResponse($flow, $publish);
+            }
+
+            $flow->update([
+                'status' => WhatsappFlow::STATUS_PUBLISHED,
+                'meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_PUBLISHED,
+                'meta_sync_error' => null,
+            ]);
+
+            return ['success' => true, 'message' => 'Flow published on Meta.', 'validation_errors' => []];
+        } catch (Throwable $exception) {
+            return $this->fail($flow, 'The Flow could not be published. Please try again.');
+        }
+    }
+
+    /**
+     * Meta Flow names are constrained to a portable ASCII identifier and 64
+     * characters. The workspace id plus the full UUID make collisions across
+     * workspaces and repeat authoring effectively impossible, even if WABAs
+     * are ever shared or Meta changes its name-uniqueness scope.
+     */
+    public function metaNameFor(WhatsappFlow $flow): string
+    {
+        $uuid = str_replace('-', '', (string) $flow->uuid);
+        $suffix = '_w'.$flow->workspace_id.'_f'.$uuid;
+        $base = Str::of(Str::ascii($flow->name))
+            ->replaceMatches('/[^A-Za-z0-9_]+/', '_')
+            ->trim('_')
+            ->lower()
+            ->value();
+        $base = $base !== '' ? $base : 'flow';
+
+        return substr($base, 0, max(1, 64 - strlen($suffix))).$suffix;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function validationErrors(Response $response): array
+    {
+        $errors = $response->json('validation_errors', []);
+
+        return is_array($errors)
+            ? array_values(array_filter($errors, 'is_array'))
+            : [];
+    }
+
+    /** @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>} */
+    private function failFromResponse(WhatsappFlow $flow, Response $response): array
+    {
+        $error = $response->json('error', []);
+        $code = is_array($error) ? (int) ($error['code'] ?? 0) : 0;
+        $message = strtolower((string) (is_array($error) ? ($error['message'] ?? '') : ''));
+
+        // Graph API OAuthException code 10: "Application does not have
+        // permission for this action". Code 200 is Meta's generic
+        // "Permissions error" variant; both are handled without exposing a
+        // raw Graph error body to the client.
+        if (in_array($code, [10, 200], true) && (str_contains($message, 'permission') || str_contains($message, 'whatsapp_business_management'))) {
+            return $this->fail($flow, self::MISSING_MANAGEMENT_PERMISSION_MESSAGE);
+        }
+
+        return $this->fail($flow, 'Meta could not sync this Flow. Please try again or review your WhatsApp connection.');
+    }
+
+    /** @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>} */
+    private function fail(WhatsappFlow $flow, string $message): array
+    {
+        $flow->update([
+            'meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_FAILED,
+            'meta_sync_error' => $message,
+        ]);
+
+        return ['success' => false, 'message' => $message, 'validation_errors' => []];
+    }
+}
