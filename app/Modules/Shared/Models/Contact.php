@@ -25,6 +25,12 @@ use Illuminate\Support\Str;
  * @property string|null $last_name
  * @property string|null $avatar
  * @property string|null $country
+ * @property string|null $gender
+ * @property Carbon|null $birthday
+ * @property Carbon|null $anniversary_date
+ * @property string|null $city
+ * @property string|null $state
+ * @property string|null $postal_code
  * @property string|null $language
  * @property bool $opt_in_whatsapp
  * @property bool $opt_in_sms
@@ -73,6 +79,31 @@ class Contact extends Model
         self::CONSENT_PURPOSE_PROFILE,
     ];
 
+    public const GENDERS = [
+        'male',
+        'female',
+        'non_binary',
+        'prefer_not_to_say',
+    ];
+
+    /**
+     * Friendly export/import labels for each canonical GENDERS value — the
+     * single source of truth for both directions: CSV export prints the
+     * label, CSV import accepts the label (case-insensitively) OR the
+     * canonical value and normalizes back to it. Keeping this on the model
+     * next to GENDERS avoids the label map drifting out of sync with the
+     * canonical list the way Segments.jsx's hardcoded field list already
+     * has with SegmentResolver::ALLOWED_FIELDS.
+     *
+     * @var array<string, string>
+     */
+    public const GENDER_LABELS = [
+        'male' => 'Male',
+        'female' => 'Female',
+        'non_binary' => 'Non-binary / Other',
+        'prefer_not_to_say' => 'Prefer not to say',
+    ];
+
     protected static function newFactory()
     {
         return ContactFactory::new();
@@ -94,6 +125,12 @@ class Contact extends Model
             'custom_fields' => 'array',
             'avatar' => 'null',
             'avatar_url' => 'null',
+            'gender' => 'redact',
+            'birthday' => 'redact',
+            'anniversary_date' => 'redact',
+            'city' => 'redact',
+            'state' => 'redact',
+            'postal_code' => 'redact',
             // Unstructured, like custom_fields: whatever captured the consent
             // (a web form, an in-app prompt) may have snapshotted the
             // contact's name/phone/IP into this blob. The other 8 consent/
@@ -122,7 +159,8 @@ class Contact extends Model
 
     protected $fillable = [
         'workspace_id', 'phone_e164', 'email', 'first_name', 'last_name',
-        'avatar', 'country', 'language', 'opt_in_whatsapp', 'opt_in_sms', 'opt_in_email',
+        'avatar', 'country', 'gender', 'birthday', 'anniversary_date', 'city', 'state', 'postal_code',
+        'language', 'opt_in_whatsapp', 'opt_in_sms', 'opt_in_email',
         'custom_fields', 'last_seen_at', 'source', 'lead_id',
         'whatsapp_consent_at', 'whatsapp_consent_source', 'whatsapp_consent_purpose',
         'whatsapp_consent_text_version', 'whatsapp_consent_evidence',
@@ -137,6 +175,8 @@ class Contact extends Model
             'opt_in_sms' => 'boolean',
             'opt_in_email' => 'boolean',
             'custom_fields' => 'array',
+            'birthday' => 'date',
+            'anniversary_date' => 'date',
             'last_seen_at' => 'datetime',
             'whatsapp_consent_at' => 'datetime',
             'whatsapp_consent_evidence' => 'array',

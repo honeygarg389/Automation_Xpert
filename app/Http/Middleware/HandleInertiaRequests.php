@@ -390,6 +390,11 @@ class HandleInertiaRequests extends Middleware
                 // a "Connect Petpooja now" CTA preselecting the workspace/
                 // outlet just created — {workspace_id, outlet_id, outlet_name}.
                 'connectCta' => $request->session()->get('connectCta'),
+                // ContactController::import() flashes a capped list of
+                // "Row N: message" strings for rows skipped due to an
+                // invalid Personal Details value (bad gender, ambiguous/
+                // future date) — surfaced on Contacts/Index.jsx.
+                'import_errors' => $request->session()->get('import_errors'),
             ],
             'auth' => $auth,
             'unreadNotificationsCount' => $unreadNotificationsCount,

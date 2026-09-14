@@ -10,12 +10,24 @@ class SegmentResolver
 {
     private const ALLOWED_FIELDS = [
         'phone_e164', 'email', 'first_name', 'last_name',
-        'country', 'language', 'source',
+        'country', 'gender', 'city', 'state', 'postal_code', 'language', 'source',
         'opt_in_whatsapp', 'opt_in_sms', 'opt_in_email',
         'created_at', 'last_seen_at',
     ];
 
     private const OPERATORS = ['=', '!=', 'like', 'not_like', '<', '>', '<=', '>=', 'is_null', 'is_not_null'];
+
+    /** @return array<int, string> */
+    public static function allowedFields(): array
+    {
+        return self::ALLOWED_FIELDS;
+    }
+
+    /** @return array<int, string> */
+    public static function operators(): array
+    {
+        return self::OPERATORS;
+    }
 
     /** Build a query for all contacts matching the segment rules. */
     public function query(Segment $segment): Builder

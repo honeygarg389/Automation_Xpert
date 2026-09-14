@@ -9,6 +9,7 @@ use App\Modules\Shared\Services\SegmentResolver;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -31,6 +32,11 @@ class SegmentController extends Controller
             'name' => ['required', 'string', 'max:128'],
             'type' => ['required', 'in:static,dynamic'],
             'rules_json' => ['nullable', 'array'],
+            'rules_json.combinator' => ['nullable', Rule::in(['AND', 'OR'])],
+            'rules_json.conditions' => ['nullable', 'array'],
+            'rules_json.conditions.*.field' => ['required_with:rules_json.conditions', 'string', Rule::in(SegmentResolver::allowedFields())],
+            'rules_json.conditions.*.operator' => ['required_with:rules_json.conditions', 'string', Rule::in(SegmentResolver::operators())],
+            'rules_json.conditions.*.value' => ['nullable'],
         ]);
 
         $segment = Segment::create(array_merge($validated, ['workspace_id' => $workspaceId]));
@@ -48,6 +54,11 @@ class SegmentController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:128'],
             'rules_json' => ['nullable', 'array'],
+            'rules_json.combinator' => ['nullable', Rule::in(['AND', 'OR'])],
+            'rules_json.conditions' => ['nullable', 'array'],
+            'rules_json.conditions.*.field' => ['required_with:rules_json.conditions', 'string', Rule::in(SegmentResolver::allowedFields())],
+            'rules_json.conditions.*.operator' => ['required_with:rules_json.conditions', 'string', Rule::in(SegmentResolver::operators())],
+            'rules_json.conditions.*.value' => ['nullable'],
         ]);
         $segment->update($validated);
 

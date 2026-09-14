@@ -5,9 +5,9 @@ import Handsontable from 'handsontable';
 import 'handsontable/styles/handsontable.min.css';
 import 'handsontable/styles/ht-theme-main.min.css';
 import { ArrowLeft, FileDown } from 'lucide-react';
-import { downloadSampleWorkbook, emptyMatrix, matrixToPayload, parseWorkbookToMatrix } from '@/Pages/Contacts/bulkImportExcel';
+import { BULK_IMPORT_FIELDS, GENDER_OPTIONS, OPT_IN_OPTIONS, downloadSampleWorkbook, emptyMatrix, matrixToPayload, parseWorkbookToMatrix } from '@/Pages/Contacts/bulkImportExcel';
+import PhoneCountrySelect from '@/Components/PhoneCountrySelect';
 import { useTranslation, Trans } from 'react-i18next';
-import i18n from '@/i18n';
 
 const DEFAULT_ROWS = 15;
 const HOT_LICENSE_KEY =
@@ -18,33 +18,22 @@ const HOT_LICENSE_KEY =
 function buildHotSettings(tags, segments) {
     const tagSource = ['', ...tags.map((t) => t.name)];
     const segSource = ['', ...segments.map((s) => s.name)];
+    const genderSource = ['', ...GENDER_OPTIONS];
+    const optInSource = ['', ...OPT_IN_OPTIONS];
+
+    const dropdown = (source) => ({ type: 'dropdown', source, strict: false, allowInvalid: true, className: 'htLeft' });
 
     return {
         data: emptyMatrix(DEFAULT_ROWS),
-        colHeaders: [
-            i18n.t('common.name'),
-            i18n.t('contacts_page.phone_e164'),
-            i18n.t('contacts_page.bulk_col_contact_list'),
-            i18n.t('contacts_page.bulk_col_segment'),
-        ],
-        columns: [
-            { type: 'text', className: 'htLeft' },
-            { type: 'text', className: 'htLeft' },
-            {
-                type: 'dropdown',
-                source: tagSource,
-                strict: false,
-                allowInvalid: true,
-                className: 'htLeft',
-            },
-            {
-                type: 'dropdown',
-                source: segSource,
-                strict: false,
-                allowInvalid: true,
-                className: 'htLeft',
-            },
-        ],
+        colHeaders: BULK_IMPORT_FIELDS.map((f) => f.gridHeader()),
+        columns: BULK_IMPORT_FIELDS.map((f) => {
+            if (f.kind === 'gender') return dropdown(genderSource);
+            if (f.kind === 'optin') return dropdown(optInSource);
+            if (f.kind === 'tag') return dropdown(tagSource);
+            if (f.kind === 'segment') return dropdown(segSource);
+
+            return { type: 'text', className: 'htLeft' };
+        }),
         rowHeaders: true,
         stretchH: 'all',
         height: 460,
@@ -64,11 +53,20 @@ function buildHotSettings(tags, segments) {
     };
 }
 
-export default function ContactsBulkImport({ tags, segments }) {
+export default function ContactsBulkImport({ tags, segments, phoneCountries = [], defaultPhoneCountry = null }) {
     const { t } = useTranslation();
     const { props } = usePage();
     const flash = props.flash ?? {};
     const pageErrors = props.errors ?? {};
+
+    // '' means "no default country chosen". The backend preselects nothing
+    // (ContactController::suggestedPhoneCountry() returns null and explains
+    // why), so this starts empty and the choice is always conscious.
+    const [country, setCountry] = useState(defaultPhoneCountry ?? '');
+    const selectedCountry = useMemo(
+        () => phoneCountries.find((c) => c.code === country) ?? null,
+        [phoneCountries, country],
+    );
 
     const [parsingError, setParsingError] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -104,8 +102,8 @@ export default function ContactsBulkImport({ tags, segments }) {
     }, []);
 
     const downloadSample = useCallback(() => {
-        downloadSampleWorkbook();
-    }, []);
+        downloadSampleWorkbook(selectedCountry);
+    }, [selectedCountry]);
 
     const onFile = useCallback(
         async (e) => {
@@ -146,7 +144,7 @@ export default function ContactsBulkImport({ tags, segments }) {
         setSubmitting(true);
         const data = hot.getData();
         const payload = matrixToPayload(data, tags, segments);
-        router.post(route('client.contacts.bulk-store'), { rows: payload }, {
+        router.post(route('client.contacts.bulk-store'), { rows: payload, default_country: country || null }, {
             preserveScroll: true,
             preserveState: true,
             onFinish: () => setSubmitting(false),
@@ -185,8 +183,25 @@ export default function ContactsBulkImport({ tags, segments }) {
                 {pageErrors.rows && (
                     <div className="rounded-lg bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200 px-4 py-2 text-sm">{pageErrors.rows}</div>
                 )}
+                {flash.import_errors && flash.import_errors.length > 0 && (
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 px-4 py-2 text-sm">
+                        <p className="font-medium">{t('contacts_page.import_rows_skipped')}</p>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                            {flash.import_errors.map((message, index) => (
+                                <li key={index}>{message}</li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
 
                 <div className="rounded-xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-5 space-y-4">
+                    <PhoneCountrySelect
+                        countries={phoneCountries}
+                        value={country}
+                        onChange={setCountry}
+                        id="bulk-default-phone-country"
+                    />
+
                     <div>
                         <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">{t('contacts_page.bulk_choose_file')}</label>
                         <input
@@ -210,6 +225,31 @@ export default function ContactsBulkImport({ tags, segments }) {
                         </p>
                         {parsingError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{parsingError}</p>}
                     </div>
+
+                    {/* Requirement 7: the grid's own helper text shows a valid
+                        example for the CURRENTLY selected country, so the
+                        example can never contradict what the import will
+                        actually accept. */}
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400" data-testid="bulk-grid-phone-hint">
+                        {selectedCountry
+                            ? t('contacts_page.bulk_grid_phone_hint_country', {
+                                  country: selectedCountry.name,
+                                  example: selectedCountry.example,
+                              })
+                            : t('contacts_page.bulk_grid_phone_hint_none')}
+                    </p>
+
+                    {/* Requirement A4: a phone number is not marketing consent.
+                        This sits right beside the WhatsApp/SMS/Email Opt-in
+                        columns so it is read at the moment those columns are
+                        actually being filled in, not buried elsewhere on the
+                        page. */}
+                    <p
+                        className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-3 py-2 text-xs text-amber-800 dark:text-amber-200"
+                        data-testid="bulk-consent-hint"
+                    >
+                        {t('contacts_page.bulk_consent_hint')}
+                    </p>
 
                     <div className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-700">
                         <div ref={containerRef} className="ht-wrapper min-h-[200px]" />
