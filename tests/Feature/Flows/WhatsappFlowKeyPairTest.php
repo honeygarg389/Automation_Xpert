@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Flows;
 
+use App\Models\Plan;
+use App\Models\User;
+use App\Models\Workspace;
 use App\Modules\Flows\Models\WhatsappFlowKeyPair;
 use App\Modules\Flows\Services\WhatsappFlowKeyPairService;
-use App\Models\Plan;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Support\WorkspaceContext;
@@ -31,7 +33,7 @@ class WhatsappFlowKeyPairTest extends TestCase
         parent::tearDown();
     }
 
-    /** @return array{user:\App\Models\User,workspace:\App\Models\Workspace,phone:WhatsappPhoneNumber} */
+    /** @return array{user:User,workspace:Workspace,phone:WhatsappPhoneNumber} */
     private function connectedPhone(): array
     {
         ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
@@ -67,12 +69,14 @@ class WhatsappFlowKeyPairTest extends TestCase
         $this->assertSame(1, $first->key_version);
         $this->assertSame(WhatsappFlowKeyPair::UPLOAD_NOT_UPLOADED, $first->meta_upload_status);
         $this->assertStringContainsString('BEGIN', $first->private_key_pem);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', (string) $first->endpoint_token);
         $this->assertStringNotContainsString('BEGIN RSA PRIVATE KEY', $raw);
         $this->assertStringNotContainsString('BEGIN PRIVATE KEY', $raw);
 
         $this->actingAs($user)->withSession(['current_workspace_id' => $workspace->id])
             ->post(route('client.flows.keys.generate', $phone->id));
         $this->assertSame(2, WhatsappFlowKeyPair::query()->max('key_version'));
+        $this->assertNotSame($first->endpoint_token, WhatsappFlowKeyPair::query()->latest('key_version')->value('endpoint_token'));
     }
 
     #[Test]

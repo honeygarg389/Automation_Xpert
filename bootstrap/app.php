@@ -173,6 +173,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'webhooks/sms/*',
             'webhooks/automation/*',
             'webhooks/ecommerce/*',
+            'webhooks/flows/*',
             // Phase 1B: one central Petpooja ingress URL, no dynamic segment —
             // a literal path, not a wildcard, since there is exactly one route.
             'webhooks/pos/petpooja',
