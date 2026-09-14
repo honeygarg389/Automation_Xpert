@@ -36,12 +36,90 @@ use Tests\TestCase;
  * how many there are or where they sort against any other module's. A
  * future Restaurant migration is included automatically; nothing here needs
  * to change when one is added.
+ *
+ * ⚠️ CORRECTION (fix/restaurant-migration-rollback-check-constraints): the
+ * paragraph above is true for an UNSTEPPED rollback (no `--step`, used by
+ * the two "full round trip" tests below) but was WRONG about `--step`.
+ * `migrate:rollback --step=N` is NOT "roll back the N most recent
+ * migrations within --path". Laravel's `Migrator::getMigrationsForRollback()`
+ * calls `MigrationRepository::getMigrations($steps)`, which queries the
+ * `migrations` table GLOBALLY — `ORDER BY batch DESC, migration DESC LIMIT
+ * $steps` — with NO knowledge of `--path` at all. `--path` is only applied
+ * afterwards, in `rollbackMigrations()`, which silently SKIPS (does not
+ * substitute) any of those N global rows whose file isn't under the given
+ * path. So a `--step` this test needs to correctly target N *Restaurant*
+ * migrations must be large enough to also "spend" a step on every
+ * non-Restaurant migration that sorts (by batch, then filename) ahead of
+ * or between them — and this codebase already has two: `app/Modules/Flows/
+ * .../2026_09_16_100000_create_whatsapp_flows_table.php` (sorts after every
+ * Restaurant migration) and `app/Modules/Shared/.../2026_09_13_100000_
+ * add_profile_fields_to_contacts_table.php` (sorts between two Restaurant
+ * migrations dated the same day). A literal `--step=2` for "the 2 most
+ * recent Restaurant migrations" silently became `--step=1`'s worth of real
+ * work once `create_whatsapp_flows_table` was merged on top — reproduced,
+ * confirmed via `Migrator`'s source, and fixed below by computing the
+ * correct GLOBAL step count instead of guessing a literal one. See
+ * `rollbackRestaurantMigrations()`.
  */
 class RestaurantMigrationRollbackTest extends TestCase
 {
     use RefreshDatabase;
 
     private const RESTAURANT_MIGRATIONS_PATH = 'app/Modules/Restaurant/database/migrations';
+
+    /**
+     * Roll back exactly $count *Restaurant* migrations, immune to any
+     * number of other modules' migrations sorting nearby in time — see the
+     * class docblock's CORRECTION for why a literal `--step` cannot do this
+     * safely on its own.
+     *
+     * Walks the applied-migrations list in the EXACT order Laravel's own
+     * rollback command uses (`ORDER BY batch DESC, migration DESC`,
+     * replicated from `DatabaseMigrationRepository::getMigrations()`),
+     * counting every row — Restaurant or not — until $count Restaurant-path
+     * matches have been seen. That running total IS the GLOBAL `--step`
+     * value that makes `migrate:rollback --path=<restaurant> --step=<n>`
+     * actually undo $count Restaurant migrations, whatever else happens to
+     * be interleaved with them now or in the future.
+     */
+    private function rollbackRestaurantMigrations(int $count): void
+    {
+        $restaurantMigrationNames = collect(glob(base_path(self::RESTAURANT_MIGRATIONS_PATH).'/*.php'))
+            ->map(fn (string $path) => basename($path, '.php'))
+            ->all();
+
+        $appliedInRollbackOrder = DB::table('migrations')
+            ->where('batch', '>=', 1)
+            ->orderByDesc('batch')
+            ->orderByDesc('migration')
+            ->pluck('migration');
+
+        $globalSteps = 0;
+        $restaurantMatches = 0;
+
+        foreach ($appliedInRollbackOrder as $migration) {
+            $globalSteps++;
+
+            if (in_array($migration, $restaurantMigrationNames, true)) {
+                $restaurantMatches++;
+
+                if ($restaurantMatches === $count) {
+                    break;
+                }
+            }
+        }
+
+        $this->assertSame(
+            $count,
+            $restaurantMatches,
+            "Expected to find {$count} applied Restaurant migration(s) to roll back; found {$restaurantMatches}."
+        );
+
+        Artisan::call('migrate:rollback', [
+            '--path' => self::RESTAURANT_MIGRATIONS_PATH,
+            '--step' => $globalSteps,
+        ]);
+    }
 
     #[Test]
     public function the_restaurant_foundation_migrations_roll_back_and_reapply_cleanly(): void
@@ -130,15 +208,27 @@ class RestaurantMigrationRollbackTest extends TestCase
      * immediately (MySQL error 3819) the first time it ran against the real
      * `whatsmine` database, which had one pre-existing 'connected' row.
      *
-     * `--step=2` rolls back both this migration and the one after it
-     * (normalize_pending_outlet_status), leaving pos_connections exactly as
-     * it was the moment this bug was hit: no active_slot column, one
-     * genuine pre-existing row. The raw insert below reproduces that row.
+     * Rolling back 2 Restaurant migrations undoes both this migration and
+     * the one after it (normalize_pending_outlet_status), leaving
+     * pos_connections exactly as it was the moment this bug was hit: no
+     * active_slot column, one genuine pre-existing row. The raw insert
+     * below reproduces that row. (Rolling back "2 Restaurant migrations" —
+     * not a literal `--step=2` — is what `rollbackRestaurantMigrations()`
+     * exists to do correctly; see its docblock.)
      */
     #[Test]
     public function the_active_slot_migration_backfills_before_adding_the_check_so_it_does_not_choke_on_a_pre_existing_row(): void
     {
-        Artisan::call('migrate:rollback', ['--path' => self::RESTAURANT_MIGRATIONS_PATH, '--step' => 2]);
+        $this->rollbackRestaurantMigrations(2);
+
+        // Prove the rollback itself actually reached both intended
+        // migrations — not just that the later insert/re-migrate happens
+        // not to throw. This is the assertion that would have caught the
+        // original defect directly: a `--step` that silently rolled back
+        // fewer Restaurant migrations than asked left this column (and its
+        // CHECK constraint) still in place.
+        $this->assertFalse(Schema::hasColumn('pos_connections', 'active_slot'),
+            'active_slot must not exist once the migration that adds it has been rolled back.');
 
         $outlet = RestaurantOutlet::factory()->create();
         DB::table('pos_connections')->insert([
@@ -172,17 +262,32 @@ class RestaurantMigrationRollbackTest extends TestCase
      * RestaurantOutletService silently became ineligible forever — it read
      * as "Not connected" yet could never be selected to connect one.
      *
-     * `--step=1` rolls back ONLY the single newest migration under the
-     * Restaurant path (this one), leaving every earlier table — including
-     * restaurant_outlets itself, sans the CHECK constraint — in place. That
-     * lets a raw insert simulate exactly the pre-fix legacy row: one
-     * created by any path that bypassed RestaurantOutletService and fell
-     * through to the (at that point) still-'pending' column default.
+     * Rolling back 1 Restaurant migration undoes ONLY the single newest
+     * migration under the Restaurant path (this one), leaving every earlier
+     * table — including restaurant_outlets itself, sans the CHECK
+     * constraint — in place. That lets a raw insert simulate exactly the
+     * pre-fix legacy row: one created by any path that bypassed
+     * RestaurantOutletService and fell through to the (at that point)
+     * still-'pending' column default. (Rolling back "1 Restaurant
+     * migration" — not a literal `--step=1` — is what
+     * `rollbackRestaurantMigrations()` exists to do correctly; see its
+     * docblock.)
      */
     #[Test]
     public function the_normalization_migration_fixes_legacy_pending_outlets_and_the_status_check_constraint_holds(): void
     {
-        Artisan::call('migrate:rollback', ['--path' => self::RESTAURANT_MIGRATIONS_PATH, '--step' => 1]);
+        $this->rollbackRestaurantMigrations(1);
+
+        // Prove the rollback actually reached this migration — not just
+        // that the later insert/re-migrate happens not to throw. This
+        // migration's down() resets the column default back to 'pending'
+        // and drops the CHECK constraint; if the rollback silently reached
+        // fewer Restaurant migrations than asked (the original defect),
+        // this default would still read 'active' here.
+        $statusColumn = collect(Schema::getColumns('restaurant_outlets'))->firstWhere('name', 'status');
+        $this->assertNotNull($statusColumn, 'restaurant_outlets.status must still exist after rolling back only the newest Restaurant migration.');
+        $this->assertSame('pending', $statusColumn['default'],
+            "The restaurant_outlets.status column's DEFAULT must read 'pending' immediately after rollback — proof the normalization migration was actually undone, not skipped.");
 
         $workspace = Workspace::factory()->create();
         DB::table('restaurant_outlets')->insert([
@@ -220,6 +325,130 @@ class RestaurantMigrationRollbackTest extends TestCase
             'workspace_id' => $workspace->id,
             'name' => 'Should Never Persist',
             'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    // ══ Invariant coverage: invalid status/active_slot combinations stay
+    //    rejected on the fully-migrated schema, independent of the rollback
+    //    tests above. `PosConnection::saving()` derives active_slot from
+    //    status automatically, so the Eloquent path can never construct
+    //    these — these tests bypass it with a raw insert specifically to
+    //    exercise the DB-level CHECK constraint itself, the backstop for
+    //    anything that isn't the model (a seeder, a direct SQL client, a
+    //    bug in the derivation logic). Each negative case is paired with a
+    //    positive control on the SAME route/mechanism per CLAUDE.md's
+    //    "every is-blocked test needs a positive control" convention. ══
+
+    #[Test]
+    public function an_archived_pos_connection_must_have_a_null_active_slot(): void
+    {
+        $outlet = RestaurantOutlet::factory()->create();
+
+        // Positive control: archived with active_slot NULL is the valid
+        // shape and must be accepted.
+        DB::table('pos_connections')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'provider' => 'petpooja',
+            'external_ref' => 'REST-ARCHIVED-VALID',
+            'status' => PosConnection::STATUS_ARCHIVED,
+            'environment' => 'sandbox',
+            'active_slot' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->assertDatabaseHas('pos_connections', ['external_ref' => 'REST-ARCHIVED-VALID', 'active_slot' => null]);
+
+        // Negative case: the same outlet, archived, but with active_slot
+        // wrongly occupying the slot — must be rejected. An archived
+        // connection sitting in the active slot is exactly the state that
+        // would make outlet eligibility computations (eligibleForNewConnection)
+        // see the outlet as "still connected" when it is not.
+        $this->expectException(QueryException::class);
+        DB::table('pos_connections')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'provider' => 'petpooja',
+            'external_ref' => 'REST-ARCHIVED-INVALID',
+            'status' => PosConnection::STATUS_ARCHIVED,
+            'environment' => 'sandbox',
+            'active_slot' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    #[Test]
+    public function a_non_archived_pos_connection_must_have_active_slot_one(): void
+    {
+        $outlet = RestaurantOutlet::factory()->create();
+
+        // Positive control: connected with active_slot = 1 is the valid
+        // shape and must be accepted.
+        DB::table('pos_connections')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'provider' => 'petpooja',
+            'external_ref' => 'REST-CONNECTED-VALID',
+            'status' => PosConnection::STATUS_CONNECTED,
+            'environment' => 'sandbox',
+            'active_slot' => 1,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->assertDatabaseHas('pos_connections', ['external_ref' => 'REST-CONNECTED-VALID', 'active_slot' => 1]);
+
+        // Negative case: connected (non-archived) but with active_slot left
+        // NULL — must be rejected. This is precisely the ordering defect
+        // this branch fixed: a non-archived row must never be allowed to
+        // sit with an unpopulated active_slot.
+        $this->expectException(QueryException::class);
+        DB::table('pos_connections')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'provider' => 'petpooja',
+            'external_ref' => 'REST-CONNECTED-INVALID',
+            'status' => PosConnection::STATUS_CONNECTED,
+            'environment' => 'sandbox',
+            'active_slot' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+    }
+
+    #[Test]
+    public function an_outlet_status_outside_active_or_archived_is_rejected(): void
+    {
+        $workspace = Workspace::factory()->create();
+
+        // Positive control: 'archived' — the other half of the two
+        // production-valid outlet states (§Required invariants: "only
+        // active / archived") — must be accepted on the current schema.
+        DB::table('restaurant_outlets')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => $workspace->id,
+            'name' => 'Closed Location',
+            'status' => RestaurantOutlet::STATUS_ARCHIVED,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        $this->assertDatabaseHas('restaurant_outlets', ['name' => 'Closed Location', 'status' => RestaurantOutlet::STATUS_ARCHIVED]);
+
+        // Negative case: a status that is neither 'active' nor 'archived'
+        // (the legacy 'pending' default this whole migration exists to
+        // eliminate, or any other arbitrary value) must still be rejected.
+        $this->expectException(QueryException::class);
+        DB::table('restaurant_outlets')->insert([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => $workspace->id,
+            'name' => 'Invalid Status Outlet',
+            'status' => 'suspended',
             'created_at' => now(),
             'updated_at' => now(),
         ]);
