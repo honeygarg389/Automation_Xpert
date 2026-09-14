@@ -9,8 +9,8 @@ use Illuminate\Support\ServiceProvider;
  *
  * This follows the Smart QR module convention exactly: ModuleServiceProvider
  * discovers this provider from app/Modules, and this module owns its migrations
- * and route files. The public route file intentionally remains empty until the
- * standalone HTML form slice; static WhatsApp Flows do not need a public URL.
+ * and route files. The public route file now owns Meta's encrypted dynamic
+ * data-exchange callback; the later standalone HTML form remains separate.
  */
 class FlowsServiceProvider extends ServiceProvider
 {

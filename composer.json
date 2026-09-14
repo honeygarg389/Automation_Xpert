@@ -27,6 +27,7 @@
         "league/flysystem-aws-s3-v3": "3.0",
         "league/html-to-markdown": "^5.1",
         "minishlink/web-push": "^10.0",
+        "phpseclib/phpseclib": "^3.0",
         "pragmarx/google2fa": "^9.0",
         "sentry/sentry-laravel": "^4.25",
         "smalot/pdfparser": "^2.12",
