@@ -95,6 +95,16 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(ContactCreated::class, [AutomationTriggerListener::class, 'handleContactCreated']);
         Event::listen(AutomationWebhookReceived::class, [AutomationTriggerListener::class, 'handleAutomationWebhookReceived']);
         Event::listen(CommerceEventReceived::class, [AutomationTriggerListener::class, 'handleCommerceEvent']);
+        // ⚠️ Previously registered ONLY via Laravel's event auto-discovery — a
+        // public handleCampaignCompleted(CampaignCompleted $event) method in
+        // app/Listeners is enough for discovery to wire it on its own, with no
+        // entry here. Made explicit so it keeps firing once
+        // bootstrap/app.php disables discovery (see the listener-registration
+        // audit there): every other app/Listeners method already had an
+        // explicit Event::listen() call, which is what made every one of them
+        // fire TWICE (once from discovery, once from here) — this was the one
+        // exception, registered zero times explicitly.
+        Event::listen(CampaignCompleted::class, [AutomationTriggerListener::class, 'handleCampaignCompleted']);
 
         // ── Outbound webhook event delivery ─────────────────────────────────
         Event::listen(ContactCreated::class, [DispatchOutboundWebhookListener::class, 'handleContactCreated']);
