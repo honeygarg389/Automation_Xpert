@@ -23,6 +23,7 @@ const emptyPlan = (currency = 'USD') => ({
     featured: false,
     popular: false,
     sort_order: 0,
+    whatsapp_flows_enabled: true,
 });
 
 export default function PlanModal({ show, onClose, plan = null, currencies = [], defaultCurrency = 'USD' }) {

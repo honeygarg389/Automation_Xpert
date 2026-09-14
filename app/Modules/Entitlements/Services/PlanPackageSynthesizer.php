@@ -62,8 +62,9 @@ class PlanPackageSynthesizer
     }
 
     /**
-     * ⚠️ TWO legacy bridges: `plans.white_label_enabled` and, derived from
-     * `plans.limits`, `smart_qr_enabled`.
+     * ⚠️ THREE legacy bridges: `plans.white_label_enabled`,
+     * `plans.whatsapp_flows_enabled`, and, derived from `plans.limits`,
+     * `smart_qr_enabled`.
      *
      * The column is the legacy source, exactly as `plans.limits` is: synthesized
      * into the package so the resolver is the single authority and the partner
@@ -81,6 +82,13 @@ class PlanPackageSynthesizer
     private function legacyFlags(Plan $plan): array
     {
         $flags = $plan->white_label_enabled ? ['white_label' => true] : [];
+
+        // Flows has no cardinality limit to derive from, unlike Smart QR. Its
+        // dedicated plan column is the legacy seed for this boolean grant; the
+        // resolver remains the only authority feature code asks.
+        if ($plan->whatsapp_flows_enabled) {
+            $flags['whatsapp_flows_enabled'] = true;
+        }
 
         // ⚠️ `smart_qr_enabled` DERIVED from the presence of the assignment
         // limit. A bridge, exactly like `white_label_enabled` above, and it

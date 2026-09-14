@@ -3,6 +3,7 @@
 namespace Tests\Feature\Flows;
 
 use App\Models\Concerns\BelongsToWorkspace;
+use App\Models\Plan;
 use App\Modules\Flows\Models\WhatsappFlow;
 use App\Support\WorkspaceContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,6 +36,11 @@ class WhatsappFlowCrudTest extends TestCase
         ]];
     }
 
+    private function grantFlowsToClient(\App\Models\Client $client): void
+    {
+        $this->attachPlanToClient($client, Plan::factory()->create(['whatsapp_flows_enabled' => true]));
+    }
+
     #[Test]
     public function model_is_workspace_scoped_and_the_coverage_guard_needs_no_pending_entry(): void
     {
@@ -45,7 +51,8 @@ class WhatsappFlowCrudTest extends TestCase
     #[Test]
     public function a_flow_is_created_in_the_active_workspace_and_screens_round_trip(): void
     {
-        ['user' => $user, 'other' => $workspace] = $this->createTwoWorkspaceUser();
+        ['user' => $user, 'client' => $client, 'other' => $workspace] = $this->createTwoWorkspaceUser();
+        $this->grantFlowsToClient($client);
         $screens = $this->screens();
 
         $this->actingAs($user)->withSession(['current_workspace_id' => $workspace->id])
@@ -64,7 +71,8 @@ class WhatsappFlowCrudTest extends TestCase
     #[Test]
     public function category_is_validated_against_the_meta_category_constant(): void
     {
-        ['user' => $user] = $this->createWorkspaceContext();
+        ['user' => $user, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
 
         $this->actingAs($user)->post(route('client.flows.store'), [
             'name' => 'Bad category', 'category' => 'MARKETING', 'status' => 'draft',
@@ -76,8 +84,10 @@ class WhatsappFlowCrudTest extends TestCase
     #[Test]
     public function update_round_trips_screens_and_another_workspace_cannot_update_or_delete(): void
     {
-        ['user' => $owner, 'workspace' => $workspace] = $this->createWorkspaceContext();
-        ['user' => $otherUser] = $this->createWorkspaceContext();
+        ['user' => $owner, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        ['user' => $otherUser, 'client' => $otherClient] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->grantFlowsToClient($otherClient);
         $flow = WhatsappFlow::create([
             'workspace_id' => $workspace->id, 'name' => 'Original', 'category' => 'SURVEY', 'status' => 'draft',
             'screens' => $this->screens(), 'submit_settings' => ['button_text' => 'Submit'],

@@ -147,6 +147,17 @@ class WhatsappFlowMetaSyncService
         return substr($base, 0, max(1, 64 - strlen($suffix))).$suffix;
     }
 
+    /** Shared Graph OAuth permission detection for Flow-management services. */
+    public static function isPermissionError(Response $response): bool
+    {
+        $error = $response->json('error', []);
+        $code = is_array($error) ? (int) ($error['code'] ?? 0) : 0;
+        $message = strtolower((string) (is_array($error) ? ($error['message'] ?? '') : ''));
+
+        return in_array($code, [10, 200], true)
+            && (str_contains($message, 'permission') || str_contains($message, 'whatsapp_business_'));
+    }
+
     /** @return list<array<string,mixed>> */
     private function validationErrors(Response $response): array
     {
@@ -160,15 +171,11 @@ class WhatsappFlowMetaSyncService
     /** @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>} */
     private function failFromResponse(WhatsappFlow $flow, Response $response): array
     {
-        $error = $response->json('error', []);
-        $code = is_array($error) ? (int) ($error['code'] ?? 0) : 0;
-        $message = strtolower((string) (is_array($error) ? ($error['message'] ?? '') : ''));
-
         // Graph API OAuthException code 10: "Application does not have
         // permission for this action". Code 200 is Meta's generic
         // "Permissions error" variant; both are handled without exposing a
         // raw Graph error body to the client.
-        if (in_array($code, [10, 200], true) && (str_contains($message, 'permission') || str_contains($message, 'whatsapp_business_management'))) {
+        if (self::isPermissionError($response)) {
             return $this->fail($flow, self::MISSING_MANAGEMENT_PERMISSION_MESSAGE);
         }
 

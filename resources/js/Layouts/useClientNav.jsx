@@ -5,7 +5,7 @@ import {
     LayoutDashboard, CreditCard, Package, FileText, Users, Settings,
     Layers, Webhook, Key, BookOpen, Image, Radio, Inbox, Bot, Database,
     Zap, Share2, MapPin, Tag, LifeBuoy, ExternalLink, Mail, MessageSquare,
-    ShoppingBag, QrCode,
+    ShoppingBag, QrCode, FileInput,
 } from 'lucide-react';
 
 const iconClass = 'h-4 w-4';
@@ -130,6 +130,7 @@ export default function useClientNav() {
 
     const automationItems = [
         { label: t('nav.automations'), href: safeRoute('client.automations.index'), icon: <Zap className={iconClass} />, activePattern: 'client.automations.*' },
+        ...(features?.whatsapp_flows ? [{ label: t('nav.whatsapp_flows'), href: safeRoute('client.flows.index'), icon: <FileInput className={iconClass} />, activePattern: 'client.flows.*' }] : []),
     ];
 
     const ecommerceItems = [

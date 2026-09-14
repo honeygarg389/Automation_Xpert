@@ -324,6 +324,20 @@ class CloudApiClient
             ]);
     }
 
+    /**
+     * Registers the RSA public key Meta uses to encrypt Flow data-channel
+     * requests for this specific business phone number.
+     */
+    public function uploadEncryptionKey(string $phoneNumberId, string $publicKeyPem): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->asMultipart()
+            ->post(self::BASE."/{$phoneNumberId}/whatsapp_business_encryption", [
+                'business_public_key' => $publicKeyPem,
+            ]);
+    }
+
     /** Upload a media file to the WhatsApp media endpoint. Returns the media ID. */
     public function uploadMedia(string $filePath, string $mimeType): string
     {
