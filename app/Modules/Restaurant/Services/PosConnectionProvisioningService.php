@@ -5,9 +5,17 @@ namespace App\Modules\Restaurant\Services;
 use App\Models\AdminUser;
 use App\Modules\Restaurant\Exceptions\ConnectionHasHistoryException;
 use App\Modules\Restaurant\Exceptions\ConnectionNotMovableException;
+use App\Modules\Restaurant\Exceptions\DpaNotAcceptedException;
+use App\Modules\Restaurant\Exceptions\NoConnectedWabaException;
 use App\Modules\Restaurant\Exceptions\OutletAlreadyConnectedException;
+use App\Modules\Restaurant\Exceptions\OutletNotAuthorizedForLivePosException;
+use App\Modules\Restaurant\Exceptions\RestaurantDeclarationNotAcceptedException;
+use App\Modules\Restaurant\Exceptions\TermsNotAcceptedException;
+use App\Modules\Restaurant\Models\LegalAcceptance;
+use App\Modules\Restaurant\Models\LegalDocumentVersion;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
+use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Services\AuditLogService;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -49,19 +57,16 @@ class PosConnectionProvisioningService
      * because every connection would already have one the moment it
      * existed — collapsing two deliberately separate steps into one.
      *
-     * There is no code path in this method (or anywhere in this class) that
-     * can create or activate a 'production' environment connection —
-     * Phase 1C's UI never offers one.
-     *
-     * ⚠️ Concurrency-safe duplicate prevention: the DB's
-     * UNIQUE(outlet_id, active_slot) constraint (see the migration that
-     * added it) is the actual backstop — this method's caller
-     * (StorePosConnectionRequest / the controller) is expected to have
-     * already filtered the outlet picker to eligible outlets, but that is a
-     * UI convenience, not the guarantee. A repeated/concurrent/UI-bypassed
-     * request that races past that filtering still hits this constraint and
-     * gets turned into a friendly OutletAlreadyConnectedException here,
-     * never a raw duplicate-key exception.
+     * ⚠️ UNCHANGED SIGNATURE, ON PURPOSE (Phase 2A Slice 1). This method is
+     * called from 50+ existing test call sites across six files. Live
+     * ("Live Petpooja") connections now go through the separate
+     * createLiveConnection() below rather than this method growing an
+     * environment parameter — keeping this one sandbox-only, unchanged, and
+     * every existing caller compiling and passing unmodified was the
+     * deliberate design choice over a single environment-aware method that
+     * would have required touching every one of those call sites for no
+     * behavioural benefit. $defaultPhoneCountry is a new, purely additive,
+     * trailing optional parameter — no existing 3-arg call site is affected.
      *
      * @param  list<string>|null  $allowedIps
      *
@@ -72,17 +77,97 @@ class PosConnectionProvisioningService
         string $externalRef,
         ?array $allowedIps,
         ?AdminUser $actor = null,
+        ?string $defaultPhoneCountry = null,
+    ): PosConnection {
+        return $this->createConnection(
+            $outlet,
+            $externalRef,
+            PosConnection::ENVIRONMENT_SANDBOX,
+            $allowedIps,
+            $defaultPhoneCountry,
+            $actor,
+        );
+    }
+
+    /**
+     * Creates a new LIVE ("Live Petpooja") connection — Phase 2A Slice 1.
+     * Petpooja has confirmed it provides no sandbox; this is the real,
+     * customer-facing integration path, as distinct from
+     * createSandboxConnection()'s AutomationXpert-only test connections.
+     *
+     * Exactly like createSandboxConnection(): begins 'pending', no token,
+     * stays that way until the admin explicitly generates one, and does NOT
+     * become 'connected' merely by being created — activateLive() (below)
+     * is the separate, deliberate step, and it additionally requires the
+     * workspace to have accepted the current Petpooja restaurant
+     * declaration. That gate is checked at ACTIVATION, not here, so a live
+     * connection can be configured (outlet, restID, token, default phone
+     * country) well before compliance is satisfied — exactly mirroring how
+     * a sandbox connection is configured before its own activation.
+     *
+     * @param  list<string>|null  $allowedIps
+     *
+     * @throws OutletAlreadyConnectedException
+     */
+    public function createLiveConnection(
+        RestaurantOutlet $outlet,
+        string $externalRef,
+        ?array $allowedIps,
+        ?string $defaultPhoneCountry,
+        ?AdminUser $actor = null,
+    ): PosConnection {
+        return $this->createConnection(
+            $outlet,
+            $externalRef,
+            PosConnection::ENVIRONMENT_PRODUCTION,
+            $allowedIps,
+            $defaultPhoneCountry,
+            $actor,
+        );
+    }
+
+    /**
+     * The shared creation path behind both public create*() methods above.
+     * Environment-agnostic by design: every invariant here (pending status,
+     * no token, the active-slot duplicate guard) applies identically to a
+     * sandbox or a live connection — only the persisted `environment` value
+     * and the audit meta it carries differ.
+     *
+     * ⚠️ Concurrency-safe duplicate prevention: the DB's
+     * UNIQUE(outlet_id, active_slot) constraint (see the migration that
+     * added it) is the actual backstop — the caller (StorePosConnectionRequest
+     * / the controller) is expected to have already filtered the outlet
+     * picker to eligible outlets, but that is a UI convenience, not the
+     * guarantee. A repeated/concurrent/UI-bypassed request that races past
+     * that filtering still hits this constraint and gets turned into a
+     * friendly OutletAlreadyConnectedException here, never a raw
+     * duplicate-key exception. Applies to a live connection exactly as it
+     * always did to a sandbox one — an outlet may have only one non-archived
+     * Petpooja connection, live or test, at a time.
+     *
+     * @param  list<string>|null  $allowedIps
+     *
+     * @throws OutletAlreadyConnectedException
+     */
+    private function createConnection(
+        RestaurantOutlet $outlet,
+        string $externalRef,
+        string $environment,
+        ?array $allowedIps,
+        ?string $defaultPhoneCountry,
+        ?AdminUser $actor,
     ): PosConnection {
         try {
-            return DB::transaction(function () use ($outlet, $externalRef, $allowedIps, $actor) {
+            return DB::transaction(function () use ($outlet, $externalRef, $environment, $allowedIps, $defaultPhoneCountry, $actor) {
                 $connection = PosConnection::create([
                     'workspace_id' => $outlet->workspace_id,
                     'outlet_id' => $outlet->id,
                     'provider' => PosConnection::PROVIDER_PETPOOJA,
                     'external_ref' => $externalRef,
                     'allowed_ips' => $allowedIps,
+                    'default_phone_country' => $defaultPhoneCountry,
                     'status' => PosConnection::STATUS_PENDING,
-                    'environment' => PosConnection::ENVIRONMENT_SANDBOX,
+                    'environment' => $environment,
                 ]);
 
                 $this->auditLog->logAdmin(
@@ -154,13 +239,165 @@ class PosConnectionProvisioningService
      * even though the admin UI is expected to never show this action in any
      * of those cases — the same belt-and-suspenders posture as this
      * module's other guarantees (defense in depth, not decoration).
+     *
+     * ⚠️ UNCHANGED BEHAVIOUR (Phase 2A Slice 1). Still refuses a
+     * non-sandbox connection — that is now correct and no longer
+     * misleading: activateLive() (below) is the live counterpart, so a
+     * sandbox-only activation method legitimately staying sandbox-only is
+     * not the "Sandbox-only dead end" this slice removes. Only the
+     * rejection MESSAGE changed, from a "production is not implemented"
+     * claim that is no longer true to a pointer at the method that now
+     * handles it. No existing test asserts the old message text.
      */
     public function activateSandbox(PosConnection $connection, ?AdminUser $actor = null): PosConnection
     {
         if ($connection->environment !== PosConnection::ENVIRONMENT_SANDBOX) {
-            throw new \RuntimeException('Only a sandbox connection can be activated through this action. Production activation is not implemented.');
+            throw new \RuntimeException('Only a sandbox connection can be activated through this action. Use activateLive() for a live Petpooja connection.');
         }
 
+        $this->assertCommonActivationPreconditions($connection);
+
+        return $this->finalizeActivation($connection, $actor, 'restaurant.pos_connection.sandbox_activated');
+    }
+
+    /**
+     * Flips a LIVE ("Live Petpooja") connection to CONNECTED — Phase 2A
+     * Slice 1 introduced this method with only ONE compliance gate
+     * (the restaurant declaration); the gate-hardening pass that added this
+     * docblock enforces the COMPLETE six-gate production activation
+     * invariant AutomationXpert requires before a live connection may go
+     * live:
+     *
+     *   1. current Terms acceptance                — assertTermsAccepted()
+     *   2. current DPA acceptance                   — assertDpaAccepted()
+     *   3. current Restaurant Declaration acceptance — assertRestaurantDeclarationAccepted()
+     *   4. a connected sender/WABA for the workspace — assertConnectedWabaExists()
+     *   5. outlet-specific authorization             — assertOutletAuthorizedForLivePos()
+     *   6. a unique configured connection token       — assertCommonActivationPreconditions()
+     *
+     * Gates 1–3 reuse LegalAcceptance/LegalDocumentVersion, the real,
+     * already-persisted Phase 1A compliance mechanism — TYPE_TERMS and
+     * TYPE_DPA existed on LegalDocumentVersion with zero callers anywhere in
+     * application logic before this pass, exactly the same "already-built,
+     * never wired in" shape TYPE_RESTAURANT_DECLARATION was in Slice 1.
+     *
+     * Gate 4 reuses WhatsappBusinessAccount's own established
+     * `where('workspace_id', ...)->where('status', 'active')` query, the
+     * exact pattern already used by resolveAccessTokenForWorkspace() and
+     * defaultPhoneNumberIdForWorkspace() elsewhere in this codebase.
+     *
+     * Gate 5 has NO prior persisted representation anywhere in this
+     * codebase — see the migration that added
+     * RestaurantOutlet::pos_live_authorized_at and
+     * RestaurantOutletService::authorizeForLivePos() for the new, auditable
+     * admin action built to represent it, rather than inventing a fake
+     * boolean or silently skipping it.
+     *
+     * Gate 6 was already fully enforced before this pass
+     * (assertCommonActivationPreconditions()'s webhook_secret_hash null
+     * check, backed by the DB's own UNIQUE constraint and
+     * assignNewToken()'s collision-retry loop) — reused unchanged, just
+     * now explicitly documented as gate 6 of the six rather than an
+     * unlabelled precondition.
+     *
+     * None of this applies to activateSandbox(): sandbox connections are
+     * AutomationXpert's own test/demo connections, not a live customer
+     * integration, and remain intentionally exempt from every compliance
+     * gate above — see activateSandbox()'s own docblock, unchanged.
+     *
+     * ⚠️ FAILS CLOSED: any gate not satisfied throws before
+     * finalizeActivation() ever runs, and the failure is also recorded via
+     * `restaurant.pos_connection.live_activation_blocked` — identifying
+     * which gate category blocked the attempt, never the reason's
+     * underlying secret/legal content — see logBlockedLiveActivation().
+     *
+     * ⚠️ WHAT IS STILL MISSING, DELIBERATELY NOT BUILT HERE: there is no
+     * client-facing flow anywhere that lets a workspace actually create a
+     * LegalAcceptance row for terms/dpa/restaurant_declaration —
+     * routes/client.php is an empty placeholder. In this environment,
+     * satisfying gates 1–3 today requires an operator/ops process to record
+     * the acceptance directly (exactly as this slice's own tests do), not a
+     * self-service screen — a real, reported gap, not a shortcut taken
+     * here. Gate 5 DOES have a real admin-facing flow
+     * (RestaurantOutletController::authorizeLivePos()) — it was built new,
+     * specifically because a database-only workaround was not acceptable
+     * for a required gate with no prior source.
+     */
+    public function activateLive(PosConnection $connection, ?AdminUser $actor = null): PosConnection
+    {
+        if ($connection->environment !== PosConnection::ENVIRONMENT_PRODUCTION) {
+            throw new \RuntimeException('Only a live Petpooja connection can be activated through this action. Use activateSandbox() for an AutomationXpert test/sandbox connection.');
+        }
+
+        try {
+            $this->assertCommonActivationPreconditions($connection);
+            $this->assertTermsAccepted($connection);
+            $this->assertDpaAccepted($connection);
+            $this->assertRestaurantDeclarationAccepted($connection);
+            $this->assertConnectedWabaExists($connection);
+            $this->assertOutletAuthorizedForLivePos($connection);
+        } catch (\RuntimeException $e) {
+            $this->logBlockedLiveActivation($connection, $actor, $this->liveActivationGateCategoryFor($connection, $e));
+
+            throw $e;
+        }
+
+        return $this->finalizeActivation($connection, $actor, 'restaurant.pos_connection.live_activated');
+    }
+
+    /**
+     * Maps a thrown gate exception to a short, stable category name for the
+     * audit trail — never the exception's own message, which for the
+     * "archived"/"no token" precondition is safe but generic, and which for
+     * every other gate is written to be a clear operator-facing sentence,
+     * not a value that belongs duplicated into a machine-readable meta
+     * field.
+     */
+    private function liveActivationGateCategoryFor(PosConnection $connection, \RuntimeException $e): string
+    {
+        return match (true) {
+            $e instanceof TermsNotAcceptedException => 'terms',
+            $e instanceof DpaNotAcceptedException => 'dpa',
+            $e instanceof RestaurantDeclarationNotAcceptedException => 'restaurant_declaration',
+            $e instanceof NoConnectedWabaException => 'connected_waba',
+            $e instanceof OutletNotAuthorizedForLivePosException => 'outlet_authorization',
+            $connection->status === PosConnection::STATUS_ARCHIVED => 'connection_archived',
+            default => 'connection_token',
+        };
+    }
+
+    /**
+     * Records a BLOCKED live activation attempt — the category alone, e.g.
+     * 'terms' or 'outlet_authorization', never a token, a legal document's
+     * content_body/content_sha256, or an exception message that might one
+     * day be edited to include either. This is deliberately a separate
+     * audit action from the 'live_activated' success action, not a status
+     * field on it, so a blocked attempt is never confused with the
+     * connection actually starting to accept deliveries.
+     */
+    private function logBlockedLiveActivation(PosConnection $connection, ?AdminUser $actor, string $gateCategory): void
+    {
+        $this->auditLog->logAdmin(
+            action: 'restaurant.pos_connection.live_activation_blocked',
+            targetType: PosConnection::class,
+            targetId: $connection->id,
+            meta: [
+                'workspace_id' => $connection->workspace_id,
+                'outlet_id' => $connection->outlet_id,
+                'blocked_gate' => $gateCategory,
+            ],
+            admin: $actor,
+        );
+    }
+
+    /**
+     * The archived/token preconditions shared identically by both
+     * activateSandbox() and activateLive() — factored out so the two
+     * methods cannot silently drift apart on what "eligible to activate"
+     * means, independent of environment.
+     */
+    private function assertCommonActivationPreconditions(PosConnection $connection): void
+    {
         if ($connection->status === PosConnection::STATUS_ARCHIVED) {
             throw new \RuntimeException('An archived connection cannot be resumed. Create a new connection instead.');
         }
@@ -168,12 +405,131 @@ class PosConnectionProvisioningService
         if ($connection->webhook_secret_hash === null) {
             throw new \RuntimeException('Cannot activate a connection with no webhook token configured.');
         }
+    }
 
-        return DB::transaction(function () use ($connection, $actor) {
+    /**
+     * Gate 1. Same real, already-persisted mechanism as
+     * assertRestaurantDeclarationAccepted() below, just a different
+     * `document_type`.
+     *
+     * @throws TermsNotAcceptedException
+     */
+    private function assertTermsAccepted(PosConnection $connection): void
+    {
+        $accepted = LegalAcceptance::currentFor(
+            $connection->workspace_id,
+            LegalDocumentVersion::TYPE_TERMS,
+        );
+
+        if ($accepted === null) {
+            throw new TermsNotAcceptedException(
+                'This workspace has not accepted the current AutomationXpert Terms of Service. A live connection cannot be activated until it has.'
+            );
+        }
+    }
+
+    /**
+     * Gate 2. Same real, already-persisted mechanism as
+     * assertRestaurantDeclarationAccepted() below, just a different
+     * `document_type`.
+     *
+     * @throws DpaNotAcceptedException
+     */
+    private function assertDpaAccepted(PosConnection $connection): void
+    {
+        $accepted = LegalAcceptance::currentFor(
+            $connection->workspace_id,
+            LegalDocumentVersion::TYPE_DPA,
+        );
+
+        if ($accepted === null) {
+            throw new DpaNotAcceptedException(
+                'This workspace has not accepted the current Data Processing Agreement. A live connection cannot be activated until it has.'
+            );
+        }
+    }
+
+    /**
+     * Gate 3.
+     *
+     * @throws RestaurantDeclarationNotAcceptedException
+     */
+    private function assertRestaurantDeclarationAccepted(PosConnection $connection): void
+    {
+        $accepted = LegalAcceptance::currentFor(
+            $connection->workspace_id,
+            LegalDocumentVersion::TYPE_RESTAURANT_DECLARATION,
+        );
+
+        if ($accepted === null) {
+            throw new RestaurantDeclarationNotAcceptedException(
+                'This workspace has not accepted the current Petpooja restaurant declaration. A live connection cannot be activated until it has.'
+            );
+        }
+    }
+
+    /**
+     * Gate 4 — "a connected sender/WABA for the workspace". Reuses
+     * WhatsappBusinessAccount's own established query shape, the exact
+     * pattern already used by resolveAccessTokenForWorkspace() and
+     * defaultPhoneNumberIdForWorkspace() elsewhere in this codebase, rather
+     * than inventing a second way to ask "does this workspace have an
+     * active WABA".
+     *
+     * @throws NoConnectedWabaException
+     */
+    private function assertConnectedWabaExists(PosConnection $connection): void
+    {
+        $connected = WhatsappBusinessAccount::where('workspace_id', $connection->workspace_id)
+            ->where('status', 'active')
+            ->exists();
+
+        if (! $connected) {
+            throw new NoConnectedWabaException(
+                'This workspace has no connected WhatsApp Business Account. A live Petpooja connection cannot be activated until one is connected.'
+            );
+        }
+    }
+
+    /**
+     * Gate 5 — "outlet-specific authorization". Unlike gates 1-4, this
+     * concept had no existing persisted representation anywhere in the
+     * codebase; see the migration that added
+     * RestaurantOutlet::pos_live_authorized_at and
+     * RestaurantOutletService::authorizeForLivePos() for the new, auditable
+     * admin action built to satisfy it.
+     *
+     * `withoutWorkspaceScope()`: PosConnection::outlet() is a plain,
+     * unscoped relation, but the RELATED model (RestaurantOutlet) carries
+     * BelongsToWorkspace's global scope, which fails closed to null with no
+     * ambient admin/tenant context — the exact same shape already
+     * documented on restoreConnection() above. Looked up explicitly here so
+     * this gate behaves identically whether or not an admin HTTP request
+     * happens to be the caller.
+     *
+     * @throws OutletNotAuthorizedForLivePosException
+     */
+    private function assertOutletAuthorizedForLivePos(PosConnection $connection): void
+    {
+        $outlet = $connection->outlet_id !== null
+            ? RestaurantOutlet::withoutWorkspaceScope('reason: resolves the connection\'s outlet for an admin-only lifecycle gate; the relation would fail closed to null with no ambient admin/tenant context, same shape as restoreConnection().')
+                ->find($connection->outlet_id)
+            : null;
+
+        if ($outlet === null || ! $outlet->isAuthorizedForLivePos()) {
+            throw new OutletNotAuthorizedForLivePosException(
+                'This outlet has not been authorized for a live Petpooja connection. An admin must authorize the outlet before it can go live.'
+            );
+        }
+    }
+
+    private function finalizeActivation(PosConnection $connection, ?AdminUser $actor, string $auditAction): PosConnection
+    {
+        return DB::transaction(function () use ($connection, $actor, $auditAction) {
             $connection->update(['status' => PosConnection::STATUS_CONNECTED]);
 
             $this->auditLog->logAdmin(
-                action: 'restaurant.pos_connection.sandbox_activated',
+                action: $auditAction,
                 targetType: PosConnection::class,
                 targetId: $connection->id,
                 meta: [
@@ -443,6 +799,40 @@ class PosConnectionProvisioningService
             );
 
             return [$connection->refresh(), $newToken];
+        });
+    }
+
+    /**
+     * Sets or clears the connection's default phone country after creation —
+     * mirrors updateAllowedIps() exactly (same "editable any time, always
+     * audited, never silently applied" shape). $defaultPhoneCountry is
+     * expected to already be a validated ISO 3166-1 alpha-2 code or null;
+     * this method does not itself validate against PhoneNumber::COUNTRIES —
+     * that happens once, at the HTTP boundary (StorePosConnectionRequest /
+     * the controller's own validate() call), the same division of
+     * responsibility updateAllowedIps() already has with the `ip` rule.
+     */
+    public function updateDefaultPhoneCountry(PosConnection $connection, ?string $defaultPhoneCountry, ?AdminUser $actor = null): PosConnection
+    {
+        return DB::transaction(function () use ($connection, $defaultPhoneCountry, $actor) {
+            $connection->update(['default_phone_country' => $defaultPhoneCountry]);
+
+            $this->auditLog->logAdmin(
+                action: 'restaurant.pos_connection.default_phone_country_changed',
+                targetType: PosConnection::class,
+                targetId: $connection->id,
+                meta: [
+                    'workspace_id' => $connection->workspace_id,
+                    // The country code itself is not sensitive (unlike an IP
+                    // allowlist's actual addresses) — recorded directly,
+                    // matching how other non-secret field changes elsewhere
+                    // in this service are audited with their new value.
+                    'default_phone_country' => $defaultPhoneCountry,
+                ],
+                admin: $actor,
+            );
+
+            return $connection->refresh();
         });
     }
 

@@ -90,6 +90,10 @@ class RestaurantOutletController extends Controller
                     'status' => $outlet->status,
                     'connection_state' => $connection ? $connection->status : 'not_connected',
                     'connection_uuid' => $connection?->uuid,
+                    // Gate 5 of the six-gate live activation invariant — never
+                    // required for a sandbox connection, only surfaced here so
+                    // an admin can satisfy it ahead of requesting a live one.
+                    'authorized_for_live_pos' => $outlet->isAuthorizedForLivePos(),
                 ];
             });
 
@@ -187,5 +191,17 @@ class RestaurantOutletController extends Controller
         }
 
         return back()->with('success', 'Outlet restored. It is active again. Any archived Petpooja connection stays archived until you restore it separately.');
+    }
+
+    /**
+     * Gate 5 of the six-gate Petpooja live activation invariant. A real,
+     * auditable admin action — the only way `RestaurantOutlet::pos_live_authorized_at`
+     * is ever written — not a database-only workaround.
+     */
+    public function authorizeLivePos(Request $request, RestaurantOutlet $outlet): RedirectResponse
+    {
+        app(RestaurantOutletService::class)->authorizeForLivePos($outlet, $request->user('admin'));
+
+        return back()->with('success', 'Outlet authorized for a live Petpooja connection.');
     }
 }

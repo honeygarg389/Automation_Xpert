@@ -136,4 +136,43 @@ class RestaurantOutletService
             return $outlet->refresh();
         });
     }
+
+    /**
+     * Gate 5 of the six-gate Petpooja live activation invariant
+     * ("outlet-specific authorization") — the smallest durable, auditable
+     * operational record for a concept that otherwise has no persisted
+     * representation anywhere in this codebase. This is a deliberate ADMIN
+     * verification action (an operator has confirmed this physical outlet
+     * is who it says it is and may go live), not a client self-service
+     * acceptance — no such UI is required for this slice, and this method,
+     * reached only through its own permission-gated admin route, is what
+     * keeps that distinction real instead of a database-only workaround.
+     *
+     * No separate "revoke" method exists in this slice: archiving the
+     * outlet already blocks everything downstream (a live connection
+     * cannot be activated on an archived outlet, and hasNonArchivedConnection()
+     * already blocks archiving an outlet with a live connection on it), and
+     * authorization deliberately persists through an archive/restore cycle
+     * — the same way a connection's token and restID persist through its
+     * own archive/restore.
+     */
+    public function authorizeForLivePos(RestaurantOutlet $outlet, ?AdminUser $actor = null): RestaurantOutlet
+    {
+        return DB::transaction(function () use ($outlet, $actor) {
+            $outlet->update([
+                'pos_live_authorized_at' => now(),
+                'pos_live_authorized_by_admin_id' => $actor?->id,
+            ]);
+
+            $this->auditLog->logAdmin(
+                action: 'restaurant.outlet.pos_live_authorized',
+                targetType: RestaurantOutlet::class,
+                targetId: $outlet->id,
+                meta: ['workspace_id' => $outlet->workspace_id],
+                admin: $actor,
+            );
+
+            return $outlet->refresh();
+        });
+    }
 }

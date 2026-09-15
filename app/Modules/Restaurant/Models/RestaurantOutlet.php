@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -20,6 +21,8 @@ use Illuminate\Support\Str;
  * @property string|null $address
  * @property string|null $timezone
  * @property string $status
+ * @property Carbon|null $pos_live_authorized_at
+ * @property int|null $pos_live_authorized_by_admin_id
  */
 class RestaurantOutlet extends Model
 {
@@ -63,6 +66,12 @@ class RestaurantOutlet extends Model
         'address',
         'timezone',
         'status',
+        'pos_live_authorized_at',
+        'pos_live_authorized_by_admin_id',
+    ];
+
+    protected $casts = [
+        'pos_live_authorized_at' => 'datetime',
     ];
 
     protected static function newFactory(): RestaurantOutletFactory
@@ -126,6 +135,17 @@ class RestaurantOutlet extends Model
         return $this->posConnections()
             ->where('status', '!=', PosConnection::STATUS_ARCHIVED)
             ->exists();
+    }
+
+    /**
+     * Gate 5 of the six-gate live activation invariant: an admin has
+     * explicitly authorized THIS outlet for a live Petpooja connection.
+     * "Authorized" is exactly "the timestamp is set" — see the migration
+     * that added these two columns and RestaurantOutletService::authorizeForLivePos().
+     */
+    public function isAuthorizedForLivePos(): bool
+    {
+        return $this->pos_live_authorized_at !== null;
     }
 
     /**

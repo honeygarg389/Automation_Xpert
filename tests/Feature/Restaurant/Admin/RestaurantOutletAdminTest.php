@@ -9,7 +9,10 @@ use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\PosConnectionProvisioningService;
 use App\Modules\Restaurant\Services\RestaurantOutletService;
+use Database\Seeders\PermissionSeeder;
+use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Collection;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -448,5 +451,111 @@ class RestaurantOutletAdminTest extends TestCase
                 $this->assertSame('active', $row['status']);
                 $this->assertSame('paused', $row['connection_state']);
             });
+    }
+
+    // ══ Gate 5 of the six-gate Petpooja live activation invariant ═══════
+
+    /**
+     * ⚠️ THE MOST LIKELY EXPLANATION FOR "the button is missing in a real
+     * environment": `authorize_pos_outlets` is defined in PermissionSeeder,
+     * but a Super Admin's actual permission SET comes from the ROLE's
+     * synced permissions (RoleSeeder's `$superAdmin->permissions()->sync(...)`),
+     * not from the seeder file existing. A deploy that adds this permission
+     * to PermissionSeeder but never re-runs PermissionSeeder THEN RoleSeeder
+     * against that environment's database leaves every existing Super Admin
+     * role exactly as it was — permission defined, never granted, so the
+     * button's (correct) `permissions.includes('authorize_pos_outlets')`
+     * check legitimately renders nothing.
+     *
+     * This runs the REAL seeders, in the REAL documented order
+     * (DatabaseSeeder::class lists PermissionSeeder before RoleSeeder), to
+     * prove the wiring itself is correct — if this ever fails, the seeder
+     * class or its ordering is broken, not just "someone forgot to deploy".
+     */
+    #[Test]
+    public function seeding_permissions_then_roles_grants_super_admin_the_outlet_authorization_permission(): void
+    {
+        $this->seed(PermissionSeeder::class);
+        $this->seed(RoleSeeder::class);
+
+        $superAdmin = Role::where('key', Role::KEY_SUPER_ADMIN)->firstOrFail();
+        $this->assertTrue(
+            $superAdmin->permissions()->where('key', 'authorize_pos_outlets')->exists(),
+            'The Super Admin role must hold authorize_pos_outlets once PermissionSeeder and RoleSeeder have both run — '
+            .'if this fails, a real Super Admin in any environment where these seeders ran (in this order) will not '
+            .'see the Authorize for Live POS action.'
+        );
+
+        // End-to-end: an admin actually wearing that real (not ad hoc test)
+        // role sees the permission in the same auth.permissions prop the
+        // Outlets page's `canAuthorizeForLivePos` check reads.
+        $admin = AdminUser::factory()->create(['status' => AdminUser::STATUS_ACTIVE]);
+        $admin->roles()->syncWithoutDetaching([$superAdmin->id]);
+
+        $this->actingAs($admin->fresh(), 'admin')
+            ->get(route('admin.restaurant.outlets.index'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('auth.permissions', fn (Collection $perms) => $perms->contains('authorize_pos_outlets')));
+    }
+
+    #[Test]
+    public function the_outlets_index_reports_live_pos_authorization_state(): void
+    {
+        $admin = $this->adminWith(['view_pos_connections']);
+        $outlet = RestaurantOutlet::factory()->create();
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.restaurant.outlets.index'))
+            ->assertOk()
+            ->assertInertia(function ($page) use ($outlet) {
+                $row = $this->findOutletRow($page->toArray(), $outlet->uuid);
+                $this->assertFalse($row['authorized_for_live_pos']);
+            });
+
+        app(RestaurantOutletService::class)->authorizeForLivePos($outlet);
+
+        $this->actingAs($admin, 'admin')
+            ->get(route('admin.restaurant.outlets.index'))
+            ->assertOk()
+            ->assertInertia(function ($page) use ($outlet) {
+                $row = $this->findOutletRow($page->toArray(), $outlet->uuid);
+                $this->assertTrue($row['authorized_for_live_pos']);
+            });
+    }
+
+    #[Test]
+    public function authorizing_an_outlet_for_live_pos_through_its_route_persists_and_audits(): void
+    {
+        $admin = $this->adminWith(['authorize_pos_outlets']);
+        $outlet = RestaurantOutlet::factory()->create();
+
+        $this->actingAs($admin, 'admin')->post(route('admin.restaurant.outlets.authorize-live-pos', $outlet))
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($outlet->fresh()->isAuthorizedForLivePos());
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'restaurant.outlet.pos_live_authorized',
+            'auditable_id' => $outlet->id,
+            'actor_admin_id' => $admin->id,
+        ]);
+    }
+
+    /**
+     * The positive control's mirror: `manage_pos_connections` alone — the
+     * permission that already covers day-to-day outlet CRUD — must NOT be
+     * enough for this more consequential act, the same split this module
+     * already applies to token rotation and activation.
+     */
+    #[Test]
+    public function admin_with_only_manage_pos_connections_cannot_authorize_an_outlet_for_live_pos(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $outlet = RestaurantOutlet::factory()->create();
+
+        $this->actingAs($admin, 'admin')
+            ->postJson(route('admin.restaurant.outlets.authorize-live-pos', $outlet))
+            ->assertForbidden();
+
+        $this->assertFalse($outlet->fresh()->isAuthorizedForLivePos());
     }
 }

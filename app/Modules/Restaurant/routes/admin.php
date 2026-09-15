@@ -43,6 +43,11 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         Route::put('/connections/{connection}/allowed-ips', [PosConnectionController::class, 'updateAllowedIps'])
             ->name('connections.allowed-ips')->middleware('permission:manage_pos_connections');
 
+        // Phase 2A Slice 1 — editable any time after creation, same
+        // permission as the IP allowlist it sits beside on the detail page.
+        Route::put('/connections/{connection}/default-phone-country', [PosConnectionController::class, 'updateDefaultPhoneCountry'])
+            ->name('connections.default-phone-country')->middleware('permission:manage_pos_connections');
+
         // ⚠️ THE ONLY ROUTE THAT EVER RETURNS A PLAINTEXT TOKEN. JSON only —
         // never an Inertia render — because an Inertia POST follows the
         // redirect-then-GET protocol, and the token would already be gone by
@@ -91,4 +96,12 @@ Route::middleware(['web', 'auth:admin', 'demo'])
 
         Route::post('/outlets/{outlet}/restore', [RestaurantOutletController::class, 'restore'])
             ->name('outlets.restore')->middleware('permission:manage_pos_connections');
+
+        // Petpooja Phase 2A gate-hardening pass — Gate 5 of the six-gate live
+        // activation invariant. Its own permission, same reasoning as
+        // rotate_pos_webhook_secret/activate_pos_connections above: this is
+        // a deliberate, consequential admin verification act, not something
+        // everyone who may manage outlets should automatically be able to do.
+        Route::post('/outlets/{outlet}/authorize-live-pos', [RestaurantOutletController::class, 'authorizeLivePos'])
+            ->name('outlets.authorize-live-pos')->middleware('permission:authorize_pos_outlets');
     });

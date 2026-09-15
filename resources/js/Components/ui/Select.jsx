@@ -23,6 +23,20 @@ export default function Select({
             )}
             <select
                 id={selectId}
+                // ⚠️ Browsers (Chrome in particular) will silently override a
+                // deliberately-unselected controlled value on a <select> that
+                // LOOKS like part of an address form — heuristically matched
+                // by nearby label text ("Country") plus a sibling "Address"
+                // field, with NO `name="country"` needed to trigger it. This
+                // is exactly how "Default phone country" showed India
+                // pre-selected on a fresh Petpooja connection form with zero
+                // user interaction: React's `value=""` was correct the whole
+                // time, but the browser's own autofill painted a different
+                // option as selected in the DOM out from under it.
+                // `autoComplete="off"` is the standard opt-out for this class
+                // of field; every <select> in this shared component gets it,
+                // since none of them are meant to be browser-autofilled.
+                autoComplete="off"
                 className={[
                     'w-full rounded-soft border border-soft border-neutral-300 dark:border-neutral-600 bg-white dark:bg-neutral-800 px-3 py-2 text-neutral-900 dark:text-neutral-100 shadow-inner transition duration-150 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20',
                     error && 'border-red-500 focus:border-red-500 focus:ring-red-500/20',

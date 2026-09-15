@@ -5,12 +5,20 @@ namespace Tests\Feature\Restaurant\Admin;
 use App\Models\AdminUser;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\User;
+use App\Modules\Restaurant\Models\LegalAcceptance;
+use App\Modules\Restaurant\Models\LegalDocumentVersion;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\PosWebhookEvent;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
+use App\Modules\Restaurant\Services\LegalDocumentPublishingService;
 use App\Modules\Restaurant\Services\PosConnectionProvisioningService;
+use App\Modules\Restaurant\Services\RestaurantOutletService;
+use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -18,6 +26,11 @@ use Tests\TestCase;
  * Phase 1C — Super Admin Restaurant Integrations UI: access control, the
  * create flow, and the guarantee that no screen this phase builds ever
  * exposes a plaintext token, a token hash, or raw payload/customer data.
+ *
+ * Phase 2A Slice 1 adds: an explicit environment choice at creation, the
+ * live activation path (gated on the real, already-persisted restaurant
+ * declaration acceptance — see acceptRestaurantDeclarationFor()), and the
+ * default phone country field/endpoint.
  */
 class PosConnectionAdminTest extends TestCase
 {
@@ -47,6 +60,84 @@ class PosConnectionAdminTest extends TestCase
     private function service(): PosConnectionProvisioningService
     {
         return app(PosConnectionProvisioningService::class);
+    }
+
+    /**
+     * Same helpers as PosConnectionProvisioningServiceTest — records a
+     * CURRENT acceptance of $documentType for $workspaceId via the real
+     * LegalDocumentVersion/LegalAcceptance models and
+     * LegalDocumentPublishingService, not a shortcut.
+     */
+    private function acceptLegalDocumentFor(int $workspaceId, string $documentType): LegalAcceptance
+    {
+        $version = LegalDocumentVersion::factory()->create(['document_type' => $documentType]);
+        app(LegalDocumentPublishingService::class)->publish($version);
+
+        return LegalAcceptance::create([
+            'workspace_id' => $workspaceId,
+            'document_type' => $documentType,
+            'legal_document_version_id' => $version->id,
+            'document_version' => $version->version,
+            'content_sha256' => $version->content_sha256,
+            'accepted_by_user_id' => User::factory()->create()->id,
+            'accepted_at' => now(),
+        ]);
+    }
+
+    private function acceptTermsFor(int $workspaceId): LegalAcceptance
+    {
+        return $this->acceptLegalDocumentFor($workspaceId, LegalDocumentVersion::TYPE_TERMS);
+    }
+
+    private function acceptDpaFor(int $workspaceId): LegalAcceptance
+    {
+        return $this->acceptLegalDocumentFor($workspaceId, LegalDocumentVersion::TYPE_DPA);
+    }
+
+    private function acceptRestaurantDeclarationFor(int $workspaceId): LegalAcceptance
+    {
+        return $this->acceptLegalDocumentFor($workspaceId, LegalDocumentVersion::TYPE_RESTAURANT_DECLARATION);
+    }
+
+    private function connectWabaFor(int $workspaceId): WhatsappBusinessAccount
+    {
+        return WhatsappBusinessAccount::factory()->create([
+            'workspace_id' => $workspaceId,
+            'status' => 'active',
+        ]);
+    }
+
+    private function authorizeOutletForLivePos(RestaurantOutlet $outlet): RestaurantOutlet
+    {
+        return app(RestaurantOutletService::class)->authorizeForLivePos($outlet);
+    }
+
+    /**
+     * Satisfies every one of the five compliance/authorization gates
+     * activateLive() checks (gate 6, the configured token, is set up
+     * separately by every caller via the token endpoint/service call) except
+     * whichever gate keys are named in $except — same isolation shape as
+     * PosConnectionProvisioningServiceTest's helper of the same name.
+     *
+     * @param  list<'terms'|'dpa'|'restaurant_declaration'|'connected_waba'|'outlet_authorization'>  $except
+     */
+    private function satisfyAllLiveActivationGatesExcept(RestaurantOutlet $outlet, array $except = []): void
+    {
+        if (! in_array('terms', $except, true)) {
+            $this->acceptTermsFor($outlet->workspace_id);
+        }
+        if (! in_array('dpa', $except, true)) {
+            $this->acceptDpaFor($outlet->workspace_id);
+        }
+        if (! in_array('restaurant_declaration', $except, true)) {
+            $this->acceptRestaurantDeclarationFor($outlet->workspace_id);
+        }
+        if (! in_array('connected_waba', $except, true)) {
+            $this->connectWabaFor($outlet->workspace_id);
+        }
+        if (! in_array('outlet_authorization', $except, true)) {
+            $this->authorizeOutletForLivePos($outlet);
+        }
     }
 
     // ══ Access control ═════════════════════════════════════════════════
@@ -118,6 +209,7 @@ class PosConnectionAdminTest extends TestCase
         $outlet = $this->outlet();
 
         $response = $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $outlet->workspace_id,
             'outlet_id' => $outlet->id,
@@ -143,6 +235,7 @@ class PosConnectionAdminTest extends TestCase
         ['workspace' => $workspace] = $this->createWorkspaceContext();
 
         $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'new',
             'workspace_id' => $workspace->id,
             'new_outlet_name' => 'Brand New Outlet',
@@ -172,6 +265,7 @@ class PosConnectionAdminTest extends TestCase
         $staleOutlet = RestaurantOutlet::factory()->create(['workspace_id' => $workspace->id, 'name' => 'Food Court']);
 
         $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'new',
             'workspace_id' => $workspace->id,
             'outlet_id' => $staleOutlet->id, // stale, must be ignored entirely
@@ -194,6 +288,7 @@ class PosConnectionAdminTest extends TestCase
         $outlet = $this->outlet();
 
         $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $outlet->workspace_id,
             'outlet_id' => $outlet->id,
@@ -220,6 +315,7 @@ class PosConnectionAdminTest extends TestCase
         $this->service()->createSandboxConnection($outlet, 'REST-ALREADY-1', null);
 
         $response = $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $outlet->workspace_id,
             'outlet_id' => $outlet->id,
@@ -239,6 +335,7 @@ class PosConnectionAdminTest extends TestCase
         ['workspace' => $otherWorkspace] = $this->createWorkspaceContext();
 
         $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $otherWorkspace->id,
             'outlet_id' => $outlet->id, // belongs to a DIFFERENT workspace
@@ -264,6 +361,7 @@ class PosConnectionAdminTest extends TestCase
         $this->assertNotSame($firstOutlet->workspace_id, $secondOutlet->workspace_id);
 
         $response = $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $secondOutlet->workspace_id,
             'outlet_id' => $secondOutlet->id,
@@ -385,26 +483,424 @@ class PosConnectionAdminTest extends TestCase
         $connection = $this->service()->createSandboxConnection($this->outlet(), 'REST-ACTIVATE-2', null);
         $this->actingAs($admin, 'admin')->postJson(route('admin.restaurant.connections.token', $connection));
 
-        $this->actingAs($admin, 'admin')
-            ->post(route('admin.restaurant.connections.activate', $connection->fresh()))
-            ->assertRedirect();
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
 
+        $response->assertRedirect();
         $this->assertSame(PosConnection::STATUS_CONNECTED, $connection->fresh()->status);
+
+        // ⚠️ Petpooja Phase 2A visual-review fix: this message used to read
+        // "Petpooja sandbox/test deliveries can now reach this connection" —
+        // false, since Petpooja provides no sandbox at all and never delivers
+        // anything to a test/sandbox connection. Pins BOTH the removal of the
+        // false claim and the accurate replacement wording, so a future edit
+        // cannot silently reintroduce a "Petpooja ... sandbox" phrase here.
+        $response->assertSessionHas('success', 'AutomationXpert test ingress is activated. Use internal test requests only; Petpooja does not provide a sandbox environment.');
+        $this->assertStringNotContainsString('Petpooja sandbox', (string) session('success'),
+            'The message must never claim Petpooja itself operates or delivers to a sandbox — it provides none.');
+        $this->assertStringNotContainsString('Petpooja deliveries', (string) session('success'),
+            'The message must never claim this test/sandbox connection receives Petpooja deliveries — only a live connection does.');
     }
 
+    /**
+     * The live counterpart's positive control: a real Petpooja delivery
+     * claim is accurate ONLY for a live connection, so this message is left
+     * unchanged by the sandbox-copy fix above and must keep mentioning
+     * Petpooja by name.
+     */
     #[Test]
-    public function a_production_connection_cannot_be_activated_through_this_action(): void
+    public function live_activation_success_message_still_accurately_names_petpooja(): void
+    {
+        $admin = $this->adminWith(['activate_pos_connections']);
+        $outlet = $this->outlet();
+        $connection = app(PosConnectionProvisioningService::class)
+            ->createLiveConnection($outlet, 'REST-LIVE-COPY-1', null, null);
+        app(PosConnectionProvisioningService::class)->generateToken($connection);
+        $this->satisfyAllLiveActivationGatesExcept($outlet);
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
+
+        $response->assertSessionHas('success', 'Live ingress activated. Petpooja deliveries can now reach this connection.');
+    }
+
+    /**
+     * ⚠️ Phase 2A Slice 1 CORRECTION: this test used to be named
+     * "a_production_connection_cannot_be_activated_through_this_action" and
+     * pinned a blanket "production is categorically unsupported" claim. That
+     * claim is now false — a live connection CAN activate (see the positive
+     * control below). What this scenario actually proves, unchanged at the
+     * HTTP-observable level (redirect, status stays PENDING), is that the
+     * REAL compliance gate still blocks it when unsatisfied. Renamed and the
+     * assertion sharpened to check the SPECIFIC reason, not just "it
+     * failed" — the old assertion would have passed just as well if
+     * activation had been refused for a completely wrong reason.
+     */
+    /**
+     * Gate 3 isolated at the HTTP level: terms and DPA are satisfied for
+     * this connection's (factory-generated) workspace, restaurant
+     * declaration deliberately is not — so this can only be failing on the
+     * gate the test names, not an accident of gates 1/2 also being
+     * unsatisfied. outlet_id is null on this raw factory row (no outlet
+     * relationship default), which is fine: gates 4/5 are never reached
+     * because gate 3 blocks first.
+     */
+    #[Test]
+    public function a_live_connection_without_an_accepted_restaurant_declaration_cannot_be_activated(): void
     {
         $admin = $this->adminWith(['activate_pos_connections']);
         $connection = PosConnection::factory()->create(['environment' => PosConnection::ENVIRONMENT_PRODUCTION]);
         $connection->forceFill(['webhook_secret_hash' => hash('sha256', 'x')])->save();
+        $this->acceptTermsFor($connection->workspace_id);
+        $this->acceptDpaFor($connection->workspace_id);
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection));
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('restaurant declaration', session('error'));
+        $this->assertSame(PosConnection::STATUS_PENDING, $connection->fresh()->status,
+            'A live connection must never be flipped to connected while its workspace has not accepted the current restaurant declaration.');
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'restaurant.pos_connection.live_activation_blocked',
+            'auditable_id' => $connection->id,
+        ]);
+    }
+
+    /**
+     * The positive control alongside the refusal above (per CLAUDE.md's
+     * "every is-blocked test needs a positive control" convention): the
+     * SAME route, SAME connection shape, succeeds once every one of the six
+     * gates — terms, DPA, restaurant declaration, a connected WABA, outlet
+     * authorization, and a configured token — is genuinely satisfied. This
+     * is what proves the gate-hardening pass actually enforces the complete
+     * invariant, not merely one gate among several that happen to exist.
+     */
+    #[Test]
+    public function a_live_connection_activates_once_every_gate_is_satisfied(): void
+    {
+        $admin = $this->adminWith(['activate_pos_connections']);
+        $outlet = $this->outlet();
+        $connection = app(PosConnectionProvisioningService::class)
+            ->createLiveConnection($outlet, 'REST-LIVE-HTTP-1', null, null);
+        app(PosConnectionProvisioningService::class)->generateToken($connection);
+        $this->satisfyAllLiveActivationGatesExcept($outlet);
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
+
+        $response->assertRedirect();
+        $response->assertSessionHasNoErrors();
+        $this->assertSame(PosConnection::STATUS_CONNECTED, $connection->fresh()->status);
+    }
+
+    /**
+     * Each remaining gate isolated at the HTTP level — the operator-facing
+     * error message must name the blocked reason, and activation must stay
+     * refused, whichever single gate is left unsatisfied.
+     */
+    #[Test]
+    public function a_live_connection_without_accepted_terms_cannot_be_activated(): void
+    {
+        $admin = $this->adminWith(['activate_pos_connections']);
+        $outlet = $this->outlet();
+        $connection = app(PosConnectionProvisioningService::class)
+            ->createLiveConnection($outlet, 'REST-LIVE-HTTP-TERMS', null, null);
+        app(PosConnectionProvisioningService::class)->generateToken($connection);
+        $this->satisfyAllLiveActivationGatesExcept($outlet, except: ['terms']);
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
+
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('Terms', session('error'));
+        $this->assertSame(PosConnection::STATUS_PENDING, $connection->fresh()->status);
+    }
+
+    #[Test]
+    public function a_live_connection_without_accepted_dpa_cannot_be_activated(): void
+    {
+        $admin = $this->adminWith(['activate_pos_connections']);
+        $outlet = $this->outlet();
+        $connection = app(PosConnectionProvisioningService::class)
+            ->createLiveConnection($outlet, 'REST-LIVE-HTTP-DPA', null, null);
+        app(PosConnectionProvisioningService::class)->generateToken($connection);
+        $this->satisfyAllLiveActivationGatesExcept($outlet, except: ['dpa']);
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
+
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('Data Processing Agreement', session('error'));
+        $this->assertSame(PosConnection::STATUS_PENDING, $connection->fresh()->status);
+    }
+
+    #[Test]
+    public function a_live_connection_with_no_connected_waba_cannot_be_activated(): void
+    {
+        $admin = $this->adminWith(['activate_pos_connections']);
+        $outlet = $this->outlet();
+        $connection = app(PosConnectionProvisioningService::class)
+            ->createLiveConnection($outlet, 'REST-LIVE-HTTP-WABA', null, null);
+        app(PosConnectionProvisioningService::class)->generateToken($connection);
+        $this->satisfyAllLiveActivationGatesExcept($outlet, except: ['connected_waba']);
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
+
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('WhatsApp Business Account', session('error'));
+        $this->assertSame(PosConnection::STATUS_PENDING, $connection->fresh()->status);
+    }
+
+    #[Test]
+    public function a_live_connection_on_an_unauthorized_outlet_cannot_be_activated(): void
+    {
+        $admin = $this->adminWith(['activate_pos_connections']);
+        $outlet = $this->outlet();
+        $connection = app(PosConnectionProvisioningService::class)
+            ->createLiveConnection($outlet, 'REST-LIVE-HTTP-OUTLET', null, null);
+        app(PosConnectionProvisioningService::class)->generateToken($connection);
+        $this->satisfyAllLiveActivationGatesExcept($outlet, except: ['outlet_authorization']);
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
+
+        $response->assertSessionHas('error');
+        $this->assertStringContainsString('outlet has not been authorized', session('error'));
+        $this->assertSame(PosConnection::STATUS_PENDING, $connection->fresh()->status);
+    }
+
+    /**
+     * Authorizing an outlet is a real admin action reachable through its own
+     * route, not a database-only workaround — this proves the route itself
+     * is what unblocks Gate 5, end to end via HTTP.
+     */
+    #[Test]
+    public function authorizing_an_outlet_for_live_pos_through_its_admin_route_unblocks_gate_5(): void
+    {
+        $admin = $this->adminWith(['authorize_pos_outlets', 'activate_pos_connections']);
+        $outlet = $this->outlet();
+        $connection = app(PosConnectionProvisioningService::class)
+            ->createLiveConnection($outlet, 'REST-LIVE-HTTP-AUTHZ', null, null);
+        app(PosConnectionProvisioningService::class)->generateToken($connection);
+        $this->satisfyAllLiveActivationGatesExcept($outlet, except: ['outlet_authorization']);
+        $this->assertFalse($outlet->fresh()->isAuthorizedForLivePos());
 
         $this->actingAs($admin, 'admin')
-            ->post(route('admin.restaurant.connections.activate', $connection))
+            ->post(route('admin.restaurant.outlets.authorize-live-pos', $outlet))
             ->assertRedirect();
 
-        $this->assertSame(PosConnection::STATUS_PENDING, $connection->fresh()->status,
-            'A production connection must never be flipped to connected through this phase\'s UI.');
+        $this->assertTrue($outlet->fresh()->isAuthorizedForLivePos());
+
+        $response = $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()));
+
+        $response->assertSessionHasNoErrors();
+        $this->assertSame(PosConnection::STATUS_CONNECTED, $connection->fresh()->status);
+    }
+
+    /** A permission-gated route: manage_pos_connections alone must not be enough for this consequential act. */
+    #[Test]
+    public function authorizing_an_outlet_for_live_pos_requires_its_own_permission(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $outlet = $this->outlet();
+
+        $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.outlets.authorize-live-pos', $outlet))
+            ->assertRedirect(route('admin.dashboard'));
+
+        $this->assertFalse($outlet->fresh()->isAuthorizedForLivePos());
+    }
+
+    // ══ Phase 2A Slice 1 — live connection creation via HTTP ═════════════
+
+    #[Test]
+    public function creating_a_live_connection_requires_an_explicit_environment_choice(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $outlet = $this->outlet();
+
+        $response = $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'mode' => 'existing',
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'external_ref' => 'REST-NOENV-1',
+            // 'environment' intentionally omitted.
+        ]);
+
+        $response->assertSessionHasErrors('environment');
+        $this->assertSame(0, PosConnection::query()->where('external_ref', 'REST-NOENV-1')->count());
+    }
+
+    #[Test]
+    public function creating_a_connection_with_environment_production_creates_a_pending_live_connection(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $outlet = $this->outlet();
+
+        $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'production',
+            'mode' => 'existing',
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'external_ref' => 'REST-LIVE-HTTP-2',
+            'default_phone_country' => 'IN',
+        ])->assertSessionHasNoErrors();
+
+        $connection = PosConnection::query()->where('external_ref', 'REST-LIVE-HTTP-2')->firstOrFail();
+        $this->assertSame(PosConnection::ENVIRONMENT_PRODUCTION, $connection->environment);
+        $this->assertSame(PosConnection::STATUS_PENDING, $connection->status,
+            'A live connection must not become connected merely because it was created.');
+        $this->assertNull($connection->webhook_secret_hash);
+        $this->assertSame('IN', $connection->default_phone_country);
+    }
+
+    // ══ Phase 2A Slice 1 — default phone country ═════════════════════════
+
+    #[Test]
+    public function default_phone_country_is_nullable_and_not_selected_when_omitted(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $outlet = $this->outlet();
+
+        $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
+            'mode' => 'existing',
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'external_ref' => 'REST-NOCOUNTRY-1',
+            // 'default_phone_country' intentionally omitted.
+        ])->assertSessionHasNoErrors();
+
+        $connection = PosConnection::query()->where('external_ref', 'REST-NOCOUNTRY-1')->firstOrFail();
+        $this->assertNull($connection->default_phone_country,
+            'Omitting the field must leave it unset — never a guessed default, not even India.');
+    }
+
+    #[Test]
+    public function an_explicit_valid_default_phone_country_persists(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $outlet = $this->outlet();
+
+        $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
+            'mode' => 'existing',
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'external_ref' => 'REST-COUNTRY-1',
+            'default_phone_country' => 'GB',
+        ])->assertSessionHasNoErrors();
+
+        $connection = PosConnection::query()->where('external_ref', 'REST-COUNTRY-1')->firstOrFail();
+        $this->assertSame('GB', $connection->default_phone_country);
+    }
+
+    #[Test]
+    public function an_invalid_default_phone_country_is_rejected(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $outlet = $this->outlet();
+
+        $response = $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
+            'mode' => 'existing',
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'external_ref' => 'REST-COUNTRY-BAD',
+            'default_phone_country' => 'ZZ', // not a real ISO 3166-1 alpha-2 code
+        ]);
+
+        $response->assertSessionHasErrors('default_phone_country');
+        $this->assertSame(0, PosConnection::query()->where('external_ref', 'REST-COUNTRY-BAD')->count());
+    }
+
+    #[Test]
+    public function updating_the_default_phone_country_on_the_detail_page_persists_and_is_audited(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $connection = $this->service()->createSandboxConnection($this->outlet(), 'REST-COUNTRY-UPDATE-1', null);
+
+        $this->actingAs($admin, 'admin')->put(
+            route('admin.restaurant.connections.default-phone-country', $connection),
+            ['default_phone_country' => 'US'],
+        )->assertSessionHasNoErrors();
+
+        $this->assertSame('US', $connection->fresh()->default_phone_country);
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'restaurant.pos_connection.default_phone_country_changed',
+            'auditable_id' => $connection->id,
+        ]);
+    }
+
+    #[Test]
+    public function updating_the_default_phone_country_can_clear_it_back_to_unset(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        $connection = $this->service()->createSandboxConnection($this->outlet(), 'REST-COUNTRY-UPDATE-2', null);
+        app(PosConnectionProvisioningService::class)->updateDefaultPhoneCountry($connection, 'IN');
+
+        $this->actingAs($admin, 'admin')->put(
+            route('admin.restaurant.connections.default-phone-country', $connection),
+            ['default_phone_country' => ''],
+        )->assertSessionHasNoErrors();
+
+        $this->assertNull($connection->fresh()->default_phone_country);
+    }
+
+    #[Test]
+    public function an_admin_without_manage_permission_cannot_update_the_default_phone_country(): void
+    {
+        $admin = $this->adminWith(['view_pos_connections']);
+        $connection = $this->service()->createSandboxConnection($this->outlet(), 'REST-COUNTRY-UPDATE-3', null);
+
+        $this->actingAs($admin, 'admin')->putJson(
+            route('admin.restaurant.connections.default-phone-country', $connection),
+            ['default_phone_country' => 'IN'],
+        )->assertForbidden();
+
+        $this->assertNull($connection->fresh()->default_phone_country);
+    }
+
+    // ══ Phase 2A Slice 1 — no outbound side effects ══════════════════════
+
+    /**
+     * The scope exclusion made explicit: creating and activating a LIVE
+     * connection through this slice must not dispatch a queue job, a
+     * WhatsApp/SMS/email send, or anything else — this slice is
+     * provisioning and activation only.
+     */
+    #[Test]
+    public function creating_and_activating_a_live_connection_dispatches_no_queue_jobs(): void
+    {
+        Queue::fake();
+        Bus::fake();
+
+        $admin = $this->adminWith(['manage_pos_connections', 'rotate_pos_webhook_secret', 'activate_pos_connections']);
+        $outlet = $this->outlet();
+
+        $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'production',
+            'mode' => 'existing',
+            'workspace_id' => $outlet->workspace_id,
+            'outlet_id' => $outlet->id,
+            'external_ref' => 'REST-NOJOBS-1',
+        ])->assertSessionHasNoErrors();
+
+        $connection = PosConnection::query()->where('external_ref', 'REST-NOJOBS-1')->firstOrFail();
+        $this->actingAs($admin, 'admin')->postJson(route('admin.restaurant.connections.token', $connection));
+        $this->satisfyAllLiveActivationGatesExcept($outlet);
+
+        $this->actingAs($admin, 'admin')
+            ->post(route('admin.restaurant.connections.activate', $connection->fresh()))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(PosConnection::STATUS_CONNECTED, $connection->fresh()->status);
+        Queue::assertNothingPushed();
+        Bus::assertNothingDispatched();
     }
 
     // ══ No payload/secret leakage on the detail page ═══════════════════
@@ -456,6 +952,7 @@ class PosConnectionAdminTest extends TestCase
         $outlet = $this->outlet();
 
         $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $outlet->workspace_id,
             'outlet_id' => $outlet->id,
@@ -474,6 +971,7 @@ class PosConnectionAdminTest extends TestCase
         $outlet = $this->outlet();
 
         $response = $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $outlet->workspace_id,
             'outlet_id' => $outlet->id,
@@ -526,6 +1024,7 @@ class PosConnectionAdminTest extends TestCase
         $outlet = $this->outlet();
 
         $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
             'mode' => 'existing',
             'workspace_id' => $outlet->workspace_id,
             'outlet_id' => $outlet->id,

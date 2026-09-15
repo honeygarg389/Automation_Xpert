@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Restaurant;
 
+use App\Models\AdminUser;
 use App\Modules\Restaurant\Exceptions\OutletHasActiveConnectionException;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\PosConnectionProvisioningService;
@@ -136,5 +137,59 @@ class RestaurantOutletServiceTest extends TestCase
         $archived = $this->service()->archiveOutlet($outlet);
 
         $this->assertSame(RestaurantOutlet::STATUS_ARCHIVED, $archived->status);
+    }
+
+    // ══ Gate 5 of the six-gate Petpooja live activation invariant ═══════
+
+    #[Test]
+    public function an_outlet_is_not_authorized_for_live_pos_by_default(): void
+    {
+        ['workspace' => $workspace] = $this->createWorkspaceContext();
+        $outlet = $this->service()->createOutlet($workspace, 'Unauthorized Outlet', null, null);
+
+        $this->assertFalse($outlet->isAuthorizedForLivePos());
+        $this->assertNull($outlet->pos_live_authorized_at);
+        $this->assertNull($outlet->pos_live_authorized_by_admin_id);
+    }
+
+    #[Test]
+    public function authorizing_an_outlet_for_live_pos_persists_and_audits_the_actor(): void
+    {
+        ['workspace' => $workspace] = $this->createWorkspaceContext();
+        $outlet = $this->service()->createOutlet($workspace, 'Verified Outlet', null, null);
+        $admin = AdminUser::factory()->create();
+
+        $authorized = $this->service()->authorizeForLivePos($outlet, $admin);
+
+        $this->assertTrue($authorized->isAuthorizedForLivePos());
+        $this->assertNotNull($authorized->pos_live_authorized_at);
+        $this->assertSame($admin->id, $authorized->pos_live_authorized_by_admin_id);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'action' => 'restaurant.outlet.pos_live_authorized',
+            'auditable_id' => $outlet->id,
+            'actor_admin_id' => $admin->id,
+        ]);
+    }
+
+    /**
+     * Authorization is a fact about the physical outlet, not the connection
+     * lifecycle — it must survive an archive/restore cycle exactly like a
+     * connection's token does, rather than needing to be re-granted.
+     */
+    #[Test]
+    public function authorization_survives_an_outlet_archive_and_restore_cycle(): void
+    {
+        ['workspace' => $workspace] = $this->createWorkspaceContext();
+        $outlet = $this->service()->createOutlet($workspace, 'Persisted Authorization Outlet', null, null);
+        $this->service()->authorizeForLivePos($outlet);
+
+        $this->service()->archiveOutlet($outlet->fresh());
+        $this->assertTrue($outlet->fresh()->isAuthorizedForLivePos(),
+            'Archiving an outlet must not clear its live POS authorization.');
+
+        $restored = $this->service()->restoreOutlet($outlet->fresh());
+        $this->assertTrue($restored->isAuthorizedForLivePos(),
+            'Restoring an outlet must not clear its live POS authorization.');
     }
 }

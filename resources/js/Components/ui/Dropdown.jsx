@@ -1,4 +1,4 @@
-import { Fragment, createContext, useContext, useState } from 'react';
+import { Fragment, createContext, useContext, useEffect, useState } from 'react';
 import { Transition } from '@headlessui/react';
 import { Link } from '@inertiajs/react';
 
@@ -6,6 +6,21 @@ const DropdownContext = createContext();
 
 export default function Dropdown({ children }) {
     const [open, setOpen] = useState(false);
+
+    // Escape-to-close: every caller of this shared component gets it for
+    // free, rather than each row-actions menu having to reimplement its own
+    // keydown handling. Only listens while actually open.
+    useEffect(() => {
+        if (!open) return undefined;
+
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') setOpen(false);
+        };
+
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, [open]);
+
     return (
         <DropdownContext.Provider value={{ open, setOpen }}>
             <div className="relative">{children}</div>
