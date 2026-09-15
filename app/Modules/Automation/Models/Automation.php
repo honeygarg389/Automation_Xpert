@@ -3,8 +3,16 @@
 namespace App\Modules\Automation\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 
+/**
+ * @property int $id
+ * @property int $workspace_id
+ * @property string $name
+ * @property string $status
+ * @property array<int, array<string, mixed>> $nodes
+ */
 class Automation extends Model
 {
     protected $table = 'automations';
@@ -35,7 +43,8 @@ class Automation extends Model
         ];
     }
 
-    public function runs()
+    /** @return HasMany<AutomationRun, $this> */
+    public function runs(): HasMany
     {
         return $this->hasMany(AutomationRun::class, 'automation_id');
     }

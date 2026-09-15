@@ -3,7 +3,20 @@
 namespace App\Modules\Automation\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
+/**
+ * @property int $id
+ * @property int $automation_id
+ * @property int|null $contact_id
+ * @property string $status
+ * @property array<string, mixed>|null $context
+ * @property Automation|null $automation
+ * @property Carbon|null $started_at
+ * @property Carbon|null $completed_at
+ */
 class AutomationRun extends Model
 {
     protected $table = 'automation_runs';
@@ -19,12 +32,14 @@ class AutomationRun extends Model
         ];
     }
 
-    public function automation()
+    /** @return BelongsTo<Automation, $this> */
+    public function automation(): BelongsTo
     {
         return $this->belongsTo(Automation::class);
     }
 
-    public function logs()
+    /** @return HasMany<AutomationRunLog, $this> */
+    public function logs(): HasMany
     {
         return $this->hasMany(AutomationRunLog::class, 'run_id');
     }

@@ -53,6 +53,12 @@ class AutomationTriggerListener
         $this->fire($event->eventType, $event->workspaceId, $event->contactId, $event->context);
     }
 
+    /** A Flow submission is contact-scoped; contactless submissions stay recorded but cannot start a contact automation. */
+    public function fireFormSubmitted(int $workspaceId, int $contactId, array $context): void
+    {
+        $this->fire('form.submitted', $workspaceId, $contactId, $context);
+    }
+
     public function handleAutomationWebhookReceived(AutomationWebhookReceived $event): void
     {
         $automation = Automation::where('id', $event->automationId)

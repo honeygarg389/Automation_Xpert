@@ -33,17 +33,25 @@ use Illuminate\Support\Str;
  * stored on every field as an explicit portable marker for the future HTML
  * renderer and import/export tools. `heading` is presentational and therefore
  * has no submitted `name`; every other type requires a unique form name.
+ *
+ * @property int $id
+ * @property int $workspace_id
+ * @property string $name
  */
 class WhatsappFlow extends Model
 {
     use BelongsToWorkspace, SoftDeletes;
 
     public const STATUS_DRAFT = 'draft';
+
     public const STATUS_PUBLISHED = 'published';
 
     public const META_SYNC_STATUS_SYNCING = 'syncing';
+
     public const META_SYNC_STATUS_SYNCED_DRAFT = 'synced_draft';
+
     public const META_SYNC_STATUS_PUBLISHED = 'published';
+
     public const META_SYNC_STATUS_FAILED = 'failed';
 
     public const STATUSES = [

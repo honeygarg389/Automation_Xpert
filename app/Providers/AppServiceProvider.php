@@ -6,6 +6,8 @@ use App\Events\AutomationFailed;
 use App\Events\AutomationWebhookReceived;
 use App\Events\CampaignCompleted;
 use App\Events\CommerceEventReceived;
+use App\Modules\Flows\Events\WhatsappFlowSubmitted;
+use App\Modules\Flows\Listeners\WhatsappFlowSubmissionListener;
 use App\Events\ContactCreated;
 use App\Events\ConversationAssigned;
 use App\Events\MessageReceived;
@@ -95,6 +97,7 @@ class AppServiceProvider extends ServiceProvider
         Event::listen(ContactCreated::class, [AutomationTriggerListener::class, 'handleContactCreated']);
         Event::listen(AutomationWebhookReceived::class, [AutomationTriggerListener::class, 'handleAutomationWebhookReceived']);
         Event::listen(CommerceEventReceived::class, [AutomationTriggerListener::class, 'handleCommerceEvent']);
+        Event::listen(WhatsappFlowSubmitted::class, WhatsappFlowSubmissionListener::class);
         // ⚠️ Previously registered ONLY via Laravel's event auto-discovery — a
         // public handleCampaignCompleted(CampaignCompleted $event) method in
         // app/Listeners is enough for discovery to wire it on its own, with no
