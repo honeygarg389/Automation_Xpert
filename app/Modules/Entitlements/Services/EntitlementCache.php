@@ -3,6 +3,7 @@
 namespace App\Modules\Entitlements\Services;
 
 use App\Models\Client;
+use App\Models\Plan;
 use App\Models\Workspace;
 use App\Modules\Entitlements\Support\Entitlement;
 use Illuminate\Support\Carbon;
@@ -25,13 +26,14 @@ use Illuminate\Support\Facades\DB;
  *
  * ─── Read-through, not write-through ────────────────────────────────────────
  *
- * Write-through would put a cache write on every plan, subscription and grant
- * path — 24+ writers across four sources, each of which has to remember. A
- * forgotten writer produces a silently stale row, which is the same
- * one-idea-in-many-places disease that produced BUG-027 and BUG-028.
+ * Known plan and assignment writes synchronously DROP affected rows. That is
+ * deliberately cheaper and safer than trying to duplicate the resolver here:
+ * the next read takes the normal read-through path and computes the answer from
+ * the source of truth. The queued reconciliation jobs then warm those rows;
+ * they are a latency optimisation, never the moment correctness begins.
  *
- * The event listeners are a write-through HINT: they refresh eagerly so the
- * common case is warm, but correctness never depends on them firing.
+ * Other event listeners remain a best-effort warm-up hint, and the scheduled
+ * source-hash sweep is the repair net for a writer that was missed entirely.
  */
 class EntitlementCache
 {
@@ -115,6 +117,25 @@ class EntitlementCache
         DB::table('workspace_entitlements')->where('workspace_id', $workspaceId)->delete();
     }
 
+    /**
+     * Forget every materialized answer owned by one client.
+     *
+     * Entitlements are client-level inputs rendered per workspace. A plan
+     * reassignment or plan edit can therefore make every workspace under that
+     * client stale at once; leaving even one row behind would make a workspace
+     * switch resurrect the old answer until the fallback TTL elapsed.
+     */
+    public function forgetClient(?int $clientId): void
+    {
+        if ($clientId === null) {
+            return;
+        }
+
+        DB::table('workspace_entitlements')
+            ->whereIn('workspace_id', Workspace::query()->where('client_id', $clientId)->select('id'))
+            ->delete();
+    }
+
     /** Every workspace of a client — the unit an entitlement change actually affects. */
     public function refreshClient(?int $clientId): void
     {
@@ -154,6 +175,12 @@ class EntitlementCache
             'user_subs' => DB::table('subscriptions')
                 ->whereIn('user_id', DB::table('users')->where('client_id', $client->id)->select('id'))
                 ->orderBy('id')->get(['id', 'plan_id', 'status'])->toJson(),
+            // Plan id alone cannot detect a shared plan row being edited. These
+            // are the complete mutable plan inputs consumed by
+            // PlanPackageSynthesizer: normaliseLimits() reads limits, and
+            // legacyFlags() reads limits, white_label_enabled and
+            // whatsapp_flows_enabled.
+            'plan' => $this->planEntitlementInputs($this->planForEntitlementSource($client)),
             'grants' => DB::table('entitlement_grants')
                 ->where('client_id', $client->id)
                 ->orWhere('partner_id', $client->partner_id)
@@ -161,5 +188,52 @@ class EntitlementCache
         ];
 
         return hash('sha256', json_encode($parts));
+    }
+
+    private function planForEntitlementSource(Client $client): ?Plan
+    {
+        return config('entitlements.enforce_effective_plan_source', false)
+            ? $client->effectivePlan()
+            : $client->activePlan();
+    }
+
+    /**
+     * @return array{id: int, limits: mixed, white_label_enabled: bool, whatsapp_flows_enabled: bool}|null
+     */
+    private function planEntitlementInputs(?Plan $plan): ?array
+    {
+        if ($plan === null) {
+            return null;
+        }
+
+        return [
+            'id' => (int) $plan->id,
+            'limits' => $this->canonicalize($plan->limits ?? []),
+            'white_label_enabled' => (bool) $plan->white_label_enabled,
+            'whatsapp_flows_enabled' => (bool) $plan->whatsapp_flows_enabled,
+        ];
+    }
+
+    /**
+     * A JSON object has no meaningful key order. Sort it before hashing so a
+     * re-serialized but semantically identical limits payload does not create
+     * false drift; list order remains meaningful and is preserved.
+     */
+    private function canonicalize(mixed $value): mixed
+    {
+        if (! is_array($value)) {
+            return $value;
+        }
+
+        $canonical = [];
+        foreach ($value as $key => $item) {
+            $canonical[$key] = $this->canonicalize($item);
+        }
+
+        if (! array_is_list($value)) {
+            ksort($canonical);
+        }
+
+        return $canonical;
     }
 }
