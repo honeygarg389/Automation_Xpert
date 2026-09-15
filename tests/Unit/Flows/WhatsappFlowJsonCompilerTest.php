@@ -137,4 +137,122 @@ class WhatsappFlowJsonCompilerTest extends TestCase
             'id' => 'invalid', 'title' => 'Invalid', 'fields' => [$this->field('bad', 'map', 'Bad')],
         ]]));
     }
+
+    #[Test]
+    public function compiler_owned_multi_step_json_round_trips_through_decompile(): void
+    {
+        $screens = [
+            ['id' => 'identity', 'title' => 'Identity', 'fields' => [
+                $this->field('heading_1_1', 'heading', 'About you', '', ['required' => false, 'helper_text' => null]),
+                $this->field('first_name', 'text', 'First name', 'first_name', ['order' => 2]),
+            ]],
+            ['id' => 'preferences', 'title' => 'Preferences', 'fields' => [
+                $this->field('channels', 'checkbox', 'Channels', 'channels', [
+                    'step' => 2,
+                    'options' => [['id' => 'email', 'title' => 'Email'], ['id' => 'whatsapp', 'title' => 'WhatsApp']],
+                ]),
+            ]],
+        ];
+        $submit = ['button_text' => 'Finish', 'success_message' => 'All set.'];
+        $compiler = app(WhatsappFlowJsonCompiler::class);
+
+        $decompiled = $compiler->decompile($compiler->compile($this->flow($screens, $submit)));
+
+        $this->assertSame($screens, $decompiled['screens']);
+        $this->assertSame($submit, $decompiled['submit_settings']);
+    }
+
+    #[Test]
+    public function a_hand_written_meta_flow_json_fixture_decompiles_into_the_shared_screens_contract(): void
+    {
+        // This fixture is deliberately not produced by compile(). It represents
+        // the component/layout shape returned from a Meta FLOW_JSON asset.
+        $metaFlowJson = [
+            'version' => '6.3',
+            'screens' => [
+                [
+                    'id' => 'PERSONAL_DETAILS',
+                    'title' => 'Tell us about yourself',
+                    'terminal' => false,
+                    'layout' => [
+                        'type' => 'SingleColumnLayout',
+                        'children' => [[
+                            'type' => 'Form',
+                            'name' => 'personal_details_form',
+                            'children' => [
+                                ['type' => 'TextHeading', 'text' => 'Personal details'],
+                                [
+                                    'type' => 'TextInput',
+                                    'name' => 'first_name',
+                                    'label' => 'First name',
+                                    'input-type' => 'text',
+                                    'required' => true,
+                                    'helper-text' => 'As shown on your ID',
+                                ],
+                                [
+                                    'type' => 'Dropdown',
+                                    'name' => 'preferred_channel',
+                                    'label' => 'Preferred channel',
+                                    'required' => false,
+                                    'data-source' => [
+                                        ['id' => 'email', 'title' => 'Email'],
+                                        ['id' => 'whatsapp', 'title' => 'WhatsApp'],
+                                    ],
+                                ],
+                                [
+                                    'type' => 'Footer',
+                                    'label' => 'Send response',
+                                    'on-click-action' => [
+                                        'name' => 'navigate',
+                                        'next' => ['type' => 'screen', 'name' => 'SUCCESS'],
+                                        'payload' => [
+                                            'first_name' => '${form.first_name}',
+                                            'preferred_channel' => '${form.preferred_channel}',
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ]],
+                    ],
+                ],
+                [
+                    'id' => 'SUCCESS',
+                    'title' => 'Success',
+                    'terminal' => true,
+                    'success' => true,
+                    'layout' => [
+                        'type' => 'SingleColumnLayout',
+                        'children' => [[
+                            'type' => 'Form',
+                            'name' => 'success_form',
+                            'children' => [
+                                ['type' => 'TextHeading', 'text' => 'Thanks — we will be in touch.'],
+                                [
+                                    'type' => 'Footer',
+                                    'label' => 'Done',
+                                    'on-click-action' => ['name' => 'complete', 'payload' => []],
+                                ],
+                            ],
+                        ]],
+                    ],
+                ],
+            ],
+        ];
+
+        $decompiled = app(WhatsappFlowJsonCompiler::class)->decompile($metaFlowJson);
+
+        $this->assertSame([
+            ['id' => 'screen_1', 'title' => 'Tell us about yourself', 'fields' => [
+                ['id' => 'heading_1_1', 'type' => 'heading', 'label' => 'Personal details', 'name' => '', 'required' => false, 'helper_text' => null, 'options' => [], 'step' => 1, 'order' => 1],
+                ['id' => 'first_name', 'type' => 'text', 'label' => 'First name', 'name' => 'first_name', 'required' => true, 'helper_text' => 'As shown on your ID', 'options' => [], 'step' => 1, 'order' => 2],
+                ['id' => 'preferred_channel', 'type' => 'select', 'label' => 'Preferred channel', 'name' => 'preferred_channel', 'required' => false, 'helper_text' => null, 'options' => [
+                    ['id' => 'email', 'title' => 'Email'], ['id' => 'whatsapp', 'title' => 'WhatsApp'],
+                ], 'step' => 1, 'order' => 3],
+            ]],
+        ], $decompiled['screens']);
+        $this->assertSame([
+            'button_text' => 'Send response',
+            'success_message' => 'Thanks — we will be in touch.',
+        ], $decompiled['submit_settings']);
+    }
 }
