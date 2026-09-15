@@ -8,6 +8,8 @@ use App\Models\ClientSubscription;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
+use App\Modules\Entitlements\Jobs\ReconcileWorkspaceEntitlements;
+use App\Modules\Entitlements\Services\EntitlementCache;
 use App\Services\AuditLogService;
 use App\Services\Billing\BillingGatewayRegistry;
 use Illuminate\Http\JsonResponse;
@@ -25,6 +27,7 @@ class ClientController extends Controller
     public function __construct(
         private AuditLogService $auditLog,
         private BillingGatewayRegistry $gateways,
+        private EntitlementCache $entitlementCache,
     ) {}
 
     public function index(Request $request): Response
@@ -376,6 +379,13 @@ class ClientController extends Controller
                 ? response()->json(['message' => $message], 422)
                 : redirect()->back()->with('error', $message);
         }
+
+        // The transaction above has committed. Forget synchronously so the
+        // immediate redirect (or another workspace under this client) cannot
+        // read the old plan until a database queue worker happens to run. The
+        // job remains responsible for eagerly rebuilding every workspace row.
+        $this->entitlementCache->forgetClient((int) $client->id);
+        ReconcileWorkspaceEntitlements::dispatch((int) $client->id);
 
         // Re-read through the typed model class for the same reason as above.
         $sub = ClientSubscription::query()

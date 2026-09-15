@@ -74,6 +74,14 @@ Schedule::command('billing:expire-trials')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Rebuild rows whose source hash drifted after a missed writer. Synchronous
+// invalidation handles known plan and assignment writes; this is the repair net.
+Schedule::command('entitlements:reconcile')
+    ->everyFifteenMinutes()
+    ->name('reconcile-workspace-entitlements')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Notify users whose trial ends in 3 days (daily at 09:00)
 Schedule::command('notifications:trial-ending --days=3')
     ->dailyAt('09:00')

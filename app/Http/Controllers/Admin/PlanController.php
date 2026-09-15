@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Client;
 use App\Models\ClientSubscription;
 use App\Models\Currency;
 use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
 use App\Modules\Entitlements\Jobs\ReconcileWorkspaceEntitlements;
+use App\Modules\Entitlements\Services\EntitlementCache;
 use App\Modules\Entitlements\Support\PlanLimitKinds;
 use App\Services\Billing\BillingGatewayRegistry;
 use App\Services\Billing\StripeGateway;
@@ -22,6 +24,8 @@ use Inertia\Response;
 
 class PlanController extends Controller
 {
+    public function __construct(private readonly EntitlementCache $entitlementCache) {}
+
     /**
      * ⚠️ THE KEY SET IS DERIVED, NOT RETYPED. BUG-027.
      *
@@ -264,22 +268,45 @@ class PlanController extends Controller
     }
 
     /**
-     * A plan edit changes the entitlement source for every client on that plan.
-     * Refresh those materialized workspace answers now; their source hash tracks
-     * subscriptions, not the mutable contents of a shared plan row.
+     * A plan edit changes the source for every client currently resolving this
+     * plan. Delete their materialized rows in this request, so the next read
+     * recomputes even when no queue worker is running; then enqueue the existing
+     * reconciliation job to warm every workspace for each affected client.
      */
     private function refreshEntitlementsForPlan(Plan $plan): void
     {
         $assignedClientIds = ClientSubscription::query()
             ->where('plan_id', $plan->id)
+            ->where('status', ClientSubscription::STATUS_ACTIVE)
             ->pluck('client_id');
 
-        $selfServeClientIds = User::query()
-            ->whereIn('id', Subscription::query()->where('plan_id', $plan->id)->select('user_id'))
-            ->pluck('client_id');
+        $candidateClientIds = $assignedClientIds;
 
-        $assignedClientIds->merge($selfServeClientIds)->filter()->unique()
-            ->each(fn ($clientId) => ReconcileWorkspaceEntitlements::dispatch((int) $clientId));
+        if (config('entitlements.enforce_effective_plan_source', false)) {
+            $selfServeClientIds = User::query()
+                ->whereIn('id', Subscription::query()
+                    ->where('plan_id', $plan->id)
+                    ->whereIn('status', ['active', 'trialing'])
+                    ->select('user_id'))
+                ->pluck('client_id');
+
+            $candidateClientIds = $candidateClientIds->merge($selfServeClientIds);
+        }
+
+        Client::query()->whereKey($candidateClientIds->filter()->unique())->get()
+            ->filter(fn (Client $client) => $this->planForEntitlementSource($client)?->is($plan))
+            ->each(function (Client $client): void {
+                $this->entitlementCache->forgetClient((int) $client->id);
+                ReconcileWorkspaceEntitlements::dispatch((int) $client->id);
+            });
+    }
+
+    /** Match EntitlementResolver's plan selection exactly. */
+    private function planForEntitlementSource(Client $client): ?Plan
+    {
+        return config('entitlements.enforce_effective_plan_source', false)
+            ? $client->effectivePlan()
+            : $client->activePlan();
     }
 
     /**
