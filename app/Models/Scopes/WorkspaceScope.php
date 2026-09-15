@@ -6,7 +6,6 @@ use App\Support\WorkspaceContext;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Scope;
-use Illuminate\Support\Facades\Auth;
 
 /**
  * Phase 0. Constrains every query on a workspace-owned model to the workspace
@@ -46,8 +45,8 @@ use Illuminate\Support\Facades\Auth;
  *
  * ─── The admin exception is a DOOR, not an oversight ────────────────────────
  *
- * The admin panel legitimately reads across tenants — that is its purpose. So
- * an authenticated `admin` guard session bypasses the filter entirely.
+ * The admin panel legitimately reads across tenants — that is its purpose. So a
+ * request genuinely served by the admin panel bypasses the filter entirely.
  *
  * This is a deliberate, ruled decision, and it is load-bearing: it is what keeps
  * `Admin\DashboardController`'s platform-wide counts correct (hazard H-1). It is
@@ -55,8 +54,36 @@ use Illuminate\Support\Facades\Auth;
  * `the_admin_guard_is_a_deliberate_door_out_of_the_scope` — named so that anyone
  * auditing this later sees a decision rather than a gap.
  *
- * It is safe only because the admin guard is a separate authentication system
- * with its own DB-backed RBAC. A customer cannot reach it.
+ * ⚠️ THE DOOR MUST BE ROUTE-AWARE, NOT GUARD-STATE-AWARE — CONFIRMED CROSS-TENANT
+ * LEAK, 2026-09-15. This used to be `Auth::guard('admin')->check()`. That is
+ * FALSE SAFETY: `Admin\ClientController::impersonate()` logs the `web` guard in
+ * as the target client's user but deliberately never logs the `admin` guard
+ * out — `ImpersonationController::stop()` only logs out `web` too — so BOTH
+ * guards stay authenticated for the entire impersonation session, by design
+ * (that is what makes "Return to Admin" work afterwards). A guard-state check
+ * cannot tell "a genuine admin-panel request" apart from "an admin impersonating
+ * a client and browsing that client's own workspace-scoped pages" — both have
+ * `Auth::guard('admin')->check() === true`.
+ *
+ * Measured directly: impersonate SpaGreen Wellness (workspace 2), then load the
+ * client-facing Flows index (`WhatsappFlow::query()->get()`, reached via the
+ * `web`-guarded `client-app` middleware, not `/admin/*`). `WorkspaceContext::id()`
+ * correctly resolved to 2 — the context resolution was never the bug — but the
+ * guard-state check fired anyway and returned every workspace's rows: 2 flows
+ * belonging to Demo Client (workspace 1) leaked alongside SpaGreen's own 1 flow.
+ * The same defect applies to any client-facing page, for all 27 models carrying
+ * this trait, for the whole duration of any impersonation session.
+ *
+ * The fix checks whether the CURRENT ROUTE actually sits behind the admin
+ * panel's `auth:admin` middleware — the real authorization boundary — rather
+ * than trusting a guard flag that impersonation intentionally leaves set. This
+ * mirrors `HandleInertiaRequests::share()`'s existing `$isAdminRoute` computation
+ * (route-name based there), which already got this right; do not revert to a
+ * bare guard check no matter how convenient it looks — that is exactly this bug.
+ *
+ * It is safe because `auth:admin` is a separate authentication system with its
+ * own DB-backed RBAC, and because the check is against the resolved ROUTE
+ * (impossible for a client request to spoof), not a session flag.
  */
 class WorkspaceScope implements Scope
 {
@@ -86,8 +113,10 @@ class WorkspaceScope implements Scope
         }
 
         // The admin panel reads across tenants by design. See the class docblock:
-        // this is a ruled exception with a named test, not an omission.
-        if (Auth::guard('admin')->check()) {
+        // this is a ruled exception with a named test, not an omission — and see
+        // the "MUST BE ROUTE-AWARE" section there for why this checks the route's
+        // middleware rather than `Auth::guard('admin')->check()`.
+        if (self::requestIsBehindAdminPanel()) {
             return;
         }
 
@@ -101,5 +130,34 @@ class WorkspaceScope implements Scope
         }
 
         $builder->where($model->getTable().'.workspace_id', $workspaceId);
+    }
+
+    /**
+     * True only when the CURRENT ROUTE is genuinely gated by the admin panel's
+     * `auth:admin` middleware — the real authorization boundary — not merely
+     * when the `admin` guard happens to be authenticated in the background.
+     *
+     * Deliberately NOT a route-name-prefix check (`routeIs('admin.*')`): two
+     * routes are named `admin.*` but sit outside `auth:admin` — `admin.login`
+     * (`web, redirect.if.admin`) and `admin.impersonation.stop` (`web, auth` —
+     * deliberately callable by the impersonated user on the `web` guard alone,
+     * see its own route comment in bootstrap/app.php). `admin.logout` is named
+     * `admin.*` too and happens to also carry `auth:admin`, so a prefix check
+     * would not have been wrong for it specifically — but relying on that
+     * holding by coincidence is the same shape of mistake this bug already
+     * was. Matching by middleware sidesteps having to keep a list like this in
+     * sync with routing changes; matching by name would silently reopen this
+     * exact bug the day someone adds a new `admin.*`-named route that isn't
+     * behind `auth:admin`.
+     *
+     * No route match (console command, queued job, artisan tinker) yields
+     * false here, exactly as a plain guard check would have — this changes
+     * nothing for non-HTTP contexts.
+     */
+    private static function requestIsBehindAdminPanel(): bool
+    {
+        $route = request()->route();
+
+        return $route !== null && in_array('auth:admin', $route->gatherMiddleware(), true);
     }
 }
