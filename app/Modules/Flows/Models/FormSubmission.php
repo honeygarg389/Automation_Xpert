@@ -14,11 +14,15 @@ use Illuminate\Support\Str;
  * A workspace-owned response ledger shared by WhatsApp Flows and future web forms.
  *
  * @property int $id
+ * @property string $uuid
  * @property int $workspace_id
  * @property int|null $whatsapp_flow_id
  * @property int|null $contact_id
  * @property int|null $automation_run_id
+ * @property string $source
  * @property array<string, mixed> $answers
+ * @property string|null $flow_token
+ * @property-read Contact|null $contact
  * @property Carbon|null $created_at
  */
 class FormSubmission extends Model

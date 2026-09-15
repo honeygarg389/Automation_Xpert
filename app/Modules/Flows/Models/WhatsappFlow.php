@@ -6,7 +6,9 @@ use App\Models\Concerns\BelongsToWorkspace;
 use App\Models\Workspace;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
 /**
@@ -35,8 +37,21 @@ use Illuminate\Support\Str;
  * has no submitted `name`; every other type requires a unique form name.
  *
  * @property int $id
+ * @property string $uuid
  * @property int $workspace_id
  * @property string $name
+ * @property string|null $description
+ * @property string|null $category
+ * @property string $status
+ * @property list<array{id:string,title:string,fields:list<array<string,mixed>>}> $screens
+ * @property array{button_text?:string,success_message?:string} $submit_settings
+ * @property string|null $meta_flow_id
+ * @property string|null $meta_sync_status
+ * @property list<array<string,mixed>>|null $meta_validation_errors
+ * @property string|null $meta_sync_error
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read int|null $submissions_count
  */
 class WhatsappFlow extends Model
 {
@@ -112,5 +127,11 @@ class WhatsappFlow extends Model
     public function workspace(): BelongsTo
     {
         return $this->belongsTo(Workspace::class);
+    }
+
+    /** @return HasMany<FormSubmission, $this> */
+    public function submissions(): HasMany
+    {
+        return $this->hasMany(FormSubmission::class);
     }
 }

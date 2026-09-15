@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 class CloudApiClient
 {
     private const API_VERSION = 'v20.0';
+
     private const BASE = 'https://graph.facebook.com/'.self::API_VERSION;
 
     public function __construct(
@@ -322,6 +323,23 @@ class CloudApiClient
             ->get(self::BASE."/{$flowId}", [
                 'fields' => 'id,name,categories,preview,status,validation_errors,json_version,data_api_version,data_channel_uri,health_status,whatsapp_business_account,application',
             ]);
+    }
+
+    /**
+     * List a Flow's assets. Meta returns a short-lived download_url for the
+     * FLOW_JSON asset; the asset body is fetched separately from that URL.
+     */
+    public function listFlowAssets(string $flowId): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->get(self::BASE."/{$flowId}/assets");
+    }
+
+    /** Download Meta's short-lived Flow JSON asset URL. */
+    public function downloadFlowAsset(string $downloadUrl): Response
+    {
+        return Http::timeout(30)->get($downloadUrl);
     }
 
     /**

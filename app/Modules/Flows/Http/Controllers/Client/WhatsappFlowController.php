@@ -3,6 +3,7 @@
 namespace App\Modules\Flows\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Flows\Models\FormSubmission;
 use App\Modules\Flows\Models\WhatsappFlow;
 use App\Modules\Flows\Services\WhatsappFlowJsonCompiler;
 use App\Modules\Flows\Services\WhatsappFlowMetaSyncService;
@@ -20,6 +21,7 @@ class WhatsappFlowController extends Controller
     {
         return Inertia::render('client/Flows/Index', [
             'flows' => WhatsappFlow::query()
+                ->withCount('submissions')
                 ->orderByDesc('updated_at')
                 ->get()
                 ->map(fn (WhatsappFlow $flow) => $this->summary($flow))
@@ -76,6 +78,45 @@ class WhatsappFlowController extends Controller
     public function preview(WhatsappFlow $flow, WhatsappFlowJsonCompiler $compiler): JsonResponse
     {
         return response()->json($compiler->compile($flow));
+    }
+
+    public function pullMeta(WhatsappFlowMetaSyncService $sync): RedirectResponse
+    {
+        $summary = $sync->pullAllFromMeta(WhatsappFlow::query()
+            ->whereNotNull('meta_flow_id')
+            ->get());
+
+        return back()->with(
+            'success',
+            sprintf('Meta Flow pull complete: %d updated, %d unchanged, %d failed.', $summary['updated'], $summary['unchanged'], $summary['failed'])
+        );
+    }
+
+    public function submissions(Request $request, WhatsappFlow $flow): Response
+    {
+        $search = trim((string) $request->string('search'));
+        $query = FormSubmission::query()
+            ->where('whatsapp_flow_id', $flow->id)
+            ->with('contact')
+            ->latest();
+
+        if ($search !== '') {
+            $query->whereHas('contact', fn ($contacts) => $contacts
+                ->where('first_name', 'like', "%{$search}%")
+                ->orWhere('last_name', 'like', "%{$search}%")
+                ->orWhere('phone_e164', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%"));
+        }
+
+        $submissions = $query->paginate(25)->through(
+            fn (FormSubmission $submission): array => $this->submissionSummary($submission)
+        );
+
+        return Inertia::render('client/Flows/Submissions', [
+            'flow' => $this->summary($flow),
+            'submissions' => $submissions,
+            'filters' => ['search' => $search],
+        ]);
     }
 
     public function sync(WhatsappFlow $flow, WhatsappFlowMetaSyncService $sync): RedirectResponse
@@ -146,7 +187,8 @@ class WhatsappFlowController extends Controller
             'meta_sync_status' => $flow->meta_sync_status,
             'meta_validation_errors' => $flow->meta_validation_errors,
             'meta_sync_error' => $flow->meta_sync_error,
-            'field_count' => collect($flow->screens ?? [])->sum(fn (array $screen) => count($screen['fields'] ?? [])),
+            'field_count' => collect($flow->screens)->sum(fn (array $screen) => count($screen['fields'])),
+            'submissions_count' => $flow->submissions_count ?? $flow->submissions()->count(),
             'updated_at' => $flow->updated_at?->toISOString(),
         ];
     }
@@ -162,5 +204,28 @@ class WhatsappFlowController extends Controller
                 'required' => true, 'helper_text' => null, 'options' => [], 'step' => 1, 'order' => 1,
             ]],
         ]];
+    }
+
+    /**
+     * @return array{uuid:string,submitted_at:string|null,contact:array{name:string,phone:string|null,email:string|null}|null,answers:array<string,mixed>,answer_preview:string}
+     */
+    private function submissionSummary(FormSubmission $submission): array
+    {
+        $contact = $submission->contact;
+
+        return [
+            'uuid' => $submission->uuid,
+            'submitted_at' => $submission->created_at?->toISOString(),
+            'contact' => $contact ? [
+                'name' => $contact->full_name,
+                'phone' => $contact->phone_e164,
+                'email' => $contact->email,
+            ] : null,
+            'answers' => $submission->answers,
+            'answer_preview' => collect($submission->answers)
+                ->take(3)
+                ->map(fn (mixed $value, string $key): string => $key.': '.(is_array($value) ? implode(', ', $value) : (string) $value))
+                ->implode(' · '),
+        ];
     }
 }
