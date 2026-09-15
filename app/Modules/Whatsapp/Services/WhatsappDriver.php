@@ -12,6 +12,7 @@ use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
+use App\Modules\Flows\Events\WhatsappFlowSubmitted;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use App\Services\WebhookIdempotencyService;
@@ -303,6 +304,8 @@ class WhatsappDriver implements ChannelDriverInterface
 
         $type = $msg['type'] ?? 'text';
         $interactive = is_array($msg['interactive'] ?? null) ? $msg['interactive'] : [];
+        $nfmReply = is_array($interactive['nfm_reply'] ?? null) ? $interactive['nfm_reply'] : [];
+        $isFlowReply = ($nfmReply['name'] ?? null) === 'flow';
         $textBlock = is_array($msg['text'] ?? null) ? $msg['text'] : [];
 
         // Extract a human-readable body for every message type
@@ -335,6 +338,7 @@ class WhatsappDriver implements ChannelDriverInterface
                 'document' => '📄 '.($msg['document']['filename'] ?? 'Document'),
                 'sticker' => '😊 Sticker',
                 'reaction' => $msg['reaction']['emoji'] ?? '👍',
+                'interactive' => $isFlowReply ? 'Flow completed' : '',
                 default => '',
             };
         }
@@ -368,6 +372,22 @@ class WhatsappDriver implements ChannelDriverInterface
 
         // Fire typed event for automations / AI
         MessageReceived::dispatch($message);
+
+        // Poll replies also arrive as nfm_reply, but only Flow replies carry
+        // this name and become a submission. Keep every other nfm_reply path
+        // exactly as it was.
+        if ($isFlowReply) {
+            $flowToken = $nfmReply['flow_token'] ?? null;
+            $responseJson = $nfmReply['response_json'] ?? null;
+            try {
+                $answers = is_string($responseJson) ? json_decode($responseJson, true, 512, JSON_THROW_ON_ERROR) : null;
+            } catch (\JsonException) {
+                $answers = null;
+            }
+            if (is_string($flowToken) && $flowToken !== '' && is_array($answers)) {
+                WhatsappFlowSubmitted::dispatch($workspaceId, $contact->id, $flowToken, $answers);
+            }
+        }
 
         return $message;
     }

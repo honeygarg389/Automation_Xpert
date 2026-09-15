@@ -1296,7 +1296,13 @@ class AutomationEngine
             'action' => ['name' => 'flow', 'parameters' => $params],
         ];
 
-        return $this->sendWhatsappPayload($run, 'interactive', $body, ['interactive' => $interactive]);
+        $result = $this->sendWhatsappPayload($run, 'interactive', $body, ['interactive' => $interactive]);
+
+        // The default flow_{runId} token correlates directly. Persist custom
+        // tokens too, since they cannot be safely reverse-engineered later.
+        $result['context_update'] = ['_whatsapp_flow_token' => $params['flow_token']];
+
+        return $result;
     }
 
     // ─── COMMERCE nodes ───────────────────────────────────────────────────────

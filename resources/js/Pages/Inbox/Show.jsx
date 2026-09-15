@@ -497,7 +497,7 @@ function PollBubble({ nfmReply, isOut }) {
     // poll vote response
     if (name === 'vote' || name === 'poll_creation') {
         let responseJson = {};
-        try { responseJson = JSON.parse(nfmReply?.response_json ?? '{}'); } catch (_) {}
+        try { responseJson = JSON.parse(nfmReply?.response_json ?? '{}'); } catch (_) { /* malformed provider payload */ }
         const pollName = responseJson.poll_name ?? responseJson.title ?? '';
         const selectedOptions = responseJson.selected_options ?? [];
         const options = responseJson.options ?? [];
@@ -525,6 +525,23 @@ function PollBubble({ nfmReply, isOut }) {
     return <WaText text={`[interactive: ${name}]`} />;
 }
 
+function FlowResponseBubble({ nfmReply, isOut }) {
+    let answers = {};
+    try { answers = JSON.parse(nfmReply?.response_json ?? '{}'); } catch (_) { /* malformed provider payload */ }
+    const entries = Object.entries(answers ?? {});
+
+    return (
+        <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm ${isOut ? 'bg-primary-600 text-white' : 'bg-neutral-100 text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'}`}>
+            <p className="mb-2 font-medium">WhatsApp Flow completed</p>
+            {entries.length > 0 ? (
+                <dl className="space-y-1">
+                    {entries.map(([key, value]) => <div key={key} className="flex gap-2"><dt className="font-medium opacity-75">{key}:</dt><dd className="break-words">{Array.isArray(value) ? value.join(', ') : String(value ?? '')}</dd></div>)}
+                </dl>
+            ) : <p className="opacity-75">No answers provided.</p>}
+        </div>
+    );
+}
+
 function InteractiveBubble({ payload, isOut }) {
     const interactive = payload?.interactive ?? {};
     const body = interactive.body?.text ?? '';
@@ -534,6 +551,7 @@ function InteractiveBubble({ payload, isOut }) {
     const nfmReply    = interactive.nfm_reply;
     if (buttonReply) return <WaText text={`✓ ${buttonReply.title}`} />;
     if (listReply)   return <WaText text={`☑ ${listReply.title}`} />;
+    if (nfmReply?.name === 'flow') return <FlowResponseBubble nfmReply={nfmReply} isOut={isOut} />;
     if (nfmReply)    return <PollBubble nfmReply={nfmReply} isOut={isOut} />;
     return (
         <div>

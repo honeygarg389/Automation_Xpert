@@ -3,7 +3,14 @@
 namespace App\Modules\Automation\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property int $id
+ * @property int $run_id
+ * @property string $node_id
+ * @property string $node_type
+ */
 class AutomationRunLog extends Model
 {
     protected $table = 'automation_run_logs';
@@ -15,7 +22,8 @@ class AutomationRunLog extends Model
         return ['output' => 'array'];
     }
 
-    public function run()
+    /** @return BelongsTo<AutomationRun, $this> */
+    public function run(): BelongsTo
     {
         return $this->belongsTo(AutomationRun::class, 'run_id');
     }
