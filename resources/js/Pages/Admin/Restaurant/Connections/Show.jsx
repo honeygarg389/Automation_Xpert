@@ -25,6 +25,7 @@ function TokenPanel({ connection, canRotate }) {
     const [error, setError] = useState(null);
 
     const isRotation = connection.token_configured;
+    const isLive = connection.environment === 'production';
 
     const requestToken = async () => {
         setBusy(true);
@@ -88,8 +89,8 @@ function TokenPanel({ connection, canRotate }) {
                 <Modal.Header title="Rotate webhook token?" onClose={() => setConfirmingRotate(false)} />
                 <Modal.Body>
                     <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                        The current token will stop working immediately. Any Petpooja sandbox configuration using the
-                        old token will need to be updated with the new one.
+                        The current token will stop working immediately. Any {isLive ? 'live Petpooja' : 'AutomationXpert test/sandbox'}{' '}
+                        configuration using the old token will need to be updated with the new one.
                     </p>
                 </Modal.Body>
                 <Modal.Footer>
@@ -121,7 +122,7 @@ function TokenPanel({ connection, canRotate }) {
     );
 }
 
-export default function Show({ connection, recentEvents, recentRejections, webhookUrl, workspaces, outlets }) {
+export default function Show({ connection, recentEvents, recentRejections, webhookUrl, workspaces, outlets, phoneCountries }) {
     const page = usePage();
     const permissions = page.props.auth?.permissions ?? [];
     const flash = page.props.flash || {};
@@ -147,9 +148,25 @@ export default function Show({ connection, recentEvents, recentRejections, webho
         }, { preserveScroll: true });
     };
 
-    const activationEligible = connection.environment === 'sandbox'
-        && connection.token_configured
-        && connection.status !== 'connected';
+    // '' (unselected) is a real, distinct draft state from any country code —
+    // never initialized to a guessed value, even when the connection already
+    // has no country set (that case IS '', correctly).
+    const [phoneCountryDraft, setPhoneCountryDraft] = useState(connection.default_phone_country ?? '');
+    const savePhoneCountry = (e) => {
+        e.preventDefault();
+        router.put(route('admin.restaurant.connections.default-phone-country', connection.uuid), {
+            default_phone_country: phoneCountryDraft || null,
+        }, { preserveScroll: true });
+    };
+
+    // Eligible on the CLIENT for either environment — the compliance gate
+    // (a live connection's workspace must have accepted the current
+    // Petpooja restaurant declaration) is enforced server-side in
+    // activateLive() and surfaces as a flash.error on failure, the same
+    // pattern every other server-side guard in this file already uses.
+    // This intentionally does NOT try to predict that gate's outcome here.
+    const isLive = connection.environment === 'production';
+    const activationEligible = connection.token_configured && connection.status !== 'connected';
 
     const activate = () => {
         router.post(route('admin.restaurant.connections.activate', connection.uuid), {}, { preserveScroll: true });
@@ -220,8 +237,16 @@ export default function Show({ connection, recentEvents, recentRejections, webho
                         <Row label="Outlet address" value={connection.outlet?.address} />
                         <Row label="Outlet timezone" value={connection.outlet?.timezone} />
                         <Row label="Provider" value="Petpooja" />
-                        <Row label="Environment" value={connection.environment} />
+                        <Row label="Environment" value={isLive ? 'Live Petpooja' : 'AutomationXpert test/sandbox'} />
                         <Row label="restID" value={connection.external_ref} mono />
+                        <Row
+                            label="Default phone country"
+                            value={
+                                connection.default_phone_country
+                                    ? (phoneCountries.find((c) => c.code === connection.default_phone_country)?.name ?? connection.default_phone_country)
+                                    : 'Not set — no country assumed'
+                            }
+                        />
                         <Row label="Last webhook received" value={connection.last_event_at ?? 'Never'} />
                         <Row label="Last test status" value={connection.last_test_status ?? 'untested'} />
                         {connection.last_test_message && <Row label="Last test message" value={connection.last_test_message} />}
@@ -247,17 +272,14 @@ export default function Show({ connection, recentEvents, recentRejections, webho
                 <TokenPanel connection={connection} canRotate={canRotateToken} />
 
                 <Card>
-                    <Card.Header title="Sandbox activation" />
+                    <Card.Header title={isLive ? 'Live activation' : 'Test/sandbox activation'} />
                     <Card.Body className="space-y-3">
                         <p className="text-sm text-neutral-500 dark:text-neutral-400">
-                            Sandbox ingress only. This phase does not process bills or send WhatsApp messages.
+                            {isLive
+                                ? 'This phase accepts and durably records Petpooja webhook deliveries only — it does not yet process bills, resolve customers, or send WhatsApp messages.'
+                                : 'AutomationXpert test/sandbox ingress only. This phase does not process bills or send WhatsApp messages.'}
                         </p>
-                        {connection.environment !== 'sandbox' ? (
-                            <p className="text-sm text-amber-700 dark:text-amber-300">
-                                Production activation will be available after required compliance and
-                                sender-connection gates are completed.
-                            </p>
-                        ) : connection.status === 'archived' ? (
+                        {connection.status === 'archived' ? (
                             <div className="space-y-2">
                                 <div className="flex items-center gap-3">
                                     <Badge variant="default">Archived — ingress blocked until restored</Badge>
@@ -302,14 +324,31 @@ export default function Show({ connection, recentEvents, recentRejections, webho
                         ) : (
                             canActivate && (
                                 <Button variant="primary" disabled={!activationEligible} onClick={activate}>
-                                    <Radio className="mr-1.5 h-4 w-4" /> Activate Sandbox Ingress
+                                    <Radio className="mr-1.5 h-4 w-4" /> {isLive ? 'Activate Live Ingress' : 'Activate Test Ingress'}
                                 </Button>
                             )
                         )}
-                        {!connection.token_configured && connection.environment === 'sandbox' && connection.status !== 'connected' && connection.status !== 'archived' && (
+                        {!connection.token_configured && connection.status !== 'connected' && connection.status !== 'archived' && (
                             <p className="text-xs text-neutral-500 dark:text-neutral-400">
                                 Generate a webhook token before activating.
                             </p>
+                        )}
+                        {isLive && connection.status !== 'connected' && connection.status !== 'archived' && (
+                            <div className="text-xs text-amber-700 dark:text-amber-300">
+                                <p>Live activation requires ALL six of the following:</p>
+                                <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                                    <li>current Terms acceptance for this workspace</li>
+                                    <li>current Data Processing Agreement (DPA) acceptance for this workspace</li>
+                                    <li>current Petpooja restaurant declaration acceptance for this workspace</li>
+                                    <li>an active WhatsApp Business Account connected to this workspace</li>
+                                    <li>this outlet authorized for live Petpooja (Outlets directory)</li>
+                                    <li>a webhook token configured on this connection</li>
+                                </ul>
+                                <p className="mt-1">
+                                    If any is missing, activation is refused and the specific reason appears at the
+                                    top of this page.
+                                </p>
+                            </div>
                         )}
                     </Card.Body>
 
@@ -317,8 +356,8 @@ export default function Show({ connection, recentEvents, recentRejections, webho
                         <Modal.Header title="Pause this connection?" onClose={() => setConfirmingPause(false)} />
                         <Modal.Body>
                             <p className="text-sm text-neutral-600 dark:text-neutral-400">
-                                Ingress will start rejecting Petpooja deliveries immediately. Records and webhook
-                                history are kept, and it can be resumed at any time.
+                                Ingress will start rejecting {isLive ? 'Petpooja' : 'AutomationXpert test'} deliveries
+                                immediately. Records and webhook history are kept, and it can be resumed at any time.
                             </p>
                         </Modal.Body>
                         <Modal.Footer>
@@ -332,7 +371,7 @@ export default function Show({ connection, recentEvents, recentRejections, webho
                         <Modal.Body className="space-y-3">
                             <ul className="list-disc space-y-1.5 pl-5 text-sm text-neutral-600 dark:text-neutral-400">
                                 <li>The connection becomes <strong>Paused</strong>, not Connected.</li>
-                                <li>Webhook ingress remains blocked — Petpooja deliveries are still rejected.</li>
+                                <li>Webhook ingress remains blocked — {isLive ? 'Petpooja' : 'AutomationXpert test'} deliveries are still rejected.</li>
                                 <li>Its original restID, token and webhook/audit history are all preserved unchanged.</li>
                                 <li>You must separately click <strong>Resume Ingress</strong> afterward to start accepting deliveries again.</li>
                             </ul>
@@ -443,6 +482,28 @@ export default function Show({ connection, recentEvents, recentRejections, webho
                                 disabled={!canManage}
                             />
                             {canManage && <Button type="submit" variant="secondary">Save allowlist</Button>}
+                        </form>
+                    </Card.Body>
+                </Card>
+
+                <Card>
+                    <Card.Header title="Default phone country" />
+                    <Card.Body>
+                        <form onSubmit={savePhoneCountry} className="space-y-3">
+                            <Select
+                                label="Default phone country (optional)"
+                                value={phoneCountryDraft}
+                                onChange={(e) => setPhoneCountryDraft(e.target.value)}
+                                options={phoneCountries.map((c) => ({ value: c.code, label: c.label }))}
+                                placeholder="No country selected"
+                                disabled={!canManage}
+                            />
+                            <ul className="list-disc space-y-0.5 pl-5 text-xs text-neutral-500 dark:text-neutral-400">
+                                <li>Petpooja sends customer phone numbers as local digits, with no country code.</li>
+                                <li>Selecting a country here lets a future ingestion step normalize those local numbers correctly.</li>
+                                <li>Left empty, this phase will not guess or coerce a phone number to any country — including India.</li>
+                            </ul>
+                            {canManage && <Button type="submit" variant="secondary">Save default phone country</Button>}
                         </form>
                     </Card.Body>
                 </Card>

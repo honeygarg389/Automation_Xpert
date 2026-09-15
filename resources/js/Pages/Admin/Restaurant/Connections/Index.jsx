@@ -129,7 +129,7 @@ export default function Index({ connections, filters }) {
                                     <td className="py-2 pr-4">{c.outlet_name ?? '—'}</td>
                                     <td className="py-2 pr-4 capitalize">{c.provider}</td>
                                     <td className="py-2 pr-4 font-mono text-xs">{c.external_ref}</td>
-                                    <td className="py-2 pr-4 capitalize">{c.environment}</td>
+                                    <td className="py-2 pr-4">{c.environment === 'production' ? 'Live' : 'Test/sandbox'}</td>
                                     <td className="py-2 pr-4">
                                         <Badge variant={STATUS_VARIANTS[c.status] ?? 'default'} size="sm">{c.status}</Badge>
                                     </td>

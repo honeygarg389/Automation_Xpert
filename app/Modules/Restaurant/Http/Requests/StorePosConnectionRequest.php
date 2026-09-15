@@ -5,11 +5,14 @@ namespace App\Modules\Restaurant\Http\Requests;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Support\IpAllowlistNormalizer;
+use App\Support\PhoneNumber;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 /**
- * Phase 1C — creating a sandbox Petpooja connection.
+ * Phase 1C creation flow, extended in Phase 2A Slice 1 with an explicit
+ * `environment` choice (Live Petpooja vs. AutomationXpert test/sandbox) and
+ * an optional `default_phone_country`.
  *
  * Authorization is the route's `permission:manage_pos_connections`
  * middleware, not this class — one gate, in the place the route table shows
@@ -57,6 +60,18 @@ class StorePosConnectionRequest extends FormRequest
         return [
             'mode' => ['required', Rule::in(['existing', 'new'])],
             'workspace_id' => ['required', 'integer', 'exists:workspaces,id'],
+
+            // Phase 2A Slice 1: the explicit environment choice. No default
+            // value — an admin must actively pick one; there is nothing here
+            // for a client to omit and silently fall back to either side.
+            'environment' => ['required', Rule::in(PosConnection::ENVIRONMENTS)],
+
+            // Nullable and NOT defaulted to 'IN' or anything else — an
+            // unselected country must reach the controller as null, exactly
+            // as the admin left it. Validated against the SAME source
+            // PhoneCountrySelect/the CSV import flow already use; no second
+            // country dataset is introduced here.
+            'default_phone_country' => ['nullable', 'string', Rule::in(array_keys(PhoneNumber::COUNTRIES))],
 
             // required_if:mode,existing — NOT required_without:new_outlet_name.
             // The old required_without version is exactly what let a stale

@@ -32,6 +32,7 @@ use Illuminate\Support\Str;
  * @property string $status
  * @property int|null $active_slot
  * @property string $environment
+ * @property string|null $default_phone_country
  * @property array<string, mixed>|null $meta_json
  * @property Carbon|null $last_tested_at
  * @property string $last_test_status
@@ -111,11 +112,14 @@ class PosConnection extends Model
     public const ENVIRONMENT_PRODUCTION = 'production';
 
     /**
-     * Phase 1C only ever writes ENVIRONMENT_SANDBOX. ENVIRONMENT_PRODUCTION
-     * exists as a named constant so the column's contract is documented and
-     * so nothing has to invent a magic string when the later compliance/
-     * activation-gate phase adds the production path — but no code in this
-     * phase creates, activates, or offers a production connection.
+     * ⚠️ Phase 2A Slice 1: ENVIRONMENT_PRODUCTION is now a real, creatable,
+     * activatable path — "Live Petpooja" in the admin UI. Petpooja itself
+     * has confirmed it provides no sandbox; ENVIRONMENT_SANDBOX names
+     * AutomationXpert's OWN test/sandbox connections only, never anything
+     * Petpooja-provided. See PosConnectionProvisioningService::
+     * createLiveConnection()/activateLive() for the live path, and
+     * createSandboxConnection()/activateSandbox() — unchanged, still
+     * sandbox-only — for the test path.
      */
     public const ENVIRONMENTS = [
         self::ENVIRONMENT_SANDBOX,
@@ -131,6 +135,7 @@ class PosConnection extends Model
         'allowed_ips',
         'status',
         'environment',
+        'default_phone_country',
         'meta_json',
         'last_tested_at',
         'last_test_status',

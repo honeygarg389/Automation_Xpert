@@ -7,7 +7,8 @@ const CONNECTION_STATE_LABELS = { pending: 'Pending', connected: 'Active', pause
 const CONNECTION_STATE_VARIANTS = { pending: 'warning', connected: 'success', paused: 'danger' };
 
 /**
- * Phase 1C — Create Sandbox Petpooja Connection.
+ * Phase 1C — Create Petpooja Connection. Extended in Phase 2A Slice 1 with
+ * an explicit environment choice and an optional default phone country.
  *
  * ⚠️ THE ROOT-CAUSE FIX: `mode` is an explicit, server-validated field, not
  * something inferred from which fields happen to be non-empty. Switching
@@ -20,11 +21,16 @@ const CONNECTION_STATE_VARIANTS = { pending: 'warning', connected: 'success', pa
  * `data:` override to `post()` (not a real Inertia option) and so submitted
  * the raw, stale form state regardless of the radio shown on screen.
  *
- * Provider is fixed to 'petpooja' and environment to 'sandbox' — neither is
- * a form field at all, so there is nothing here for a client to tamper with
- * to request anything else. The server enforces the same thing independently
- * (StorePosConnectionRequest never accepts either field; the controller
- * always calls createSandboxConnection()).
+ * ⚠️ `environment` is now the SAME shape of explicit, server-validated
+ * field as `mode` — never inferred, never defaulted. Provider is still
+ * fixed to 'petpooja' and is not a form field at all.
+ *
+ * ⚠️ `default_phone_country` starts as `''` (unselected) and is submitted as
+ * `null`, never a guessed value — see the transform() in submit(). Petpooja's
+ * own sample payloads show local, non-E.164 phone numbers; this platform
+ * must never silently assume India or any other country. See
+ * PhoneNumber::options() (server) for the shared country data source — the
+ * same one the CSV/XLSX contact import screens already use.
  *
  * `preselect` (Section H): arrives from the Outlets directory's "Connect
  * Petpooja now" CTA after "Add Outlet Only". It is trusted only as far as
@@ -34,7 +40,7 @@ const CONNECTION_STATE_VARIANTS = { pending: 'warning', connected: 'success', pa
  * longer qualifies, this silently falls back to the ordinary empty form
  * instead of preselecting a now-wrong outlet.
  */
-export default function Create({ workspaces, outlets, preselect }) {
+export default function Create({ workspaces, outlets, preselect, phoneCountries }) {
     const preselectedOutlet = useMemo(() => {
         if (!preselect?.outlet_id) return null;
         return outlets.find((o) => (
@@ -54,6 +60,12 @@ export default function Create({ workspaces, outlets, preselect }) {
         new_outlet_timezone: '',
         external_ref: '',
         allowed_ips: '',
+        // No default — the admin must actively choose. See the class docblock.
+        environment: '',
+        // '' means "unselected", not any particular country — including
+        // India, which is only ever pinned FIRST in the options list, never
+        // pre-chosen. Submitted as null, never as ''.
+        default_phone_country: '',
     });
 
     const outletsForWorkspace = useMemo(
@@ -103,6 +115,10 @@ export default function Create({ workspaces, outlets, preselect }) {
         transform((formData) => ({
             ...formData,
             allowed_ips: allowedIps.length ? allowedIps : null,
+            // '' -> null: an unselected country must reach the server as
+            // "not set", never as an empty-string value that could later be
+            // mistaken for a real (if blank) choice.
+            default_phone_country: formData.default_phone_country || null,
         }));
 
         post(route('admin.restaurant.connections.store'));
@@ -110,10 +126,10 @@ export default function Create({ workspaces, outlets, preselect }) {
 
     return (
         <AdminLayout>
-            <Head title="New Sandbox Petpooja Connection" />
+            <Head title="New Petpooja Connection" />
 
             <h1 className="mb-6 text-xl font-semibold text-neutral-900 dark:text-neutral-100">
-                New Sandbox Petpooja Connection
+                New Petpooja Connection
             </h1>
 
             {preselectedOutlet && (
@@ -125,6 +141,40 @@ export default function Create({ workspaces, outlets, preselect }) {
 
             <Card className="max-w-2xl">
                 <form onSubmit={submit} className="space-y-5">
+                    <div>
+                        <span className="mb-2 block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+                            Connection environment
+                        </span>
+                        <div className="flex gap-4 text-sm">
+                            <label className="flex items-center gap-1.5">
+                                <input
+                                    type="radio"
+                                    name="environment"
+                                    checked={data.environment === 'production'}
+                                    onChange={() => setData('environment', 'production')}
+                                />
+                                Live Petpooja
+                            </label>
+                            <label className="flex items-center gap-1.5">
+                                <input
+                                    type="radio"
+                                    name="environment"
+                                    checked={data.environment === 'sandbox'}
+                                    onChange={() => setData('environment', 'sandbox')}
+                                />
+                                AutomationXpert test/sandbox
+                            </label>
+                        </div>
+                        {errors.environment && <p className="mt-1 text-xs text-coral-600 dark:text-coral-400">{errors.environment}</p>}
+                        <p className="mt-2 text-xs text-neutral-500 dark:text-neutral-400">
+                            {data.environment === 'production'
+                                ? 'A real, live Petpooja restaurant. Petpooja provides no sandbox of its own — this is the one integration path Petpooja actually offers. Creating it does not connect it; activation is a separate, explicit step below and requires all six live-activation requirements to be satisfied first (see below).'
+                                : data.environment === 'sandbox'
+                                    ? 'An AutomationXpert-only test connection for internal testing (this admin panel, curl, Postman) — Petpooja does not provide a sandbox and never delivers anything to a connection in this mode. Useful for exercising this screen and the webhook ingress without a real outlet.'
+                                    : 'Choose one — there is no default.'}
+                        </p>
+                    </div>
+
                     <Select
                         label="Workspace / restaurant"
                         value={data.workspace_id}
@@ -250,15 +300,48 @@ export default function Create({ workspaces, outlets, preselect }) {
                         error={errors['allowed_ips.0'] || errors.allowed_ips}
                     />
 
+                    <div>
+                        <Select
+                            name="default_phone_country"
+                            label="Default phone country (optional)"
+                            value={data.default_phone_country}
+                            onChange={(e) => setData('default_phone_country', e.target.value)}
+                            options={phoneCountries.map((c) => ({ value: c.code, label: c.label }))}
+                            placeholder="No country selected"
+                            error={errors.default_phone_country}
+                        />
+                        <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-neutral-500 dark:text-neutral-400">
+                            <li>Petpooja sends customer phone numbers as local digits, with no country code.</li>
+                            <li>Selecting a country here lets a future ingestion step normalize those local numbers correctly.</li>
+                            <li>
+                                Left empty, this phase will not guess or coerce a phone number to any country — including
+                                India, even though it is listed first below.
+                            </li>
+                        </ul>
+                    </div>
+
                     <div className="rounded-soft border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
-                        Provider is fixed to <strong>Petpooja</strong>. Environment is fixed to <strong>Sandbox</strong>.
-                        Production activation will be available after required compliance and sender-connection gates
-                        are completed.
+                        Provider is fixed to <strong>Petpooja</strong>.
+                        {data.environment === 'production' && (
+                            <>
+                                {' '}A live connection is created Pending — it does not become Connected until you
+                                separately generate a token and activate it on the connection&apos;s detail page,
+                                which requires ALL of the following:
+                                <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs">
+                                    <li>current Terms acceptance for this workspace</li>
+                                    <li>current Data Processing Agreement (DPA) acceptance for this workspace</li>
+                                    <li>current Petpooja restaurant declaration acceptance for this workspace</li>
+                                    <li>an active WhatsApp Business Account connected to this workspace</li>
+                                    <li>this outlet authorized for live Petpooja (Outlets directory)</li>
+                                    <li>a webhook token configured on this connection</li>
+                                </ul>
+                            </>
+                        )}
                     </div>
 
                     <div className="flex justify-end gap-3">
                         <Button type="submit" variant="primary" disabled={processing}>
-                            Create sandbox connection
+                            {data.environment === 'production' ? 'Create live connection' : 'Create connection'}
                         </Button>
                     </div>
                 </form>

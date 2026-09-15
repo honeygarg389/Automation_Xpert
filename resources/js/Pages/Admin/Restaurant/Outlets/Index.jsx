@@ -1,8 +1,8 @@
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
-import { Badge, Button, Card, Input, Modal, Pagination, Select } from '@/Components/ui';
-import { Pencil, Plug, Plus, RotateCcw, Search } from 'lucide-react';
+import { Badge, Button, Card, Dropdown, Input, Modal, Pagination, Select } from '@/Components/ui';
+import { Archive, BadgeCheck, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, Settings, ShieldCheck } from 'lucide-react';
 
 const OUTLET_STATUS_VARIANTS = { active: 'success', archived: 'default' };
 
@@ -41,6 +41,7 @@ export default function Index({ outlets, workspaces, filters }) {
     const page = usePage();
     const permissions = page.props.auth?.permissions ?? [];
     const canManage = permissions.includes('manage_pos_connections');
+    const canAuthorizeForLivePos = permissions.includes('authorize_pos_outlets');
     const flash = page.props.flash || {};
 
     const [search, setSearch] = useState(filters?.search ?? '');
@@ -68,6 +69,7 @@ export default function Index({ outlets, workspaces, filters }) {
     const [editingOutlet, setEditingOutlet] = useState(null);
     const [archivingOutlet, setArchivingOutlet] = useState(null);
     const [restoringOutlet, setRestoringOutlet] = useState(null);
+    const [authorizingOutlet, setAuthorizingOutlet] = useState(null);
 
     const rows = outlets.data ?? [];
 
@@ -181,7 +183,8 @@ export default function Index({ outlets, workspaces, filters }) {
                                 <th className="py-2 pr-4 font-medium">Timezone</th>
                                 <th className="py-2 pr-4 font-medium">Status</th>
                                 <th className="py-2 pr-4 font-medium">Petpooja connection</th>
-                                <th className="py-2 pr-4 font-medium"></th>
+                                <th className="py-2 pr-4 font-medium">Live POS authorization</th>
+                                <th className="py-2 pr-4 text-right font-medium">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -199,48 +202,25 @@ export default function Index({ outlets, workspaces, filters }) {
                                             {CONNECTION_STATE_LABELS[o.connection_state] ?? o.connection_state}
                                         </Badge>
                                     </td>
+                                    <td className="py-2 pr-4">
+                                        {o.authorized_for_live_pos ? (
+                                            <Badge variant="success" size="sm">
+                                                <BadgeCheck className="mr-1 inline h-3.5 w-3.5" /> Authorized
+                                            </Badge>
+                                        ) : (
+                                            <Badge variant="default" size="sm">Not authorized</Badge>
+                                        )}
+                                    </td>
                                     <td className="py-2 pr-4 text-right">
-                                        <div className="flex justify-end gap-3">
-                                            {o.connection_uuid && (
-                                                <Link
-                                                    href={route('admin.restaurant.connections.show', o.connection_uuid)}
-                                                    className="text-brand-600 hover:underline dark:text-brand-400"
-                                                >
-                                                    {/* This link only NAVIGATES to the connection's detail page —
-                                                        it does not itself restore anything, so it must never be
-                                                        labeled "Restore Connection". The actual Restore action, with
-                                                        its confirmation, lives on that detail page. */}
-                                                    {o.connection_state === 'archived' ? 'Manage Archived Connection' : 'Configure'}
-                                                </Link>
-                                            )}
-                                            {canManage && o.status === 'active' && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setEditingOutlet(o)}
-                                                    className="text-neutral-500 hover:text-neutral-700 dark:text-neutral-400 dark:hover:text-neutral-200"
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </button>
-                                            )}
-                                            {canManage && o.status === 'active' && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setArchivingOutlet(o)}
-                                                    className="text-coral-600 hover:underline dark:text-coral-400"
-                                                >
-                                                    Archive
-                                                </button>
-                                            )}
-                                            {canManage && o.status === 'archived' && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setRestoringOutlet(o)}
-                                                    className="inline-flex items-center gap-1 text-brand-600 hover:underline dark:text-brand-400"
-                                                >
-                                                    <RotateCcw className="h-3.5 w-3.5" /> Restore
-                                                </button>
-                                            )}
-                                        </div>
+                                        <OutletRowActions
+                                            outlet={o}
+                                            canManage={canManage}
+                                            canAuthorizeForLivePos={canAuthorizeForLivePos}
+                                            onEdit={() => setEditingOutlet(o)}
+                                            onAuthorize={() => setAuthorizingOutlet(o)}
+                                            onArchive={() => setArchivingOutlet(o)}
+                                            onRestore={() => setRestoringOutlet(o)}
+                                        />
                                     </td>
                                 </tr>
                             ))}
@@ -261,7 +241,104 @@ export default function Index({ outlets, workspaces, filters }) {
             <EditOutletModal outlet={editingOutlet} onClose={() => setEditingOutlet(null)} />
             <ArchiveOutletModal outlet={archivingOutlet} onClose={() => setArchivingOutlet(null)} />
             <RestoreOutletModal outlet={restoringOutlet} onClose={() => setRestoringOutlet(null)} />
+            <AuthorizeOutletModal outlet={authorizingOutlet} onClose={() => setAuthorizingOutlet(null)} />
         </AdminLayout>
+    );
+}
+
+/**
+ * The compact "Actions" menu a table-row refactor collapsed Configure, Edit
+ * outlet, Authorize and Archive outlet into. Each item keeps EXACTLY the
+ * visibility condition, click handler, confirmation modal and route it had
+ * as a separate inline control — only the presentation changed.
+ *
+ * Restore is deliberately NOT part of this menu: it was out of this
+ * refactor's scope (only Configure/Edit/Authorize/Archive were named), it
+ * only ever appears for an archived outlet — exactly when Edit/Authorize/
+ * Archive never do — and it reads more naturally as the one primary action
+ * on an archived row than buried behind a three-dot menu.
+ *
+ * The trigger itself only renders when at least one menu item actually
+ * would — an admin with no relevant permission, viewing an outlet with no
+ * connection to configure, must never see a three-dot button that opens an
+ * empty menu.
+ */
+function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, onAuthorize, onArchive, onRestore }) {
+    const hasConfigure = !!outlet.connection_uuid;
+    const hasEdit = canManage && outlet.status === 'active';
+    const hasAuthorize = canAuthorizeForLivePos && outlet.status === 'active' && !outlet.authorized_for_live_pos;
+    const hasArchive = canManage && outlet.status === 'active';
+    const hasAnyMenuAction = hasConfigure || hasEdit || hasAuthorize || hasArchive;
+    const canRestore = canManage && outlet.status === 'archived';
+
+    return (
+        <div className="flex items-center justify-end gap-2">
+            {canRestore && (
+                <button
+                    type="button"
+                    onClick={onRestore}
+                    className="inline-flex items-center gap-1 text-brand-600 hover:underline dark:text-brand-400"
+                >
+                    <RotateCcw className="h-3.5 w-3.5" /> Restore
+                </button>
+            )}
+            {hasAnyMenuAction && (
+                <Dropdown>
+                    <Dropdown.Trigger>
+                        <button
+                            type="button"
+                            title="Actions"
+                            aria-label={`Actions for ${outlet.name}`}
+                            className="rounded-soft p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700 dark:hover:bg-neutral-800 dark:hover:text-neutral-300 transition duration-150"
+                        >
+                            <MoreVertical className="h-4 w-4" />
+                        </button>
+                    </Dropdown.Trigger>
+                    <Dropdown.Content align="right" width="56">
+                        {hasConfigure && (
+                            <Dropdown.Item as="link" href={route('admin.restaurant.connections.show', outlet.connection_uuid)}>
+                                <Settings className="mr-2 inline h-4 w-4" />
+                                {/* Only NAVIGATES to the connection's detail page — it does not
+                                    itself restore anything, so it must never be labeled "Restore
+                                    Connection". The actual Restore action, with its confirmation,
+                                    lives on that detail page. */}
+                                {outlet.connection_state === 'archived' ? 'Manage Archived Connection' : 'Configure'}
+                            </Dropdown.Item>
+                        )}
+                        {hasEdit && (
+                            <Dropdown.Item onClick={onEdit}>
+                                <Pencil className="mr-2 inline h-4 w-4" />
+                                Edit outlet
+                            </Dropdown.Item>
+                        )}
+                        {hasAuthorize && (
+                            <Dropdown.Item
+                                onClick={onAuthorize}
+                                title="Authorize outlet for live Petpooja"
+                                aria-label="Authorize outlet for live Petpooja"
+                            >
+                                <ShieldCheck className="mr-2 inline h-4 w-4" />
+                                Authorize
+                            </Dropdown.Item>
+                        )}
+                        {hasArchive && (
+                            <>
+                                {(hasConfigure || hasEdit || hasAuthorize) && <Dropdown.Divider />}
+                                <Dropdown.Item
+                                    onClick={onArchive}
+                                    title="Archive outlet"
+                                    aria-label="Archive outlet"
+                                    className="text-coral-600 hover:bg-coral-50 dark:text-coral-400 dark:hover:bg-coral-950/40"
+                                >
+                                    <Archive className="mr-2 inline h-4 w-4" />
+                                    Archive outlet
+                                </Dropdown.Item>
+                            </>
+                        )}
+                    </Dropdown.Content>
+                </Dropdown>
+            )}
+        </div>
     );
 }
 
@@ -425,6 +502,51 @@ function ArchiveOutletModal({ outlet, onClose }) {
             <Modal.Footer>
                 <Button variant="secondary" onClick={onClose}>Cancel</Button>
                 <Button variant="danger" disabled={processing} onClick={confirmArchive}>Archive outlet</Button>
+            </Modal.Footer>
+        </Modal>
+    );
+}
+
+/**
+ * Gate 5 of the six-gate Petpooja live activation invariant
+ * ("outlet-specific authorization") — the real, auditable admin action that
+ * this concept requires, reachable through this button and its own
+ * permission-gated route rather than a database-only field nobody sets.
+ * There is deliberately no "revoke" counterpart in this slice: archiving
+ * the outlet already blocks everything downstream, and authorization is
+ * meant to persist through an archive/restore cycle exactly like a
+ * connection's token does.
+ */
+function AuthorizeOutletModal({ outlet, onClose }) {
+    const [processing, setProcessing] = useState(false);
+
+    if (!outlet) return null;
+
+    const confirmAuthorize = () => {
+        setProcessing(true);
+        router.post(route('admin.restaurant.outlets.authorize-live-pos', outlet.uuid), {}, {
+            preserveScroll: true,
+            onFinish: () => {
+                setProcessing(false);
+                onClose();
+            },
+        });
+    };
+
+    return (
+        <Modal show={!!outlet} onClose={onClose} maxWidth="sm">
+            <Modal.Header title={`Authorize ${outlet.name} for a live Petpooja connection?`} onClose={onClose} />
+            <Modal.Body>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                    Confirms this physical outlet has been verified and may go live. This is one of six required
+                    checks before a live Petpooja connection on this outlet can be activated — the others (Terms,
+                    DPA and restaurant declaration acceptance, and a connected WhatsApp Business Account) are
+                    tracked at the workspace level, not here.
+                </p>
+            </Modal.Body>
+            <Modal.Footer>
+                <Button variant="secondary" onClick={onClose}>Cancel</Button>
+                <Button variant="primary" disabled={processing} onClick={confirmAuthorize}>Authorize outlet</Button>
             </Modal.Footer>
         </Modal>
     );

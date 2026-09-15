@@ -60,6 +60,18 @@ use Tests\TestCase;
  * confirmed via `Migrator`'s source, and fixed below by computing the
  * correct GLOBAL step count instead of guessing a literal one. See
  * `rollbackRestaurantMigrations()`.
+ *
+ * ⚠️ THIRD CORRECTION (Petpooja Phase 2A gate-hardening pass): the fix above
+ * computed the correct global step count dynamically, but still took an
+ * `int $count` of "how many Restaurant migrations" as input — which meant
+ * every call site had to know, and keep updating, how many Restaurant
+ * migrations currently exist above the one it actually cares about. That
+ * count went stale the moment `add_default_phone_country_to_pos_connections_table`
+ * (Phase 2A Slice 1) landed as the new newest Restaurant migration: both
+ * call sites below needed a manual "+1" for no reason connected to what
+ * they were actually testing. `rollbackRestaurantMigrations()` now takes
+ * the target migration's own name instead of a count — see its docblock
+ * and `calculateGlobalStepsToReach()`.
  */
 class RestaurantMigrationRollbackTest extends TestCase
 {
@@ -68,21 +80,70 @@ class RestaurantMigrationRollbackTest extends TestCase
     private const RESTAURANT_MIGRATIONS_PATH = 'app/Modules/Restaurant/database/migrations';
 
     /**
-     * Roll back exactly $count *Restaurant* migrations, immune to any
-     * number of other modules' migrations sorting nearby in time — see the
-     * class docblock's CORRECTION for why a literal `--step` cannot do this
-     * safely on its own.
+     * SECOND CORRECTION (Petpooja Phase 2A gate-hardening pass): this
+     * helper used to take an `int $count` — "roll back the N most recent
+     * Restaurant migrations". That count had to be manually bumped every
+     * time a new Restaurant migration was added on top of the ones it was
+     * written against, which is the exact same staleness the FIRST
+     * correction above already fixed once for the un-stepped rollback, just
+     * moved one layer up into this helper instead of removed.
      *
-     * Walks the applied-migrations list in the EXACT order Laravel's own
-     * rollback command uses (`ORDER BY batch DESC, migration DESC`,
-     * replicated from `DatabaseMigrationRepository::getMigrations()`),
-     * counting every row — Restaurant or not — until $count Restaurant-path
-     * matches have been seen. That running total IS the GLOBAL `--step`
-     * value that makes `migrate:rollback --path=<restaurant> --step=<n>`
-     * actually undo $count Restaurant migrations, whatever else happens to
-     * be interleaved with them now or in the future.
+     * The helper now takes the TARGET migration's own name and walks the
+     * applied list to find it, computing however many global steps that
+     * turns out to require. Adding any number of newer Restaurant
+     * migrations above a named target changes nothing at any call site.
+     *
+     * Pure arithmetic, deliberately factored out of `rollbackRestaurantMigrations()`
+     * so it can be exercised directly against a fabricated applied-migrations
+     * list — see
+     * `the_global_step_calculation_accounts_for_a_newer_restaurant_migration_and_interleaved_module_migrations`
+     * — proving the counting logic itself stays correct when a newer
+     * Restaurant migration (or an unrelated module's migration sorting
+     * between two Restaurant ones) exists, without depending on the
+     * repository's CURRENT migration set to happen to contain one.
+     *
+     * $appliedInRollbackOrder must already be in the exact order Laravel's
+     * own rollback command uses (`ORDER BY batch DESC, migration DESC`,
+     * replicated from `DatabaseMigrationRepository::getMigrations()`).
+     * Counts every entry — Restaurant or not — until $throughMigration is
+     * reached; that running total is the GLOBAL `--step` value that makes
+     * `migrate:rollback --path=<restaurant> --step=<n>` reach it.
+     *
+     * @param  list<string>  $appliedInRollbackOrder
+     * @param  list<string>  $restaurantMigrationNames
      */
-    private function rollbackRestaurantMigrations(int $count): void
+    private function calculateGlobalStepsToReach(
+        array $appliedInRollbackOrder,
+        array $restaurantMigrationNames,
+        string $throughMigration,
+    ): int {
+        $this->assertContains(
+            $throughMigration,
+            $restaurantMigrationNames,
+            "'{$throughMigration}' is not a migration file under ".self::RESTAURANT_MIGRATIONS_PATH.'.'
+        );
+
+        $globalSteps = 0;
+
+        foreach ($appliedInRollbackOrder as $migration) {
+            $globalSteps++;
+
+            if ($migration === $throughMigration) {
+                return $globalSteps;
+            }
+        }
+
+        $this->fail("Expected to find applied migration '{$throughMigration}' to roll back through; it was not found in the applied migrations table.");
+    }
+
+    /**
+     * Roll back every Restaurant migration from the top down through, and
+     * including, $throughMigration — named by its migration filename
+     * (without `.php`) — immune to any number of other modules' migrations
+     * sorting nearby in time, AND immune to any number of newer Restaurant
+     * migrations added above it later.
+     */
+    private function rollbackRestaurantMigrations(string $throughMigration): void
     {
         $restaurantMigrationNames = collect(glob(base_path(self::RESTAURANT_MIGRATIONS_PATH).'/*.php'))
             ->map(fn (string $path) => basename($path, '.php'))
@@ -92,33 +153,61 @@ class RestaurantMigrationRollbackTest extends TestCase
             ->where('batch', '>=', 1)
             ->orderByDesc('batch')
             ->orderByDesc('migration')
-            ->pluck('migration');
+            ->pluck('migration')
+            ->all();
 
-        $globalSteps = 0;
-        $restaurantMatches = 0;
-
-        foreach ($appliedInRollbackOrder as $migration) {
-            $globalSteps++;
-
-            if (in_array($migration, $restaurantMigrationNames, true)) {
-                $restaurantMatches++;
-
-                if ($restaurantMatches === $count) {
-                    break;
-                }
-            }
-        }
-
-        $this->assertSame(
-            $count,
-            $restaurantMatches,
-            "Expected to find {$count} applied Restaurant migration(s) to roll back; found {$restaurantMatches}."
-        );
+        $globalSteps = $this->calculateGlobalStepsToReach($appliedInRollbackOrder, $restaurantMigrationNames, $throughMigration);
 
         Artisan::call('migrate:rollback', [
             '--path' => self::RESTAURANT_MIGRATIONS_PATH,
             '--step' => $globalSteps,
         ]);
+    }
+
+    #[Test]
+    public function the_global_step_calculation_accounts_for_a_newer_restaurant_migration_and_interleaved_module_migrations(): void
+    {
+        // Fabricated, independent of whatever migrations actually exist on
+        // disk right now — this is what makes the test a REGRESSION guard
+        // rather than an accident of today's migration set. Mirrors the
+        // exact shape the class docblock's corrections describe: a
+        // Restaurant migration newer than the target, and an unrelated
+        // module's migration sorting between two Restaurant ones.
+        $appliedInRollbackOrder = [
+            '2026_09_20_100000_some_future_restaurant_migration',   // newer Restaurant migration
+            '2026_09_19_100000_unrelated_flows_migration',          // interleaved non-Restaurant migration
+            '2026_09_18_100000_add_default_phone_country_to_pos_connections_table',
+            '2026_09_15_100000_normalize_pending_outlet_status_to_active', // target
+            '2026_09_14_100000_add_lifecycle_status_and_active_slot_to_pos_connections_table',
+            '2026_09_11_100200_create_restaurant_outlets_table',
+        ];
+
+        $restaurantMigrationNames = [
+            '2026_09_20_100000_some_future_restaurant_migration',
+            '2026_09_18_100000_add_default_phone_country_to_pos_connections_table',
+            '2026_09_15_100000_normalize_pending_outlet_status_to_active',
+            '2026_09_14_100000_add_lifecycle_status_and_active_slot_to_pos_connections_table',
+            '2026_09_11_100200_create_restaurant_outlets_table',
+        ];
+
+        $steps = $this->calculateGlobalStepsToReach(
+            $appliedInRollbackOrder,
+            $restaurantMigrationNames,
+            '2026_09_15_100000_normalize_pending_outlet_status_to_active',
+        );
+
+        // Position 4 in the fabricated list: 1 newer Restaurant migration +
+        // 1 interleaved non-Restaurant migration + 1 older Restaurant
+        // migration (2026_09_18) sit above the target, and the target
+        // itself is the 4th entry. A count-based helper asked for "2
+        // Restaurant migrations" would have stopped after only 3 global
+        // steps (matching 2026_09_18 as Restaurant match #1 and the target
+        // as #2, without ever spending a step on the interleaved flows
+        // migration) — silently 1 step short of what
+        // `migrate:rollback --path=... --step=3` actually needs to reach
+        // the target, exactly the defect this helper exists to prevent.
+        $this->assertSame(4, $steps,
+            'Must count every applied migration — Restaurant or not — from the top through the named target, inclusive.');
     }
 
     #[Test]
@@ -208,18 +297,24 @@ class RestaurantMigrationRollbackTest extends TestCase
      * immediately (MySQL error 3819) the first time it ran against the real
      * `whatsmine` database, which had one pre-existing 'connected' row.
      *
-     * Rolling back 2 Restaurant migrations undoes both this migration and
-     * the one after it (normalize_pending_outlet_status), leaving
-     * pos_connections exactly as it was the moment this bug was hit: no
-     * active_slot column, one genuine pre-existing row. The raw insert
-     * below reproduces that row. (Rolling back "2 Restaurant migrations" —
-     * not a literal `--step=2` — is what `rollbackRestaurantMigrations()`
-     * exists to do correctly; see its docblock.)
+     * Rolling back THROUGH this migration by name also undoes every
+     * Restaurant migration newer than it — currently just
+     * normalize_pending_outlet_status and Phase 2A Slice 1's
+     * add_default_phone_country_to_pos_connections_table (a plain nullable
+     * column add with nothing to reproduce here, along for the ride only
+     * because it currently happens to be the newest Restaurant migration)
+     * — leaving pos_connections exactly as it was the moment this bug was
+     * hit: no active_slot column, one genuine pre-existing row. The raw
+     * insert below reproduces that row. (`rollbackRestaurantMigrations()`
+     * now takes this migration's own name, not a count — see its docblock.
+     * Any future Restaurant migration added above this one changes nothing
+     * here: the target is still found by name, at whatever depth it now
+     * sits.)
      */
     #[Test]
     public function the_active_slot_migration_backfills_before_adding_the_check_so_it_does_not_choke_on_a_pre_existing_row(): void
     {
-        $this->rollbackRestaurantMigrations(2);
+        $this->rollbackRestaurantMigrations('2026_09_14_100000_add_lifecycle_status_and_active_slot_to_pos_connections_table');
 
         // Prove the rollback itself actually reached both intended
         // migrations — not just that the later insert/re-migrate happens
@@ -262,21 +357,23 @@ class RestaurantMigrationRollbackTest extends TestCase
      * RestaurantOutletService silently became ineligible forever — it read
      * as "Not connected" yet could never be selected to connect one.
      *
-     * Rolling back 1 Restaurant migration undoes ONLY the single newest
-     * migration under the Restaurant path (this one), leaving every earlier
-     * table — including restaurant_outlets itself, sans the CHECK
-     * constraint — in place. That lets a raw insert simulate exactly the
+     * Rolling back THROUGH this migration by name also undoes every
+     * Restaurant migration newer than it — currently just Phase 2A Slice
+     * 1's add_default_phone_country_to_pos_connections_table (a plain
+     * nullable column add, along for the ride only because it currently
+     * happens to be the newest Restaurant migration) — leaving every
+     * earlier table, including restaurant_outlets itself sans the CHECK
+     * constraint, in place. That lets a raw insert simulate exactly the
      * pre-fix legacy row: one created by any path that bypassed
      * RestaurantOutletService and fell through to the (at that point)
-     * still-'pending' column default. (Rolling back "1 Restaurant
-     * migration" — not a literal `--step=1` — is what
-     * `rollbackRestaurantMigrations()` exists to do correctly; see its
-     * docblock.)
+     * still-'pending' column default. (Same "named target, not a fixed
+     * count" note as the sibling test above — see
+     * `rollbackRestaurantMigrations()`'s docblock.)
      */
     #[Test]
     public function the_normalization_migration_fixes_legacy_pending_outlets_and_the_status_check_constraint_holds(): void
     {
-        $this->rollbackRestaurantMigrations(1);
+        $this->rollbackRestaurantMigrations('2026_09_15_100000_normalize_pending_outlet_status_to_active');
 
         // Prove the rollback actually reached this migration — not just
         // that the later insert/re-migrate happens not to throw. This

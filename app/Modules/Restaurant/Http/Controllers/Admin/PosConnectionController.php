@@ -15,9 +15,11 @@ use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\PosConnectionProvisioningService;
 use App\Modules\Restaurant\Services\RestaurantOutletService;
 use App\Modules\Restaurant\Support\IpAllowlistNormalizer;
+use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -29,10 +31,12 @@ use Inertia\Response;
  * job is request handling and choosing what to show, never generating or
  * touching a plaintext token itself.
  *
- * Sandbox-only, by construction, not merely by convention: nothing here
- * accepts an `environment` value from the request at all — every create
- * goes through createSandboxConnection(), which hardcodes
- * PosConnection::ENVIRONMENT_SANDBOX.
+ * ⚠️ Phase 2A Slice 1 — NO LONGER sandbox-only. `store()` now reads an
+ * explicit `environment` from the (validated) request and routes to
+ * createSandboxConnection() or createLiveConnection() accordingly; `activate()`
+ * does the same for activateSandbox()/activateLive(). Nothing here decides
+ * WHICH environment on its own — that choice is always the admin's, made
+ * explicit on the create form, never inferred or defaulted.
  */
 class PosConnectionController extends Controller
 {
@@ -102,6 +106,10 @@ class PosConnectionController extends Controller
                 'workspace_id' => $request->integer('workspace_id') ?: null,
                 'outlet_id' => $request->integer('outlet_id') ?: null,
             ],
+            // No default/suggested country here — same "no preselection"
+            // convention as ContactController::suggestedPhoneCountry(),
+            // deliberately not reused here (see PhoneNumber::options()).
+            'phoneCountries' => PhoneNumber::options(),
         ]);
     }
 
@@ -130,13 +138,25 @@ class PosConnectionController extends Controller
             );
         }
 
+        $service = app(PosConnectionProvisioningService::class);
+        $isLive = $data['environment'] === PosConnection::ENVIRONMENT_PRODUCTION;
+
         try {
-            $connection = app(PosConnectionProvisioningService::class)->createSandboxConnection(
-                outlet: $outlet,
-                externalRef: $data['external_ref'],
-                allowedIps: $data['allowed_ips'] ?? null,
-                actor: $request->user('admin'),
-            );
+            $connection = $isLive
+                ? $service->createLiveConnection(
+                    outlet: $outlet,
+                    externalRef: $data['external_ref'],
+                    allowedIps: $data['allowed_ips'] ?? null,
+                    defaultPhoneCountry: $data['default_phone_country'] ?? null,
+                    actor: $request->user('admin'),
+                )
+                : $service->createSandboxConnection(
+                    outlet: $outlet,
+                    externalRef: $data['external_ref'],
+                    allowedIps: $data['allowed_ips'] ?? null,
+                    actor: $request->user('admin'),
+                    defaultPhoneCountry: $data['default_phone_country'] ?? null,
+                );
         } catch (OutletAlreadyConnectedException $e) {
             // The DB-level backstop caught a race the validation-time check
             // missed (a second admin, or a repeated/UI-bypassed request) —
@@ -145,7 +165,9 @@ class PosConnectionController extends Controller
         }
 
         return redirect()->route('admin.restaurant.connections.show', $connection)
-            ->with('success', 'Sandbox connection created. Generate a webhook token to finish setup.');
+            ->with('success', $isLive
+                ? 'Live Petpooja connection created. Generate a webhook token, then activate once compliance is satisfied.'
+                : 'Test/sandbox connection created. Generate a webhook token to finish setup.');
     }
 
     public function show(PosConnection $connection): Response
@@ -204,6 +226,7 @@ class PosConnectionController extends Controller
                 'token_configured' => $connection->webhook_secret_hash !== null,
                 'webhook_secret_rotated_at' => $connection->webhook_secret_rotated_at?->toIso8601String(),
                 'allowed_ips' => $connection->allowed_ips,
+                'default_phone_country' => $connection->default_phone_country,
                 'last_event_at' => $connection->last_event_at?->toIso8601String(),
                 'last_tested_at' => $connection->last_tested_at?->toIso8601String(),
                 'last_test_status' => $connection->last_test_status,
@@ -229,6 +252,7 @@ class PosConnectionController extends Controller
             // For the guarded move flow's target picker — same shape as create().
             'workspaces' => $this->workspaceOptions(),
             'outlets' => $this->outletOptionsWithConnectionState(),
+            'phoneCountries' => PhoneNumber::options(),
         ]);
     }
 
@@ -279,16 +303,53 @@ class PosConnectionController extends Controller
         return back()->with('success', 'IP allowlist updated.');
     }
 
-    /** "Activate" (from pending) and "Resume" (from paused) are the same action. */
+    /**
+     * "Activate" (from pending) and "Resume" (from paused) are the same
+     * action. Routes to the environment-appropriate service method — the
+     * connection's OWN persisted `environment` decides which, never
+     * anything from the request, so this cannot be tricked into activating
+     * a live connection through the sandbox path or vice versa.
+     */
     public function activate(Request $request, PosConnection $connection): RedirectResponse
     {
+        $service = app(PosConnectionProvisioningService::class);
+        $isLive = $connection->environment === PosConnection::ENVIRONMENT_PRODUCTION;
+
         try {
-            app(PosConnectionProvisioningService::class)->activateSandbox($connection, $request->user('admin'));
+            $isLive
+                ? $service->activateLive($connection, $request->user('admin'))
+                : $service->activateSandbox($connection, $request->user('admin'));
         } catch (\RuntimeException $e) {
             return back()->with('error', $e->getMessage());
         }
 
-        return back()->with('success', 'Sandbox ingress activated. Petpooja sandbox/test deliveries can now reach this connection.');
+        // ⚠️ Petpooja has confirmed it provides no sandbox environment at
+        // all — the OLD sandbox-path message ("Petpooja sandbox/test
+        // deliveries can now reach this connection") falsely implied
+        // Petpooja itself could deliver to a test connection. This
+        // AutomationXpert test/sandbox connection only ever receives
+        // internal test requests (this admin panel's own tooling, curl,
+        // Postman) — never anything Petpooja sends, because Petpooja has
+        // nothing to send it. The live message is unaffected: a live
+        // connection genuinely does receive real Petpooja deliveries.
+        return back()->with('success', $isLive
+            ? 'Live ingress activated. Petpooja deliveries can now reach this connection.'
+            : 'AutomationXpert test ingress is activated. Use internal test requests only; Petpooja does not provide a sandbox environment.');
+    }
+
+    public function updateDefaultPhoneCountry(Request $request, PosConnection $connection): RedirectResponse
+    {
+        $validated = $request->validate([
+            'default_phone_country' => ['nullable', 'string', Rule::in(array_keys(PhoneNumber::COUNTRIES))],
+        ]);
+
+        app(PosConnectionProvisioningService::class)->updateDefaultPhoneCountry(
+            $connection,
+            $validated['default_phone_country'] ?? null,
+            $request->user('admin'),
+        );
+
+        return back()->with('success', 'Default phone country updated.');
     }
 
     public function pause(Request $request, PosConnection $connection): RedirectResponse

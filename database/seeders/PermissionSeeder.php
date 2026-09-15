@@ -104,6 +104,14 @@ class PermissionSeeder extends Seeder
             // even the pre-history case is consequential enough to gate on
             // its own rather than folding into general "manage".
             ['key' => 'move_pos_connections', 'name' => 'Move POS Connections', 'category' => 'Restaurant Integrations', 'description' => 'Correct an accidental workspace/outlet mapping via the guarded move flow. Blocked once the connection has any webhook history.'],
+
+            // Petpooja Phase 2A gate-hardening pass — Gate 5 of the six-gate
+            // live activation invariant ("outlet-specific authorization").
+            // Separate from `manage_pos_connections` for the same reason as
+            // the other splits above: this is an admin verifying a physical
+            // outlet's identity before it can go live, a more consequential
+            // act than day-to-day outlet management.
+            ['key' => 'authorize_pos_outlets', 'name' => 'Authorize Outlets for Live Petpooja', 'category' => 'Restaurant Integrations', 'description' => 'Record that an outlet has been verified and is authorized for a live Petpooja connection. Required before that outlet\'s connection can be activated live.'],
         ];
     }
 
