@@ -15,7 +15,9 @@ Route::middleware(['web', 'client-app', EnsureFlowsEnabled::class])
         Route::post('/encryption-keys/{phoneNumber}/rotate', [WhatsappFlowKeyPairController::class, 'rotate'])->name('keys.rotate');
         Route::get('/', [WhatsappFlowController::class, 'index'])->name('index');
         Route::post('/', [WhatsappFlowController::class, 'store'])->name('store');
-        Route::post('/sync-meta', [WhatsappFlowController::class, 'pullMeta'])->name('pull-meta');
+        Route::post('/sync-status', [WhatsappFlowController::class, 'syncStatus'])->name('sync-status');
+        Route::get('/import', [WhatsappFlowController::class, 'importPicker'])->name('import.picker');
+        Route::post('/import', [WhatsappFlowController::class, 'import'])->name('import.store');
         Route::get('/{flow}/submissions', [WhatsappFlowController::class, 'submissions'])->name('submissions');
         Route::get('/{flow}', [WhatsappFlowController::class, 'edit'])->name('edit');
         Route::put('/{flow}', [WhatsappFlowController::class, 'update'])->name('update');

@@ -8,6 +8,7 @@ use App\Modules\Whatsapp\Services\CloudApiClient;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -204,6 +205,128 @@ class WhatsappFlowMetaSyncService
     }
 
     /**
+     * The Meta Flows that exist on this workspace's WABA but have NO matching
+     * local record yet — the picker's candidate list. Unlike pullAllFromMeta()
+     * (which only ever touches flows we already know about), this reaches
+     * across the boundary in the other direction: Meta knows about flows we
+     * have never seen.
+     *
+     * Lightweight fields only (id, name, status, categories,
+     * validation_errors) — the same set the picker in Meta's own Flow
+     * management surface shows before committing to a full import.
+     *
+     * @return list<array{meta_flow_id:string,name:string,status:string,categories:list<string>,validation_errors:list<array<string,mixed>>}>
+     */
+    public function listImportableFlows(int $workspaceId): array
+    {
+        $waba = WhatsappBusinessAccount::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('status', 'active')
+            ->first();
+        $client = CloudApiClient::forWorkspace($workspaceId);
+
+        if (! $waba || ! $client) {
+            throw new RuntimeException('Connect an active WhatsApp Business Account before importing Flows.');
+        }
+
+        $response = $client->listFlows($waba->waba_id);
+
+        if (! $response->successful()) {
+            throw new RuntimeException(
+                self::isPermissionError($response)
+                    ? self::MISSING_MANAGEMENT_PERMISSION_MESSAGE
+                    : 'Meta could not list Flows for this account. Please try again.'
+            );
+        }
+
+        // WhatsappFlow::query() is BelongsToWorkspace-scoped, so this already
+        // reads only the CURRENT workspace's linked Meta Flow ids — a Flow
+        // imported into workspace A can never suppress the same Meta Flow
+        // from appearing importable in workspace B's picker.
+        $linkedMetaFlowIds = WhatsappFlow::query()
+            ->whereNotNull('meta_flow_id')
+            ->pluck('meta_flow_id')
+            ->all();
+
+        $metaFlows = $response->json('data', []);
+        if (! is_array($metaFlows)) {
+            return [];
+        }
+
+        $importable = [];
+        foreach ($metaFlows as $metaFlow) {
+            if (! is_array($metaFlow) || ! is_string($metaFlow['id'] ?? null)) {
+                continue;
+            }
+            if (in_array($metaFlow['id'], $linkedMetaFlowIds, true)) {
+                continue;
+            }
+
+            $categories = $metaFlow['categories'] ?? [];
+            $validationErrors = $metaFlow['validation_errors'] ?? [];
+
+            $importable[] = [
+                'meta_flow_id' => $metaFlow['id'],
+                'name' => is_string($metaFlow['name'] ?? null) ? $metaFlow['name'] : 'Untitled Flow',
+                'status' => is_string($metaFlow['status'] ?? null) ? $metaFlow['status'] : 'DRAFT',
+                'categories' => is_array($categories) ? array_values(array_filter($categories, 'is_string')) : [],
+                'validation_errors' => is_array($validationErrors) ? array_values(array_filter($validationErrors, 'is_array')) : [],
+            ];
+        }
+
+        return $importable;
+    }
+
+    /**
+     * Creates a NEW local WhatsappFlow for a Meta Flow that has no local
+     * record — the picker's commit action. Meta's own name/category/status
+     * seed the new row, and the actual screen content is fetched the same way
+     * pullFromMeta() already does for a Flow it knows about: create the row
+     * first (workspace-scoped, meta_flow_id set, a valid placeholder screens
+     * value so the NOT NULL column is never violated), then hand it to
+     * pullFromMeta() to populate the real content. If that content fetch
+     * fails, the row is kept rather than discarded — meta_sync_error is
+     * already recorded on it by pullFromMeta(), and the next "Sync Status"
+     * bulk action (this workspace's existing retry path) will pick it back up
+     * automatically, exactly as it would for any other linked Flow whose
+     * content fetch failed.
+     */
+    public function importFlow(int $workspaceId, string $metaFlowId): WhatsappFlow
+    {
+        $client = CloudApiClient::forWorkspace($workspaceId);
+        if (! $client) {
+            throw new RuntimeException('Connect an active WhatsApp Business Account before importing a Flow.');
+        }
+
+        $meta = $client->getFlow($metaFlowId);
+        if (! $meta->successful()) {
+            throw new RuntimeException(
+                self::isPermissionError($meta)
+                    ? self::MISSING_MANAGEMENT_PERMISSION_MESSAGE
+                    : 'Meta could not provide details for this Flow.'
+            );
+        }
+
+        $metaStatus = is_string($meta->json('status')) ? $meta->json('status') : 'DRAFT';
+        $categories = $meta->json('categories', []);
+        $isPublished = $metaStatus === 'PUBLISHED';
+
+        $flow = WhatsappFlow::create([
+            'workspace_id' => $workspaceId,
+            'name' => is_string($meta->json('name')) && $meta->json('name') !== '' ? $meta->json('name') : 'Imported Flow',
+            'category' => is_array($categories) && is_string($categories[0] ?? null) ? $categories[0] : 'OTHER',
+            'status' => $isPublished ? WhatsappFlow::STATUS_PUBLISHED : WhatsappFlow::STATUS_DRAFT,
+            'screens' => $this->placeholderScreens(),
+            'meta_flow_id' => $metaFlowId,
+            'meta_sync_status' => $isPublished ? WhatsappFlow::META_SYNC_STATUS_PUBLISHED : WhatsappFlow::META_SYNC_STATUS_SYNCED_DRAFT,
+        ]);
+
+        $this->pullFromMeta($flow);
+
+        return $flow->fresh();
+    }
+
+    /**
      * Meta Flow names are constrained to a portable ASCII identifier and 64
      * characters. The workspace id plus the full UUID make collisions across
      * workspaces and repeat authoring effectively impossible, even if WABAs
@@ -242,6 +365,28 @@ class WhatsappFlowMetaSyncService
         return is_array($errors)
             ? array_values(array_filter($errors, 'is_array'))
             : [];
+    }
+
+    /**
+     * A valid, well-formed screens value for the moment between creating an
+     * imported Flow's row and pullFromMeta() overwriting it with the real
+     * content. The `screens` column is NOT NULL, and if the content fetch
+     * that follows genuinely fails, this is what the row is left holding —
+     * so it stays syncable (WhatsappFlowJsonCompiler requires at least one
+     * input field) rather than an empty, broken definition.
+     *
+     * @return list<array{id:string,title:string,fields:list<array<string,mixed>>}>
+     */
+    private function placeholderScreens(): array
+    {
+        return [[
+            'id' => 'step_1',
+            'title' => 'Imported from Meta',
+            'fields' => [[
+                'id' => 'field_1', 'type' => 'text', 'label' => 'Field', 'name' => 'field_1',
+                'required' => false, 'helper_text' => null, 'options' => [], 'step' => 1, 'order' => 1,
+            ]],
+        ]];
     }
 
     /**

@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 
 /** Client authoring surface for static Flow definitions. No Meta API is called here. */
 class WhatsappFlowController extends Controller
@@ -34,12 +35,7 @@ class WhatsappFlowController extends Controller
     public function edit(WhatsappFlow $flow): Response
     {
         return Inertia::render('client/Flows/Builder', [
-            'flow' => [
-                ...$this->summary($flow),
-                'description' => $flow->description,
-                'screens' => $flow->screens,
-                'submit_settings' => $flow->submit_settings,
-            ],
+            'flow' => $this->summary($flow),
             'categories' => WhatsappFlow::CATEGORIES,
             'fieldTypes' => WhatsappFlowJsonCompiler::FIELD_TYPES,
         ]);
@@ -80,7 +76,15 @@ class WhatsappFlowController extends Controller
         return response()->json($compiler->compile($flow));
     }
 
-    public function pullMeta(WhatsappFlowMetaSyncService $sync): RedirectResponse
+    /**
+     * "Sync Status" — the bulk RECONCILE action. Only ever touches Flows this
+     * workspace already knows about (whereNotNull('meta_flow_id')): it pulls
+     * each one's current content down from Meta, overwriting local screens.
+     * Renamed from "Sync Meta Flows" because that name now belongs to
+     * importPicker()/import() below — the actual "bring in Flows Meta has
+     * that we don't" feature this workspace never had until now.
+     */
+    public function syncStatus(WhatsappFlowMetaSyncService $sync): RedirectResponse
     {
         $summary = $sync->pullAllFromMeta(WhatsappFlow::query()
             ->whereNotNull('meta_flow_id')
@@ -88,8 +92,45 @@ class WhatsappFlowController extends Controller
 
         return back()->with(
             'success',
-            sprintf('Meta Flow pull complete: %d updated, %d unchanged, %d failed.', $summary['updated'], $summary['unchanged'], $summary['failed'])
+            sprintf('Sync status complete: %d updated, %d unchanged, %d failed.', $summary['updated'], $summary['unchanged'], $summary['failed'])
         );
+    }
+
+    /** The picker's candidate list — Meta Flows with no local record yet. */
+    public function importPicker(WhatsappFlowMetaSyncService $sync, Request $request): JsonResponse
+    {
+        try {
+            return response()->json(['flows' => $sync->listImportableFlows($this->workspaceId($request))]);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function import(Request $request, WhatsappFlowMetaSyncService $sync): RedirectResponse
+    {
+        $data = $request->validate([
+            'meta_flow_ids' => ['required', 'array', 'min:1'],
+            'meta_flow_ids.*' => ['required', 'string'],
+        ]);
+
+        $workspaceId = $this->workspaceId($request);
+        $imported = 0;
+        $failed = 0;
+
+        foreach ($data['meta_flow_ids'] as $metaFlowId) {
+            try {
+                $sync->importFlow($workspaceId, $metaFlowId);
+                $imported++;
+            } catch (RuntimeException) {
+                $failed++;
+            }
+        }
+
+        $message = $failed === 0
+            ? sprintf('%d Flow%s imported.', $imported, $imported === 1 ? '' : 's')
+            : sprintf('%d Flow%s imported, %d failed.', $imported, $imported === 1 ? '' : 's', $failed);
+
+        return back()->with($failed === 0 ? 'success' : 'error', $message);
     }
 
     public function submissions(Request $request, WhatsappFlow $flow): Response
@@ -199,6 +240,8 @@ class WhatsappFlowController extends Controller
             'submit_settings' => ['nullable', 'array'],
             'submit_settings.button_text' => ['nullable', 'string', 'max:35'],
             'submit_settings.success_message' => ['nullable', 'string', 'max:1024'],
+            'max_submissions' => ['nullable', 'integer', 'min:1'],
+            'limit_error_message' => ['nullable', 'string', 'max:255'],
         ];
 
         $rules += [
@@ -225,25 +268,40 @@ class WhatsappFlowController extends Controller
         return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
     }
 
-    /** @return array<string,mixed> */
+    /**
+     * @return array<string,mixed>
+     *
+     * Includes the full `screens` array (not just field_count) so the list
+     * page's Info modal (Form Fields tab) can render from data already on the
+     * page — no second request per flow. Fine at this workspace's expected
+     * flow counts (index() has never paginated); a workspace with hundreds of
+     * Flows would need to reconsider this, but none does today.
+     */
     private function summary(WhatsappFlow $flow): array
     {
         return [
             'id' => $flow->id,
             'uuid' => $flow->uuid,
             'name' => $flow->name,
+            'description' => $flow->description,
             'category' => $flow->category,
             'status' => $flow->status,
+            'screens' => $flow->screens,
+            'submit_settings' => $flow->submit_settings,
             'meta_flow_id' => $flow->meta_flow_id,
             'meta_sync_status' => $flow->meta_sync_status,
             'meta_validation_errors' => $flow->meta_validation_errors,
             'meta_sync_error' => $flow->meta_sync_error,
             'field_count' => collect($flow->screens)->sum(fn (array $screen) => count($screen['fields'])),
+            'step_count' => count($flow->screens),
             'submissions_count' => $flow->submissions_count ?? $flow->submissions()->count(),
+            'created_at' => $flow->created_at?->toISOString(),
             'updated_at' => $flow->updated_at?->toISOString(),
             'web_form_enabled' => $flow->web_form_enabled,
             'public_slug' => $flow->public_slug,
             'recaptcha_enabled' => $flow->recaptcha_enabled,
+            'max_submissions' => $flow->max_submissions,
+            'limit_error_message' => $flow->limit_error_message,
         ];
     }
 

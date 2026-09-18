@@ -27,6 +27,7 @@
     @else
         <h1>{{ $form['name'] }}</h1>
         @if ($form['description']) <p>{{ $form['description'] }}</p> @endif
+        @error('limit')<p class="notice" role="alert">{{ $message }}</p>@enderror
         <form method="POST" action="{{ route('public.flows.form.submit', $flow->public_slug) }}" novalidate>
             @csrf
             @foreach ($form['steps'] as $stepIndex => $step)

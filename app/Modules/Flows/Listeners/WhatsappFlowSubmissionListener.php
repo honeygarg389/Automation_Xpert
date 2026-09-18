@@ -10,6 +10,7 @@ use App\Modules\Flows\Models\WhatsappFlow;
 use App\Modules\Flows\Services\FlowSubmissionContactEnricher;
 use App\Modules\Flows\Services\FlowSubmissionTriggerDispatcher;
 use App\Support\WorkspaceContext;
+use Illuminate\Support\Facades\Log;
 
 /**
  * Turns a parsed WhatsApp nfm_reply into the durable submission ledger and its
@@ -28,6 +29,26 @@ class WhatsappFlowSubmissionListener
         WorkspaceContext::for($event->workspaceId, function () use ($event): void {
             $run = $this->correlateRun($event->workspaceId, $event->contactId, $event->flowToken);
             $flow = $this->flowForRun($run);
+
+            // The Flow UI has already run to completion on the contact's phone by
+            // the time this handler runs — Meta delivers the nfm_reply as a fait
+            // accompli, unlike the web form which can refuse before accepting
+            // input. So "must not silently succeed" here means: do not persist a
+            // FormSubmission row (which would count toward the same ledger and
+            // fire automation triggers as if it were accepted), and record the
+            // refusal somewhere an operator can see it, rather than swallowing it
+            // with no observable trace at all.
+            if ($flow?->hasReachedSubmissionLimit()) {
+                Log::warning('flows.submission_limit_reached', [
+                    'workspace_id' => $event->workspaceId,
+                    'whatsapp_flow_id' => $flow->id,
+                    'contact_id' => $event->contactId,
+                    'source' => FormSubmission::SOURCE_WHATSAPP_FLOW,
+                ]);
+
+                return;
+            }
+
             $contact = $this->contacts->enrich($event->workspaceId, $event->answers, $event->contactId);
 
             $submission = FormSubmission::create([
