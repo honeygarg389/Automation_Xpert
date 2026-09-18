@@ -52,6 +52,8 @@ use Illuminate\Support\Str;
  * @property bool $web_form_enabled
  * @property string|null $public_slug
  * @property bool $recaptcha_enabled
+ * @property int|null $max_submissions
+ * @property string|null $limit_error_message
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read int|null $submissions_count
@@ -104,6 +106,8 @@ class WhatsappFlow extends Model
         'web_form_enabled',
         'public_slug',
         'recaptcha_enabled',
+        'max_submissions',
+        'limit_error_message',
     ];
 
     protected function casts(): array
@@ -114,6 +118,7 @@ class WhatsappFlow extends Model
             'meta_validation_errors' => 'array',
             'web_form_enabled' => 'boolean',
             'recaptcha_enabled' => 'boolean',
+            'max_submissions' => 'integer',
         ];
     }
 
@@ -147,5 +152,22 @@ class WhatsappFlow extends Model
     public function submissions(): HasMany
     {
         return $this->hasMany(FormSubmission::class);
+    }
+
+    /**
+     * The ledger is shared across both submission sources (WhatsApp Flow and
+     * public web form) — see FormSubmission::SOURCES — so this counts across
+     * both, deliberately with no `source` filter. Callers must run inside the
+     * correct WorkspaceContext: FormSubmission is workspace-scoped and the
+     * scope fails closed, so calling this with no context resolved would
+     * silently read zero and never trip the limit.
+     */
+    public function hasReachedSubmissionLimit(): bool
+    {
+        if ($this->max_submissions === null) {
+            return false;
+        }
+
+        return $this->submissions()->count() >= $this->max_submissions;
     }
 }

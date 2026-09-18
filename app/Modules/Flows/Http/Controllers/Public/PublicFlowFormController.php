@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Modules\Flows\Models\WhatsappFlow;
 use App\Modules\Flows\Services\WebFormRenderer;
 use App\Modules\Flows\Services\WebFormSubmissionService;
+use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -41,6 +42,18 @@ class PublicFlowFormController extends Controller
     public function submit(Request $request, string $slug): RedirectResponse
     {
         $flow = $this->flow($slug);
+
+        // hasReachedSubmissionLimit() counts FormSubmission rows, which are
+        // workspace-scoped and fail CLOSED with no context — flow() fetched
+        // this row via withoutWorkspaceScope() for a visitor with no tenant
+        // context, so the count must be resolved inside one explicitly, or it
+        // would silently read zero and the limit would never trip.
+        $limitReached = WorkspaceContext::for($flow->workspace_id, fn (): bool => $flow->hasReachedSubmissionLimit());
+        if ($limitReached) {
+            return back()->withErrors([
+                'limit' => $flow->limit_error_message ?? 'You have already reached the maximum number of submissions for this form.',
+            ]);
+        }
 
         if ($flow->recaptcha_enabled && ! $this->passesRecaptcha($request)) {
             return back()

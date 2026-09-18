@@ -315,6 +315,16 @@ class CloudApiClient
             ->post(self::BASE."/{$flowId}/publish");
     }
 
+    /** List every Flow Meta has for this WhatsApp Business Account (lightweight fields only — for an import picker, not full content). */
+    public function listFlows(string $wabaId): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->get(self::BASE."/{$wabaId}/flows", [
+                'fields' => 'id,name,status,categories,validation_errors',
+            ]);
+    }
+
     /** Fetch the current Meta Flow status, validation errors, versions, and health metadata. */
     public function getFlow(string $flowId): Response
     {

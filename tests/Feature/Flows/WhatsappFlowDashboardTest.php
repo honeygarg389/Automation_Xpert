@@ -65,9 +65,9 @@ class WhatsappFlowDashboardTest extends TestCase
             'https://assets.test/meta-pull.json' => Http::response($metaJson),
         ]);
 
-        $this->actingAs($user)->post(route('client.flows.pull-meta'))
+        $this->actingAs($user)->post(route('client.flows.sync-status'))
             ->assertRedirect()
-            ->assertSessionHas('success', 'Meta Flow pull complete: 1 updated, 0 unchanged, 0 failed.');
+            ->assertSessionHas('success', 'Sync status complete: 1 updated, 0 unchanged, 0 failed.');
 
         $this->assertSame('Meta value', $flow->fresh()->screens[0]['fields'][0]['label']);
         $this->assertSame('Finish', $flow->fresh()->submit_settings['button_text']);

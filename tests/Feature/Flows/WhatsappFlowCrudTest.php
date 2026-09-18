@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Flows;
 
+use App\Models\Client;
 use App\Models\Concerns\BelongsToWorkspace;
 use App\Models\Plan;
 use App\Modules\Flows\Models\WhatsappFlow;
@@ -36,7 +37,7 @@ class WhatsappFlowCrudTest extends TestCase
         ]];
     }
 
-    private function grantFlowsToClient(\App\Models\Client $client): void
+    private function grantFlowsToClient(Client $client): void
     {
         $this->attachPlanToClient($client, Plan::factory()->create(['whatsapp_flows_enabled' => true]));
     }
@@ -106,5 +107,27 @@ class WhatsappFlowCrudTest extends TestCase
         ])->assertNotFound();
         $this->actingAs($otherUser)->delete(route('client.flows.destroy', $flow->uuid))->assertNotFound();
         $this->assertNotSoftDeleted('whatsapp_flows', ['id' => $flow->id]);
+    }
+
+    /**
+     * Positive control for the test above: a 404 on another workspace's
+     * delete attempt proves nothing about the route actually working — it is
+     * equally consistent with the endpoint refusing everyone. This proves
+     * the SAME route, same verb, same user type succeeds for the legitimate
+     * owner, per this suite's own working-agreement rule.
+     */
+    #[Test]
+    public function the_owning_workspace_can_delete_its_own_flow(): void
+    {
+        ['user' => $owner, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $flow = WhatsappFlow::create([
+            'workspace_id' => $workspace->id, 'name' => 'Disposable', 'category' => 'SURVEY', 'status' => 'draft',
+            'screens' => $this->screens(), 'submit_settings' => ['button_text' => 'Submit'],
+        ]);
+
+        $this->actingAs($owner)->delete(route('client.flows.destroy', $flow->uuid))->assertRedirect(route('client.flows.index'));
+
+        $this->assertSoftDeleted('whatsapp_flows', ['id' => $flow->id]);
     }
 }
