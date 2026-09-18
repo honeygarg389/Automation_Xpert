@@ -46,6 +46,14 @@ return [
         'redirect' => env('GOOGLE_REDIRECT_URI', '/auth/google/callback'),
     ],
 
+    // Platform-wide keys: reCAPTCHA registrations are bound to the public
+    // domain serving these forms, not to individual workspaces.
+    'recaptcha' => [
+        'site_key' => env('RECAPTCHA_SITE_KEY', ''),
+        'secret_key' => env('RECAPTCHA_SECRET_KEY', ''),
+        'verify_url' => 'https://www.google.com/recaptcha/api/siteverify',
+    ],
+
     'github' => [
         'client_id' => env('GITHUB_CLIENT_ID'),
         'client_secret' => env('GITHUB_CLIENT_SECRET'),

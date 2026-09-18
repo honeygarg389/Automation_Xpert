@@ -2,13 +2,13 @@
 
 namespace App\Modules\Flows\Listeners;
 
-use App\Listeners\AutomationTriggerListener;
 use App\Modules\Automation\Models\AutomationRun;
 use App\Modules\Automation\Models\AutomationRunLog;
 use App\Modules\Flows\Events\WhatsappFlowSubmitted;
 use App\Modules\Flows\Models\FormSubmission;
 use App\Modules\Flows\Models\WhatsappFlow;
 use App\Modules\Flows\Services\FlowSubmissionContactEnricher;
+use App\Modules\Flows\Services\FlowSubmissionTriggerDispatcher;
 use App\Support\WorkspaceContext;
 
 /**
@@ -20,7 +20,7 @@ class WhatsappFlowSubmissionListener
 {
     public function __construct(
         private readonly FlowSubmissionContactEnricher $contacts,
-        private readonly AutomationTriggerListener $triggers,
+        private readonly FlowSubmissionTriggerDispatcher $triggers,
     ) {}
 
     public function handle(WhatsappFlowSubmitted $event): void
@@ -40,13 +40,7 @@ class WhatsappFlowSubmissionListener
                 'automation_run_id' => $run?->id,
             ]);
 
-            if ($contact !== null) {
-                $this->triggers->fireFormSubmitted(
-                    $event->workspaceId,
-                    $contact->id,
-                    $this->triggerContext($flow, $submission)
-                );
-            }
+            $this->triggers->dispatch($flow, $submission);
         });
     }
 
@@ -97,26 +91,5 @@ class WhatsappFlowSubmissionListener
         return is_string($metaFlowId) && $metaFlowId !== ''
             ? WhatsappFlow::where('meta_flow_id', $metaFlowId)->first()
             : null;
-    }
-
-    /** @return array<string, string> */
-    private function triggerContext(?WhatsappFlow $flow, FormSubmission $submission): array
-    {
-        $answers = [];
-        foreach ($submission->answers as $key => $value) {
-            if ($key === '') {
-                continue;
-            }
-            if (is_scalar($value)) {
-                $answers[$key] = (string) $value;
-            } elseif ($value !== null) {
-                $answers[$key] = json_encode($value, JSON_THROW_ON_ERROR);
-            }
-        }
-
-        return array_merge($answers, [
-            'flow_name' => $flow === null ? 'WhatsApp Flow' : $flow->name,
-            'submitted_at' => $submission->created_at->toIso8601String(),
-        ]);
     }
 }

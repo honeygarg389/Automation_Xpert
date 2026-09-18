@@ -137,6 +137,57 @@ class WhatsappFlowController extends Controller
         return back()->with($result['success'] ? 'success' : 'error', $result['message']);
     }
 
+    /**
+     * Enabling is idempotent on the slug: a flow that already has one (from a
+     * prior enable, even if since disabled) keeps it — only a flow that has
+     * NEVER been enabled gets a freshly generated one. Re-enabling must not
+     * silently invalidate a link an owner already shared; that is what
+     * regenerateWebForm() exists for, as an explicit, separate action.
+     */
+    public function enableWebForm(WhatsappFlow $flow): RedirectResponse
+    {
+        $flow->update([
+            'web_form_enabled' => true,
+            'public_slug' => $flow->public_slug ?? WhatsappFlow::generatePublicSlug(),
+        ]);
+
+        return back()->with('success', 'Web form enabled.');
+    }
+
+    /**
+     * The slug is deliberately NOT cleared here — see enableWebForm()'s
+     * docblock. Disabling only takes the public route away; it does not
+     * discard the identity of the link, so re-enabling restores the exact
+     * same URL an owner may have already shared or printed.
+     */
+    public function disableWebForm(WhatsappFlow $flow): RedirectResponse
+    {
+        $flow->update(['web_form_enabled' => false]);
+
+        return back()->with('success', 'Web form disabled.');
+    }
+
+    /**
+     * Deliberately invalidates the previous link — this is the ONLY action
+     * that changes public_slug once set. An owner reaches for this after a
+     * link leaked somewhere it shouldn't have.
+     */
+    public function regenerateWebFormSlug(WhatsappFlow $flow): RedirectResponse
+    {
+        $flow->update(['public_slug' => WhatsappFlow::generatePublicSlug()]);
+
+        return back()->with('success', 'Web form link regenerated. The previous link no longer works.');
+    }
+
+    public function updateWebFormRecaptcha(Request $request, WhatsappFlow $flow): RedirectResponse
+    {
+        $flow->update($request->validate([
+            'recaptcha_enabled' => ['required', 'boolean'],
+        ]));
+
+        return back()->with('success', 'reCAPTCHA setting updated.');
+    }
+
     /** @return array<string,mixed> */
     private function validated(Request $request, bool $withScreens): array
     {
@@ -190,6 +241,9 @@ class WhatsappFlowController extends Controller
             'field_count' => collect($flow->screens)->sum(fn (array $screen) => count($screen['fields'])),
             'submissions_count' => $flow->submissions_count ?? $flow->submissions()->count(),
             'updated_at' => $flow->updated_at?->toISOString(),
+            'web_form_enabled' => $flow->web_form_enabled,
+            'public_slug' => $flow->public_slug,
+            'recaptcha_enabled' => $flow->recaptcha_enabled,
         ];
     }
 
