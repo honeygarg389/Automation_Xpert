@@ -23,4 +23,8 @@ Route::middleware(['web', 'client-app', EnsureFlowsEnabled::class])
         Route::get('/{flow}/preview', [WhatsappFlowController::class, 'preview'])->name('preview');
         Route::post('/{flow}/sync', [WhatsappFlowController::class, 'sync'])->name('sync');
         Route::post('/{flow}/publish', [WhatsappFlowController::class, 'publish'])->name('publish');
+        Route::post('/{flow}/web-form/enable', [WhatsappFlowController::class, 'enableWebForm'])->name('web-form.enable');
+        Route::post('/{flow}/web-form/disable', [WhatsappFlowController::class, 'disableWebForm'])->name('web-form.disable');
+        Route::post('/{flow}/web-form/regenerate', [WhatsappFlowController::class, 'regenerateWebFormSlug'])->name('web-form.regenerate');
+        Route::put('/{flow}/web-form/recaptcha', [WhatsappFlowController::class, 'updateWebFormRecaptcha'])->name('web-form.recaptcha');
     });

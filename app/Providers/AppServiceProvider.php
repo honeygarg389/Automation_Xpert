@@ -6,8 +6,6 @@ use App\Events\AutomationFailed;
 use App\Events\AutomationWebhookReceived;
 use App\Events\CampaignCompleted;
 use App\Events\CommerceEventReceived;
-use App\Modules\Flows\Events\WhatsappFlowSubmitted;
-use App\Modules\Flows\Listeners\WhatsappFlowSubmissionListener;
 use App\Events\ContactCreated;
 use App\Events\ConversationAssigned;
 use App\Events\MessageReceived;
@@ -34,6 +32,8 @@ use App\Listeners\SendTrialEndingNotification;
 use App\Listeners\SendWelcomeNotification;
 use App\Models\Client;
 use App\Models\Workspace;
+use App\Modules\Flows\Events\WhatsappFlowSubmitted;
+use App\Modules\Flows\Listeners\WhatsappFlowSubmissionListener;
 use App\Modules\Shared\Services\ChannelManager;
 use App\Modules\SmartQr\Listeners\RecordQrAttributionListener;
 use App\Services\Billing\BillingGatewayRegistry;
@@ -149,6 +149,12 @@ class AppServiceProvider extends ServiceProvider
             // Limit is intentionally high: a single Meta app services multiple workspaces and
             // all their traffic arrives from a small pool of Meta egress IPs.
             return Limit::perMinute(1000)->by($request->getClientIp());
+        });
+
+        // Public form POSTs are lead-capture, not a shared physical QR scan:
+        // repeat attempts from one address are a useful abuse signal.
+        RateLimiter::for('flow-form-submissions', function (Request $request) {
+            return Limit::perMinute(10)->by('flow-web-form:'.$request->ip());
         });
 
         RateLimiter::for('ai-runs', function (Request $request) {

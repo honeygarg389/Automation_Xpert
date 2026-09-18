@@ -44,11 +44,14 @@ use Illuminate\Support\Str;
  * @property string|null $category
  * @property string $status
  * @property list<array{id:string,title:string,fields:list<array<string,mixed>>}> $screens
- * @property array{button_text?:string,success_message?:string} $submit_settings
+ * @property array{button_text?:string,success_message?:string}|null $submit_settings
  * @property string|null $meta_flow_id
  * @property string|null $meta_sync_status
  * @property list<array<string,mixed>>|null $meta_validation_errors
  * @property string|null $meta_sync_error
+ * @property bool $web_form_enabled
+ * @property string|null $public_slug
+ * @property bool $recaptcha_enabled
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read int|null $submissions_count
@@ -98,6 +101,9 @@ class WhatsappFlow extends Model
         'meta_sync_status',
         'meta_validation_errors',
         'meta_sync_error',
+        'web_form_enabled',
+        'public_slug',
+        'recaptcha_enabled',
     ];
 
     protected function casts(): array
@@ -106,6 +112,8 @@ class WhatsappFlow extends Model
             'screens' => 'array',
             'submit_settings' => 'array',
             'meta_validation_errors' => 'array',
+            'web_form_enabled' => 'boolean',
+            'recaptcha_enabled' => 'boolean',
         ];
     }
 
@@ -121,6 +129,12 @@ class WhatsappFlow extends Model
     public function getRouteKeyName(): string
     {
         return 'uuid';
+    }
+
+    /** Smart QR's opaque public-token format: 128 bits of CSPRNG entropy. */
+    public static function generatePublicSlug(): string
+    {
+        return bin2hex(random_bytes(16));
     }
 
     /** @return BelongsTo<Workspace, $this> */
