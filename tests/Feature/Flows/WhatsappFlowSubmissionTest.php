@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Flows;
 
-use App\Models\User;
 use App\Models\Workspace;
 use App\Modules\Automation\Models\Automation;
 use App\Modules\Automation\Models\AutomationRun;
@@ -123,10 +122,12 @@ class WhatsappFlowSubmissionTest extends TestCase
             return [$flow, $run];
         });
 
+        // Meta's real nfm_reply never carries flow_token as a sibling key —
+        // it is nested inside response_json alongside the answer fields.
         $this->postInteractive($waba, [
             'name' => 'flow',
-            'flow_token' => 'flow_'.$sourceRun->id,
             'response_json' => json_encode([
+                'flow_token' => 'flow_'.$sourceRun->id,
                 'phone' => '+15555550101',
                 'first_name' => 'Overwriting attempt',
                 'email' => 'captured@example.test',

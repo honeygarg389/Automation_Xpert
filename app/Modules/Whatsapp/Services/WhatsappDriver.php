@@ -5,6 +5,7 @@ namespace App\Modules\Whatsapp\Services;
 use App\Events\MessageReceived;
 use App\Events\MessageStatusUpdated;
 use App\Modules\Broadcasting\Models\CampaignRecipient;
+use App\Modules\Flows\Events\WhatsappFlowSubmitted;
 use App\Modules\Shared\Contracts\ChannelDriverInterface;
 use App\Modules\Shared\Models\ChannelAccount;
 use App\Modules\Shared\Models\Contact;
@@ -12,7 +13,6 @@ use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
-use App\Modules\Flows\Events\WhatsappFlowSubmitted;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use App\Services\WebhookIdempotencyService;
@@ -377,14 +377,16 @@ class WhatsappDriver implements ChannelDriverInterface
         // this name and become a submission. Keep every other nfm_reply path
         // exactly as it was.
         if ($isFlowReply) {
-            $flowToken = $nfmReply['flow_token'] ?? null;
             $responseJson = $nfmReply['response_json'] ?? null;
             try {
                 $answers = is_string($responseJson) ? json_decode($responseJson, true, 512, JSON_THROW_ON_ERROR) : null;
             } catch (\JsonException) {
                 $answers = null;
             }
-            if (is_string($flowToken) && $flowToken !== '' && is_array($answers)) {
+            // Meta nests flow_token inside response_json alongside the answer
+            // fields — it is never a sibling key of nfm_reply itself.
+            $flowToken = is_array($answers) ? ($answers['flow_token'] ?? null) : null;
+            if (is_string($flowToken) && $flowToken !== '') {
                 WhatsappFlowSubmitted::dispatch($workspaceId, $contact->id, $flowToken, $answers);
             }
         }
