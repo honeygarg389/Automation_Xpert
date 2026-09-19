@@ -8,6 +8,7 @@ use App\Modules\Whatsapp\Services\CloudApiClient;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
 
@@ -98,9 +99,48 @@ class WhatsappFlowMetaSyncService
     }
 
     /**
+     * The single-click "Publish to Meta" action: validates the Flow has
+     * content (reusing the compiler's own structural checks rather than
+     * re-implementing them), syncs it (create-if-needed + upload JSON via
+     * syncToMeta()), stops here with Meta's own validation errors surfaced
+     * if the upload comes back invalid — syncToMeta() already fails and
+     * records that itself, so a non-success result here already means
+     * "do not proceed to publish", no separate check needed — and only then
+     * publishes via publishOnly() below.
+     *
+     * The existing "Sync Draft to Meta" action still calls syncToMeta()
+     * directly and stops there, unchanged, for the "push content and test in
+     * Draft before going live" workflow this deliberately does not fold in.
+     *
      * @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>}
      */
     public function publishToMeta(WhatsappFlow $flow): array
+    {
+        try {
+            $this->compiler->compile($flow);
+        } catch (InvalidArgumentException $exception) {
+            return $this->fail($flow, $exception->getMessage());
+        }
+
+        $syncResult = $this->syncToMeta($flow);
+        if (! $syncResult['success']) {
+            return $syncResult;
+        }
+
+        return $this->publishOnly($flow->fresh());
+    }
+
+    /**
+     * Publish-only: requires the Flow to already be synced (has a
+     * meta_flow_id). This is the pre-existing "Publish" action, unchanged —
+     * reused directly by the chained publishToMeta() above once its own sync
+     * step succeeds, and still reachable on its own via the existing
+     * POST /{flow}/publish route for a Flow already synced via "Sync Draft
+     * to Meta".
+     *
+     * @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>}
+     */
+    public function publishOnly(WhatsappFlow $flow): array
     {
         if (! $flow->meta_flow_id) {
             return $this->fail($flow, 'Sync this Flow to Meta before publishing it.');
@@ -130,6 +170,60 @@ class WhatsappFlowMetaSyncService
     }
 
     /**
+     * Section H refinement — duplicating a PUBLISHED flow. Meta's documented
+     * Create-Flow-with-clone pattern (`clone_flow_id`) gives the new local
+     * copy a genuine Meta-side lineage back to the original, instead of a
+     * purely local copy that only happens to share the same compiled JSON.
+     * A Draft source has no meaningful Meta-side identity to clone from yet,
+     * so callers only reach this when the source is currently PUBLISHED on
+     * Meta — see WhatsappFlowController::duplicate().
+     *
+     * Best-effort: if there is no active WABA/phone number, or Meta rejects
+     * the clone call, the local duplicate row this was called for is left
+     * exactly as a Draft-source duplicate would be — unconnected to Meta —
+     * rather than failing the whole "Duplicate" action outright. The caller
+     * decides what to tell the user from the returned message.
+     *
+     * @return array{success:bool,message:string}
+     */
+    public function cloneOnMeta(WhatsappFlow $copy, string $sourceMetaFlowId): array
+    {
+        $waba = WhatsappBusinessAccount::query()
+            ->where('workspace_id', $copy->workspace_id)
+            ->where('status', 'active')
+            ->first();
+        $client = CloudApiClient::forWorkspace($copy->workspace_id);
+
+        if (! $waba || ! $client) {
+            return ['success' => false, 'message' => 'Connect an active WhatsApp Business Account before cloning this Flow on Meta.'];
+        }
+
+        try {
+            $response = $client->createFlow($waba->waba_id, $this->metaNameFor($copy), $copy->category ?: 'OTHER', $sourceMetaFlowId);
+            if (! $response->successful()) {
+                return [
+                    'success' => false,
+                    'message' => self::isPermissionError($response) ? self::MISSING_MANAGEMENT_PERMISSION_MESSAGE : 'Meta could not clone this Flow.',
+                ];
+            }
+
+            $metaFlowId = (string) $response->json('id', '');
+            if ($metaFlowId === '') {
+                return ['success' => false, 'message' => 'Meta did not return a Flow ID for the clone.'];
+            }
+
+            $copy->update([
+                'meta_flow_id' => $metaFlowId,
+                'meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_SYNCED_DRAFT,
+            ]);
+
+            return ['success' => true, 'message' => 'Flow duplicated and cloned on Meta as a new draft.'];
+        } catch (Throwable) {
+            return ['success' => false, 'message' => 'Meta could not clone this Flow. Please try again.'];
+        }
+    }
+
+    /**
      * Pull every locally Meta-linked Flow in a workspace. This is intentionally
      * a Meta-authoritative operation: the UI requires an explicit warning
      * before it calls this method because saved local screens are overwritten.
@@ -146,6 +240,53 @@ class WhatsappFlowMetaSyncService
         }
 
         return $summary;
+    }
+
+    /**
+     * Section E / Task 3 — the dashboard's single "Sync from Meta" button.
+     * Does the whole reconcile-with-Meta job in one call: refreshes every
+     * already-linked Flow's content (pullAllFromMeta(), unchanged) AND
+     * automatically imports every Meta Flow this workspace has no local
+     * record of yet, reusing importFlow()'s exact decompile-based creation
+     * logic — the same logic the manual picker (listImportableFlows() +
+     * importFlow(), still independently reachable and unchanged) already
+     * used, just no longer gated on a separate manual selection step for
+     * THIS action specifically.
+     *
+     * A workspace with no active WABA (or one Meta genuinely can't be
+     * reached for) simply imports nothing here — that is reported as zero
+     * imports, not as an error for the whole action, since the refresh half
+     * may still have done real, useful work.
+     *
+     * @return array{updated:int,imported:int,errors:int}
+     */
+    public function syncAllFromMeta(int $workspaceId): array
+    {
+        $pull = $this->pullAllFromMeta(WhatsappFlow::query()
+            ->whereNotNull('meta_flow_id')
+            ->get());
+
+        $imported = 0;
+        $importErrors = 0;
+        try {
+            $candidates = $this->listImportableFlows($workspaceId);
+        } catch (RuntimeException) {
+            $candidates = [];
+        }
+        foreach ($candidates as $candidate) {
+            try {
+                $this->importFlow($workspaceId, $candidate['meta_flow_id']);
+                $imported++;
+            } catch (RuntimeException) {
+                $importErrors++;
+            }
+        }
+
+        return [
+            'updated' => $pull['updated'],
+            'imported' => $imported,
+            'errors' => $pull['failed'] + $importErrors,
+        ];
     }
 
     /** @return 'updated'|'unchanged'|'failed' */
@@ -188,13 +329,35 @@ class WhatsappFlowMetaSyncService
             }
 
             $decompiled = $this->compiler->decompile($metaJson);
-            if ($flow->screens === $decompiled['screens'] && $flow->submit_settings === $decompiled['submit_settings']) {
+            if ($flow->screens === $decompiled['screens']
+                && $flow->submit_settings === $decompiled['submit_settings']
+                && ($flow->meta_passthrough ?? []) === $decompiled['meta_passthrough']) {
+                // Task 3 — this branch used to return with NO update() call
+                // at all, so a STALE meta_sync_error left over from an
+                // earlier failed pull attempt (e.g. a transient download
+                // failure) could sit there indefinitely: the local content
+                // never changed, so every later pull kept landing on
+                // "unchanged" and never reached the 'updated' branch below,
+                // which is the only place this used to get cleared. A
+                // successful pull — even one that finds nothing to change —
+                // is still positive proof the Flow is fine, and must clear
+                // it, not just a pull that also changes content.
+                if ($flow->meta_sync_error !== null) {
+                    $flow->update(['meta_sync_error' => null]);
+                }
+
                 return 'unchanged';
             }
 
             $flow->update([
                 'screens' => $decompiled['screens'],
                 'submit_settings' => $decompiled['submit_settings'],
+                // Section D — Meta's data-exchange/routing metadata this
+                // Flow may carry, so a later re-compile re-emits it instead
+                // of silently dropping it. Null rather than [] when there is
+                // nothing to preserve — matches the column's "nothing here"
+                // default rather than persisting a meaningless empty object.
+                'meta_passthrough' => $decompiled['meta_passthrough'] !== [] ? $decompiled['meta_passthrough'] : null,
                 'meta_sync_error' => null,
             ]);
 
@@ -327,6 +490,74 @@ class WhatsappFlowMetaSyncService
     }
 
     /**
+     * Section G — the "Delete" action, state-machine-aware. Meta's own error
+     * 139004 ("Can't delete published Flow... deprecate instead") means a
+     * single DELETE call is only correct for two of three states, and wrong
+     * (a guaranteed API failure) for the third:
+     *
+     *   - Never synced (no meta_flow_id): nothing exists on Meta to remove —
+     *     the caller does a plain local soft-delete, no Graph call at all.
+     *   - Synced but still Draft on Meta: Meta's real DELETE /{flow-id} is
+     *     valid here — call it, then the caller does the local soft-delete
+     *     too, exactly matching "Delete" everywhere it is used.
+     *   - Published on Meta: DELETE is REJECTED by Meta outright. The only
+     *     valid action is deprecate — POST /{flow-id}/deprecate — which is
+     *     irreversible and is NOT a delete: the row and its submission
+     *     history stay, only meta_sync_status changes to 'deprecated'. The
+     *     caller must NOT soft-delete in this branch.
+     *
+     * On any Meta-side failure, nothing local changes — no soft-delete, no
+     * status flip — so the local row never claims an outcome ("deleted",
+     * "deprecated") that Meta itself refused. A retry from the exact same
+     * state is always safe.
+     *
+     * @return array{success:bool,message:string,action:'local_only'|'meta_delete'|'meta_deprecate'}
+     */
+    public function removeFromMeta(WhatsappFlow $flow): array
+    {
+        if (! $flow->meta_flow_id) {
+            return ['success' => true, 'message' => 'Flow deleted.', 'action' => 'local_only'];
+        }
+
+        $client = CloudApiClient::forWorkspace($flow->workspace_id);
+        $isPublished = $flow->meta_sync_status === WhatsappFlow::META_SYNC_STATUS_PUBLISHED;
+
+        if (! $client) {
+            return [
+                'success' => false,
+                'message' => 'Connect an active WhatsApp Business Account before '.($isPublished ? 'deprecating' : 'deleting').' this Flow.',
+                'action' => $isPublished ? 'meta_deprecate' : 'meta_delete',
+            ];
+        }
+
+        if ($isPublished) {
+            $response = $client->deprecateFlow($flow->meta_flow_id);
+            if (! $response->successful()) {
+                return [
+                    'success' => false,
+                    'message' => self::isPermissionError($response) ? self::MISSING_MANAGEMENT_PERMISSION_MESSAGE : 'Meta could not deprecate this Flow. Please try again.',
+                    'action' => 'meta_deprecate',
+                ];
+            }
+
+            $flow->update(['meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_DEPRECATED]);
+
+            return ['success' => true, 'message' => 'Flow deprecated on Meta. This cannot be undone.', 'action' => 'meta_deprecate'];
+        }
+
+        $response = $client->deleteFlow($flow->meta_flow_id);
+        if (! $response->successful()) {
+            return [
+                'success' => false,
+                'message' => self::isPermissionError($response) ? self::MISSING_MANAGEMENT_PERMISSION_MESSAGE : 'Meta could not delete this Flow. Please try again.',
+                'action' => 'meta_delete',
+            ];
+        }
+
+        return ['success' => true, 'message' => 'Flow deleted.', 'action' => 'meta_delete'];
+    }
+
+    /**
      * Meta Flow names are constrained to a portable ASCII identifier and 64
      * characters. The workspace id plus the full UUID make collisions across
      * workspaces and repeat authoring effectively impossible, even if WABAs
@@ -379,11 +610,23 @@ class WhatsappFlowMetaSyncService
      */
     private function placeholderScreens(): array
     {
+        // Section B (imported-flow round-trip fix) — this used to hardcode
+        // the literal "field_1" as both id and name. If the content fetch
+        // below then fails, this placeholder is what stays on the row
+        // (see the docblock above) — and duplicating THAT flow before a
+        // retry re-sync used to carry the numeric-suffixed "field_1" name
+        // straight through recompile into Meta's upload. nextUnique() with a
+        // fresh $used produces the bare "field" (no suffix at all, since
+        // nothing else claims it here), which can never collide with this
+        // shape again.
+        $used = [];
+        $name = MetaFlowIdentifier::nextUnique($used, 'field');
+
         return [[
             'id' => 'step_1',
             'title' => 'Imported from Meta',
             'fields' => [[
-                'id' => 'field_1', 'type' => 'text', 'label' => 'Field', 'name' => 'field_1',
+                'id' => $name, 'type' => 'text', 'label' => 'Field', 'name' => $name,
                 'required' => false, 'helper_text' => null, 'options' => [], 'step' => 1, 'order' => 1,
             ]],
         ]];
@@ -413,7 +656,65 @@ class WhatsappFlowMetaSyncService
             return $this->fail($flow, self::MISSING_MANAGEMENT_PERMISSION_MESSAGE);
         }
 
+        // Task 2 — Graph error 139001, confirmed live against Meta's real
+        // API: "Updating attempt failed" / "Flow can only be modified in
+        // Draft status". Distinct from a permission problem or a malformed
+        // request — the Flow's Meta-side copy has moved past Draft (usually
+        // deprecated or published directly on Meta, outside this app's own
+        // publish()/removeFromMeta() actions), which is exactly what made
+        // the LOCAL meta_sync_status stale in the first place.
+        if (self::isFlowNotDraftError($response)) {
+            return $this->failFlowNotDraft($flow);
+        }
+
         return $this->fail($flow, 'Meta could not sync this Flow. Please try again or review your WhatsApp connection.');
+    }
+
+    /** Graph error 139001 — a real error CODE, not a message-substring heuristic, so it is not vulnerable to Meta rewording the message text. */
+    private static function isFlowNotDraftError(Response $response): bool
+    {
+        $error = $response->json('error', []);
+        $code = is_array($error) ? (int) ($error['code'] ?? 0) : 0;
+
+        return $code === 139001;
+    }
+
+    /**
+     * Task 2 self-healing — one follow-up getFlow() call (the same method
+     * the import picker already uses) reconciles LOCAL meta_sync_status to
+     * Meta's REAL current status, so the dashboard badge (Section N's
+     * single-source-of-truth logic, which is authoritative on
+     * meta_sync_status once meta_flow_id exists) reflects reality going
+     * forward instead of staying wrong until a manual "Sync from Meta".
+     *
+     * Deliberately does NOT also set meta_sync_error: once reconciled,
+     * DEPRECATED/PUBLISHED are normal terminal states (see Section G), not
+     * an ongoing error condition the badge should keep flagging red forever
+     * — the specific explanation is returned as THIS result's message,
+     * surfaced once as a flash banner, not persisted as a standing claim.
+     *
+     * @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>}
+     */
+    private function failFlowNotDraft(WhatsappFlow $flow): array
+    {
+        $message = "This Flow's Meta-side copy is no longer in Draft status (it may have been deprecated or published directly on Meta) and can no longer be updated. Check its current status or create a new version.";
+
+        $client = CloudApiClient::forWorkspace($flow->workspace_id);
+        $metaStatus = $client?->getFlow((string) $flow->meta_flow_id)->json('status');
+        $reconciled = match ($metaStatus) {
+            'PUBLISHED' => WhatsappFlow::META_SYNC_STATUS_PUBLISHED,
+            'DEPRECATED' => WhatsappFlow::META_SYNC_STATUS_DEPRECATED,
+            'DRAFT' => WhatsappFlow::META_SYNC_STATUS_SYNCED_DRAFT,
+            default => null,
+        };
+
+        // The follow-up call itself failing, or returning a status this
+        // service doesn't model, is not swallowed silently — fall back to
+        // the existing FAILED bookkeeping rather than leaving
+        // meta_sync_status ambiguously untouched.
+        $flow->update(['meta_sync_status' => $reconciled ?? WhatsappFlow::META_SYNC_STATUS_FAILED]);
+
+        return ['success' => false, 'message' => $message, 'validation_errors' => []];
     }
 
     /** @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>} */

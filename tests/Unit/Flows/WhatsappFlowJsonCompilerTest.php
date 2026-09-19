@@ -38,7 +38,10 @@ class WhatsappFlowJsonCompilerTest extends TestCase
 
         $this->assertSame('6.3', $compiled['version']);
         $this->assertCount(2, $compiled['screens']);
-        $this->assertSame('SCREEN_CONTACT_1', $compiled['screens'][0]['id']);
+        // Task 1 — no numeric position suffix anymore (Meta rejects digits
+        // anywhere in a screen id); "contact" is already valid so it's
+        // preserved as-is under the "SCREEN_" prefix, uppercased.
+        $this->assertSame('SCREEN_CONTACT', $compiled['screens'][0]['id']);
         $this->assertFalse($compiled['screens'][0]['terminal']);
         $children = $compiled['screens'][0]['layout']['children'][0]['children'];
         $this->assertSame('Form', $compiled['screens'][0]['layout']['children'][0]['type']);
@@ -160,6 +163,56 @@ class WhatsappFlowJsonCompilerTest extends TestCase
 
         $this->assertSame($screens, $decompiled['screens']);
         $this->assertSame($submit, $decompiled['submit_settings']);
+    }
+
+    /**
+     * Task 1 (screenId() fix), regression — reproduces the exact real-world
+     * shape confirmed live against Meta's API in the diagnosis session: a
+     * flow whose screen uses the Builder's own default local id "step_1"
+     * (Builder.jsx's blankStep()) compiled to "SCREEN_STEP_1_1", which Meta's
+     * real validation response rejected outright: "Property 'id' should
+     * only consist of alphabets and underscores" at path `screens[0].id`.
+     * Confirmed against flow id=6 ("Lead", the already-Published flow used
+     * in that diagnosis) — its current content uses this exact "step_1"
+     * default, and compiling it with today's fix must never reproduce the
+     * old digit-suffixed shape anywhere.
+     */
+    #[Test]
+    public function a_flow_using_the_default_step_1_local_screen_id_never_compiles_to_a_digit_suffixed_screen_id(): void
+    {
+        $compiled = app(WhatsappFlowJsonCompiler::class)->compile($this->flow([[
+            'id' => 'step_1', 'title' => 'Step 1', 'fields' => [$this->field('name', 'text', 'Name')],
+        ]]));
+
+        $screenId = $compiled['screens'][0]['id'];
+        $this->assertSame('SCREEN_STEP', $screenId);
+        $this->assertDoesNotMatchRegularExpression('/[0-9]/', $screenId, 'No digit may appear anywhere in a compiled screen id.');
+        $this->assertNotSame('SCREEN_STEP_1_1', $screenId, 'The exact real-world violation confirmed live against Meta must never reappear.');
+    }
+
+    /**
+     * Multiple steps that all use the Builder's default "step_N" naming
+     * (the overwhelmingly common case — the UI never exposes an editable
+     * screen id, only a title) all sanitize to the SAME base ("SCREEN_STEP")
+     * and must disambiguate alphabetically, never by falling back to the
+     * digit each one originally differed by.
+     */
+    #[Test]
+    public function multiple_default_named_steps_disambiguate_alphabetically_with_no_digits_anywhere(): void
+    {
+        $compiled = app(WhatsappFlowJsonCompiler::class)->compile($this->flow([
+            ['id' => 'step_1', 'title' => 'Step 1', 'fields' => [$this->field('first_name', 'text', 'First name')]],
+            ['id' => 'step_2', 'title' => 'Step 2', 'fields' => [$this->field('email', 'email', 'Email')]],
+        ]));
+
+        $ids = array_column(array_slice($compiled['screens'], 0, 2), 'id');
+        $this->assertSame(['SCREEN_STEP', 'SCREEN_STEP_A'], $ids);
+        foreach ($ids as $id) {
+            $this->assertDoesNotMatchRegularExpression('/[0-9]/', $id);
+        }
+        // Navigation must reference the SAME disambiguated id, not the old digit-suffixed one.
+        $firstFooter = $compiled['screens'][0]['layout']['children'][0]['children'][1];
+        $this->assertSame('SCREEN_STEP_A', $firstFooter['on-click-action']['next']['name']);
     }
 
     #[Test]

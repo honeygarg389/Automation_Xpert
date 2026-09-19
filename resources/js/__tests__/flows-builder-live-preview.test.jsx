@@ -125,7 +125,7 @@ describe('live preview panel', () => {
     });
 });
 
-describe('published-flow edit warning', () => {
+describe('published-flow read-only notice (Section F)', () => {
     it('is absent for a flow that has never synced', () => {
         render(<FlowsBuilder flow={baseFlow({ meta_sync_status: null })} categories={['LEAD_GENERATION']} fieldTypes={FIELD_TYPES} />);
         expect(screen.queryByText(/live on Meta/)).not.toBeInTheDocument();
@@ -136,12 +136,15 @@ describe('published-flow edit warning', () => {
         expect(screen.queryByText(/live on Meta/)).not.toBeInTheDocument();
     });
 
-    it('appears, non-blocking, only when meta_sync_status is published', () => {
+    it('appears, and the Builder becomes read-only, only when meta_sync_status is published', () => {
         render(<FlowsBuilder flow={baseFlow({ meta_sync_status: 'published' })} categories={['LEAD_GENERATION']} fieldTypes={FIELD_TYPES} />);
 
         expect(screen.getByText(/live on Meta/)).toBeInTheDocument();
-        expect(screen.getByText(/revert it to Draft/)).toBeInTheDocument();
-        // Non-blocking: the Save button must still be present and not disabled by the warning itself.
-        expect(screen.getByRole('button', { name: /Save Changes/ })).not.toBeDisabled();
+        expect(screen.getByText(/can.t be edited here/)).toBeInTheDocument();
+        // Section F — a Published Flow hides Save/Sync/Publish entirely and offers only Duplicate.
+        expect(screen.queryByRole('button', { name: /Save Changes/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Sync Draft to Meta/ })).not.toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /Publish to Meta/ })).not.toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Duplicate/ })).toBeInTheDocument();
     });
 });

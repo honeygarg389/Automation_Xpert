@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 vi.mock('@inertiajs/react', () => ({
     usePage: () => ({ props: { flash: {} } }),
@@ -11,6 +11,7 @@ vi.mock('@inertiajs/react', () => ({
 vi.mock('@/Layouts/ClientLayout', () => ({ default: ({ children }) => <div>{children}</div> }));
 vi.mock('@/Components/EmptyState', () => ({ default: () => null }));
 
+import { router } from '@inertiajs/react';
 import FlowsIndex from '@/Pages/client/Flows/Index';
 
 const flow = (overrides = {}) => ({
@@ -129,62 +130,56 @@ describe('the read-only Info modal', () => {
 });
 
 /**
- * The "Sync Meta Flows" import picker — the feature that took over the name
- * from the renamed bulk-reconcile action. Frontend half of
- * WhatsappFlowImportTest.php's backend coverage: this proves the picker
- * fetches, renders candidates, and gates Import on a selection — not that
- * import() itself is correct (already proven server-side).
+ * Section E — "Sync from Meta" unifies the old separate "Sync Meta Flows"
+ * (import picker) and "Sync Status" (bulk refresh) buttons into one action.
+ *
+ * Task 3 refinement — this is now a single POST to its own dedicated
+ * `sync-from-meta` endpoint (WhatsappFlowMetaSyncService::syncAllFromMeta()),
+ * which refreshes linked flows AND auto-imports unmatched ones server-side
+ * in one call and returns one concrete "{updated} updated, {imported}
+ * imported, {errors} errors" summary — surfaced through this page's existing
+ * flash-banner convention, same as every other action here. The manual
+ * checkbox picker this button used to open is gone from this entry point
+ * (a single deterministic summary isn't obtainable from an action whose
+ * import half waits on an arbitrary later user choice); its underlying
+ * routes stay independently reachable and are covered by their own backend
+ * tests.
  */
-describe('the Sync Meta Flows import picker', () => {
+describe('the Sync from Meta action (Section E / Task 3)', () => {
+    beforeEach(() => {
+        router.post.mockClear();
+    });
+
     afterEach(() => {
-        vi.unstubAllGlobals();
+        window.confirm = undefined;
     });
 
-    it('fetches the picker endpoint and lists importable Meta flows with their badges', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: true,
-            json: async () => ({ flows: [
-                { meta_flow_id: 'm1', name: 'Untitled Survey', status: 'DRAFT', categories: ['SURVEY'], validation_errors: [] },
-            ] }),
-        }));
+    it('posts once to the dedicated sync-from-meta endpoint after confirmation', () => {
+        window.confirm = vi.fn(() => true);
         render(<FlowsIndex flows={[flow()]} categories={['LEAD_GENERATION']} />);
 
-        fireEvent.click(screen.getByRole('button', { name: /Sync Meta Flows/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Sync from Meta/i }));
 
-        await waitFor(() => expect(screen.getByText('Untitled Survey')).toBeInTheDocument());
-        expect(within(screen.getByRole('dialog')).getByText('DRAFT')).toBeInTheDocument();
-        expect(fetch).toHaveBeenCalledWith('/client.flows.import.picker', expect.anything());
+        expect(window.confirm).toHaveBeenCalledTimes(1);
+        expect(router.post).toHaveBeenCalledTimes(1);
+        expect(router.post).toHaveBeenCalledWith(route('client.flows.sync-from-meta'), {}, expect.anything());
     });
 
-    it('disables Import until at least one candidate is selected, then enables it', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: true,
-            json: async () => ({ flows: [
-                { meta_flow_id: 'm1', name: 'Untitled Survey', status: 'DRAFT', categories: [], validation_errors: [] },
-            ] }),
-        }));
+    it('does nothing at all when the overwrite warning is declined', () => {
+        window.confirm = vi.fn(() => false);
         render(<FlowsIndex flows={[flow()]} categories={['LEAD_GENERATION']} />);
-        fireEvent.click(screen.getByRole('button', { name: /Sync Meta Flows/i }));
-        await waitFor(() => expect(screen.getByText('Untitled Survey')).toBeInTheDocument());
 
-        const importButton = screen.getByRole('button', { name: /^Import/ });
-        expect(importButton).toBeDisabled();
+        fireEvent.click(screen.getByRole('button', { name: /Sync from Meta/i }));
 
-        fireEvent.click(screen.getByLabelText('Untitled Survey'));
-
-        expect(importButton).not.toBeDisabled();
-        expect(importButton).toHaveTextContent('Import (1)');
+        expect(router.post).not.toHaveBeenCalled();
     });
 
-    it('shows the fetch error rather than an empty list when Meta cannot be reached', async () => {
-        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-            ok: false,
-            json: async () => ({ message: 'Connect an active WhatsApp Business Account before importing Flows.' }),
-        }));
+    it('no longer opens any import picker modal from this button', () => {
+        window.confirm = vi.fn(() => true);
         render(<FlowsIndex flows={[flow()]} categories={['LEAD_GENERATION']} />);
 
-        fireEvent.click(screen.getByRole('button', { name: /Sync Meta Flows/i }));
+        fireEvent.click(screen.getByRole('button', { name: /Sync from Meta/i }));
 
-        await waitFor(() => expect(screen.getByText(/Connect an active WhatsApp Business Account/)).toBeInTheDocument());
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 });
