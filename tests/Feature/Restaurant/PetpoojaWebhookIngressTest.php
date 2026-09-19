@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Restaurant;
 
+use App\Modules\Restaurant\Jobs\ProcessPosWebhookEventJob;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\PosWebhookEvent;
 use App\Modules\Restaurant\Models\PosWebhookRejection;
@@ -30,6 +31,25 @@ class PetpoojaWebhookIngressTest extends TestCase
     use RefreshDatabase;
 
     private const URL = '/webhooks/pos/petpooja';
+
+    /**
+     * Phase 2 slice 2 added ProcessPosWebhookEventJob, dispatched for a
+     * valid 'orderdetails' event. This file's whole point predates and is
+     * unrelated to that job — it pins INGRESS capture (bytes, hashing,
+     * dedup, rejection) — so the queue is faked class-wide to keep this
+     * file's assertions exactly what they were before slice 2 existed. Under
+     * this app's test QUEUE_CONNECTION=sync, an un-faked dispatch would run
+     * the job inline and mutate pos_webhook_events.attempts/processing_status
+     * as a side effect of a test that has nothing to do with processing.
+     * Dispatch DECISIONS (which outcomes get a job at all) are covered by
+     * PetpoojaWebhookDispatchTest and this file's own
+     * a_valid_orderdetails_event_dispatches_the_processing_job() below.
+     */
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Queue::fake();
+    }
 
     // ══ Fixtures — realistic Petpooja Order Push payload shapes ══════════
 
@@ -531,17 +551,26 @@ class PetpoojaWebhookIngressTest extends TestCase
         }
     }
 
-    // ══ No side effects beyond capture ═══════════════════════════════
+    // ══ Dispatch behaviour ═════════════════════════════════════════════
 
+    /**
+     * Phase 1B pinned "no side effects beyond capture" as an absolute rule.
+     * Phase 2 slice 2 deliberately changed that for exactly one outcome: a
+     * valid, authenticated 'orderdetails' event now dispatches
+     * ProcessPosWebhookEventJob (see PetpoojaWebhookController's own
+     * docblock). Every other outcome — including the rejected/unresolvable
+     * connection this test already exercised — must still dispatch nothing.
+     * The full outcome x dispatch matrix (quarantined, exact-retry, rejected)
+     * lives in PetpoojaWebhookDispatchTest; this pins the two cases this
+     * file's own fixtures already cover.
+     */
     #[Test]
-    public function no_queue_job_is_dispatched_for_any_outcome(): void
+    public function a_valid_orderdetails_event_dispatches_the_processing_job_but_a_rejected_request_does_not(): void
     {
-        Queue::fake();
-
         $connection = $this->activeConnection();
         $this->postRaw(json_encode($this->basicOrderPayload($connection->external_ref, $this->tokenFor($connection))));
         $this->postRaw(json_encode($this->basicOrderPayload('unknown', 'irrelevant')));
 
-        Queue::assertNothingPushed();
+        Queue::assertPushed(ProcessPosWebhookEventJob::class, 1);
     }
 }

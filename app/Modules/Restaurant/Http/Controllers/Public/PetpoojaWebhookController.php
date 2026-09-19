@@ -3,6 +3,7 @@
 namespace App\Modules\Restaurant\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Restaurant\Jobs\ProcessPosWebhookEventJob;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\PosWebhookEvent;
 use App\Modules\Restaurant\Models\PosWebhookRejection;
@@ -13,8 +14,12 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Phase 1B — Petpooja sandbox webhook ingress. Secure capture only: no bill
- * processing, no customer sync, no queue dispatch, no outbound messaging.
+ * Phase 1B — Petpooja sandbox webhook ingress: secure capture. Phase 2 slice 2
+ * added exactly one thing on top — dispatching `ProcessPosWebhookEventJob`
+ * for a valid, authenticated `orderdetails` event once its row is durably
+ * committed. Everything else stays capture-only: no bill processing happens
+ * IN this controller (it happens in the queued job), no outbound messaging,
+ * no customer webhooks, no external HTTP calls from this class.
  * See PosWebhookEvent's class docblock for the two CRITICAL invariants this
  * controller exists to satisfy (workspace_id provenance, raw-byte hashing).
  *
@@ -162,8 +167,8 @@ class PetpoojaWebhookController extends Controller
         ?string $failureReason,
     ): JsonResponse {
         try {
-            DB::transaction(function () use ($connection, $payloadHash, $rawBody, $payload, $eventType, $processingStatus, $failureReason) {
-                PosWebhookEvent::create([
+            $event = DB::transaction(function () use ($connection, $payloadHash, $rawBody, $payload, $eventType, $processingStatus, $failureReason) {
+                $event = PosWebhookEvent::create([
                     'connection_id' => $connection->id,
                     // ⚠️ workspace_id comes ONLY from the resolved connection —
                     // never from anything in $payload. See PosWebhookEvent's
@@ -181,13 +186,16 @@ class PetpoojaWebhookController extends Controller
                 ]);
 
                 $connection->update(['last_event_at' => now()]);
+
+                return $event;
             });
         } catch (QueryException $e) {
             if ($this->isDuplicateDelivery($e)) {
                 // Exact-retry: the row already exists from the original
-                // delivery. Same success response, no second row, and
-                // last_event_at from the original delivery stands — this
-                // is a retry, not a new event.
+                // delivery, and its processing job was already dispatched on
+                // that original delivery — never re-dispatch here. Same
+                // success response, no second row, and last_event_at from the
+                // original delivery stands — this is a retry, not a new event.
                 return response()->json(['status' => 'ok']);
             }
 
@@ -201,6 +209,33 @@ class PetpoojaWebhookController extends Controller
             ]);
 
             return response()->json(['status' => 'error'], 500);
+        }
+
+        // Dispatched AFTER the transaction above has committed — never from
+        // inside it — so a worker can never pick up a job whose row is not
+        // yet durable. Only a valid, authenticated 'orderdetails' event
+        // (processing_status === STATUS_PENDING) gets a job; quarantined
+        // events ('missing_event'/'unsupported_event') have no processing
+        // job in this slice and must never be dispatched.
+        //
+        // ⚠️ Deliberately isolated in its own try/catch: this webhook's HTTP
+        // contract with Petpooja depends ONLY on whether the event was
+        // DURABLY CAPTURED (already true above), never on the processing
+        // job. Under a real (database) queue connection dispatch() only
+        // enqueues a row and cannot throw for job-internal reasons; under
+        // `sync` (this app's test environment) dispatch() executes the job
+        // inline, and a downstream processing failure must still never turn
+        // an accepted webhook into a 500 that makes Petpooja redeliver a
+        // payload that was already safely stored.
+        if ($processingStatus === PosWebhookEvent::STATUS_PENDING) {
+            try {
+                ProcessPosWebhookEventJob::dispatch($event->id)->onQueue('restaurant');
+            } catch (\Throwable $e) {
+                Log::error('Petpooja webhook: failed to dispatch order-processing job', [
+                    'event_id' => $event->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
 
         return response()->json(['status' => 'ok']);

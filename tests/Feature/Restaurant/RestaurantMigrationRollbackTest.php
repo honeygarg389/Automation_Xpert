@@ -550,4 +550,47 @@ class RestaurantMigrationRollbackTest extends TestCase
             'updated_at' => now(),
         ]);
     }
+
+    /**
+     * `add_source_fields_to_restaurant_bills_table` changes what `placed_at`
+     * MEANS (it used to be the timezone-less `created_on` read as UTC, falling
+     * back to the receive time — a guess). Rows written under the old behaviour
+     * must not keep claiming a certainty they never had, and must get the new
+     * operational ordering key. Rolls back to just before that migration by
+     * NAME (see rollbackRestaurantMigrations()), seeds a legacy row, re-applies.
+     */
+    #[Test]
+    public function the_source_fields_migration_repairs_legacy_bill_rows_and_rolls_back_cleanly(): void
+    {
+        $this->rollbackRestaurantMigrations('2026_09_20_100200_add_source_fields_to_restaurant_bills_table');
+
+        $this->assertFalse(Schema::hasColumn('restaurant_bills', 'source_order_status'));
+        $this->assertFalse(Schema::hasColumn('restaurant_bills', 'source_created_on_raw'));
+        $this->assertFalse(Schema::hasColumn('restaurant_bills', 'received_at'));
+        $this->assertTrue(Schema::hasTable('restaurant_bills'), 'Only the source-fields migration should have been undone.');
+
+        $connection = PosConnection::factory()->create();
+        DB::table('restaurant_bills')->insert([
+            'workspace_id' => $connection->workspace_id,
+            'connection_id' => $connection->id,
+            'provider' => 'petpooja',
+            'external_order_id' => 'LEGACY-1',
+            // The old behaviour: timezone-less created_on stored as if UTC.
+            'placed_at' => '2025-04-04 11:45:35',
+            'created_at' => '2025-04-04 12:00:00',
+            'updated_at' => '2025-04-04 12:00:00',
+        ]);
+
+        Artisan::call('migrate', ['--path' => self::RESTAURANT_MIGRATIONS_PATH]);
+
+        $this->assertTrue(Schema::hasColumn('restaurant_bills', 'source_order_status'));
+        $this->assertTrue(Schema::hasColumn('restaurant_bills', 'source_created_on_raw'));
+        $this->assertTrue(Schema::hasColumn('restaurant_bills', 'received_at'));
+
+        $legacy = DB::table('restaurant_bills')->where('external_order_id', 'LEGACY-1')->first();
+        $this->assertNull($legacy->placed_at, 'A UTC guess must not survive as if it were an order time.');
+        $this->assertSame('2025-04-04 12:00:00', $legacy->received_at, 'The legacy row gets its arrival time as the ordering key.');
+        $this->assertNull($legacy->source_order_status);
+        $this->assertNull($legacy->source_created_on_raw);
+    }
 }

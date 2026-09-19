@@ -62,6 +62,18 @@ services:
     deploy:
       replicas: 2
 
+  # Petpooja order processing (ProcessPosWebhookEventJob). WITHOUT this
+  # service every job dispatched onto `restaurant` sits unconsumed forever:
+  # no error, no failed_jobs row, the event just stays `pending` — and the
+  # stalled-event sweep would keep redispatching onto the same dead queue.
+  # Safe to run several replicas: the job's claim is an atomic conditional
+  # UPDATE and the bill write is a race-safe upsert.
+  queue-restaurant:
+    <<: *queue-defaults
+    command: php artisan queue:work redis --queue=restaurant --sleep=3 --tries=3 --max-time=1800
+    deploy:
+      replicas: 2
+
   reverb:
     <<: *queue-defaults
     command: php artisan reverb:start --host=0.0.0.0 --port=8080
