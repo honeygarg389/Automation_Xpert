@@ -1,22 +1,21 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
-    AlertTriangle, ClipboardList, Download, FileInput, Info as InfoIcon, KeyRound, LayoutGrid,
-    MoreVertical, Pencil, Plus, RefreshCw, Rocket, Search, Send, Trash2,
+    AlertTriangle, ChevronDown, ClipboardList, Copy, Eye, FileInput, Info as InfoIcon, KeyRound, LayoutGrid,
+    MoreVertical, Pencil, Phone, Plus, RefreshCw, Rocket, Search, Send, ShieldOff, Trash2,
 } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ClientLayout from '@/Layouts/ClientLayout';
 import EmptyState from '@/Components/EmptyState';
-import { Badge, Button, Checkbox, ConfirmDestructiveModal, Modal, Tabs } from '@/Components/ui';
+import { Badge, Button, ConfirmDestructiveModal, Modal, Tabs } from '@/Components/ui';
 
-const META_LABELS = { syncing: 'Syncing', synced_draft: 'Synced draft', published: 'Published', failed: 'Sync failed' };
+const META_LABELS = { syncing: 'Syncing', synced_draft: 'Synced draft', published: 'Published', failed: 'Sync failed', deprecated: 'Deprecated' };
 
-// The card's own status pill shows flow.status (this workspace's authored
-// draft/published state) — a plain 2-value enum, distinct from the richer
-// meta_sync_status shown in the Info modal and in the card's bottom banner.
 const STATUS_PILL_CLASSES = {
     published: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
     draft: 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400',
+    failed: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    deprecated: 'bg-neutral-200 text-neutral-700 dark:bg-neutral-700 dark:text-neutral-300',
 };
 
 // The bottom banner's tone -> icon-circle color + icon, keyed the same as
@@ -38,11 +37,17 @@ export default function FlowsIndex({ flows, categories }) {
     const [syncingStatus, setSyncingStatus] = useState(false);
     const [search, setSearch] = useState('');
     const [infoFlow, setInfoFlow] = useState(null);
-    const [importState, setImportState] = useState(null); // null | { loading, error, candidates, selected, submitting }
     const [name, setName] = useState('');
     const [category, setCategory] = useState('OTHER');
     const [createErrors, setCreateErrors] = useState({});
     const [createProcessing, setCreateProcessing] = useState(false);
+    // Section E — "Send Test" from the Published card's ⋮ menu, mirroring
+    // Builder.jsx's own modal exactly (same endpoint, same plausibility gate)
+    // since a Published flow's Builder is read-only and this is one of the
+    // few actions still offered for it there too.
+    const [testSendFlow, setTestSendFlow] = useState(null);
+    const [testSendPhone, setTestSendPhone] = useState('');
+    const [testSendState, setTestSendState] = useState({ sending: false, error: null, success: null });
 
     const filteredFlows = useMemo(() => {
         const query = search.trim().toLowerCase();
@@ -71,45 +76,27 @@ export default function FlowsIndex({ flows, categories }) {
         router.post(route('client.flows.' + action, flow.uuid), {}, { preserveScroll: true, onFinish: () => setActioning(null) });
     };
 
-    // "Sync Status" — the bulk RECONCILE action. Only ever touches flows this
-    // workspace already links (meta_flow_id set): pulls each one's content
-    // down from Meta, overwriting local screens. Not the same thing as the
-    // Import picker below, which brings in flows we don't have yet.
-    const syncStatus = () => {
-        if (!window.confirm('Sync Status will overwrite saved local screens for every already-linked flow with the current Meta Flow JSON. Continue?')) return;
+    // Section E — "Sync from Meta" unifies what used to be two separate
+    // header buttons ("Sync Meta Flows" the manual import picker, and "Sync
+    // Status" the bulk reconcile) into one action.
+    //
+    // Task 3 refinement — this now does the WHOLE job in a single backend
+    // call (WhatsappFlowMetaSyncService::syncAllFromMeta(), routed through
+    // its own dedicated `sync-from-meta` endpoint): refresh every
+    // already-linked flow's content from Meta AND automatically import
+    // every Meta flow this workspace doesn't have locally yet, then report
+    // one concrete "{updated} updated, {imported} imported, {errors}
+    // errors" summary via the existing flash-banner convention. This
+    // replaces the earlier manual checkbox picker for THIS action — a
+    // single deterministic summary is not obtainable from an action whose
+    // import half waits on an arbitrary later user choice. The picker's own
+    // routes/controller actions (client.flows.import.picker/.store) are
+    // untouched and still independently reachable; only this page's wiring
+    // to them, which had no other caller, was removed.
+    const syncFromMeta = () => {
+        if (!window.confirm('Sync from Meta will overwrite saved local screens for every already-linked flow with the current Meta Flow JSON, and automatically import any new flows found on Meta. Continue?')) return;
         setSyncingStatus(true);
-        router.post(route('client.flows.sync-status'), {}, { preserveScroll: true, onFinish: () => setSyncingStatus(false) });
-    };
-
-    // "Sync Meta Flows" — the IMPORT picker. Finds Meta flows with no local
-    // record and lets the owner bring selected ones in as new local flows.
-    const openImportPicker = async () => {
-        setImportState({ loading: true, error: null, candidates: [], selected: [], submitting: false });
-        try {
-            const response = await fetch(route('client.flows.import.picker'), { headers: { Accept: 'application/json' } });
-            const body = await response.json();
-            if (!response.ok) throw new Error(body.message ?? 'Meta Flows could not be listed.');
-            setImportState({ loading: false, error: null, candidates: body.flows, selected: [], submitting: false });
-        } catch (error) {
-            setImportState({ loading: false, error: error.message, candidates: [], selected: [], submitting: false });
-        }
-    };
-    const toggleImportSelection = (metaFlowId) => {
-        setImportState((state) => ({
-            ...state,
-            selected: state.selected.includes(metaFlowId)
-                ? state.selected.filter((id) => id !== metaFlowId)
-                : [...state.selected, metaFlowId],
-        }));
-    };
-    const submitImport = () => {
-        if (!importState || importState.selected.length === 0) return;
-        setImportState((state) => ({ ...state, submitting: true }));
-        router.post(route('client.flows.import.store'), { meta_flow_ids: importState.selected }, {
-            preserveScroll: true,
-            onSuccess: () => setImportState(null),
-            onFinish: () => setImportState((state) => state && ({ ...state, submitting: false })),
-        });
+        router.post(route('client.flows.sync-from-meta'), {}, { preserveScroll: true, onFinish: () => setSyncingStatus(false) });
     };
 
     const deleteFlow = () => {
@@ -119,20 +106,94 @@ export default function FlowsIndex({ flows, categories }) {
             onSuccess: () => setDeleteConfirm(null),
         });
     };
+    // Section G — the destroy() route itself already branches on the Flow's
+    // real Meta state (see WhatsappFlowMetaSyncService::removeFromMeta());
+    // this only decides which COPY the confirmation modal shows before that
+    // call is made, since a Published flow is never actually deleted — it is
+    // deprecated, irreversibly, and that must read as a materially different
+    // and stronger warning than a routine delete.
+    const isDeprecateConfirm = deleteConfirm?.meta_sync_status === 'published';
+    const testSendUrl = () => testSendFlow && route('client.flows.test-send', testSendFlow.uuid);
+    const submitTestSend = async (event) => {
+        event.preventDefault();
+        setTestSendState({ sending: true, error: null, success: null });
+        try {
+            const response = await fetch(testSendUrl(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]')?.content,
+                },
+                body: JSON.stringify({ phone_number: testSendPhone }),
+            });
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.message ?? 'Could not send the test message.');
+            setTestSendState({ sending: false, error: null, success: body.message });
+            setTimeout(() => setTestSendFlow(null), 1500);
+        } catch (error) {
+            setTestSendState({ sending: false, error: error.message, success: null });
+        }
+    };
 
     const webFormUrl = (flow) => (flow.public_slug ? route('public.flows.form.show', flow.public_slug) : null);
 
-    const statusBanner = (flow) => {
+    /**
+     * Section N — the SINGLE source of truth for "is this Flow live",
+     * shared by the card's status badge AND its status-banner text so they
+     * can never contradict each other. Before this, the badge read local
+     * `flow.status` (this workspace's authored intent) while the banner
+     * read `meta_sync_status` (Meta's own last-known platform state) — two
+     * different fields answering the same visible question, with nothing
+     * keeping them consistent. A flow whose local `status` was ever set to
+     * "published" without a successful Meta sync (e.g. via a direct API
+     * call, or a stale value predating a failed sync) could show a
+     * "PUBLISHED" badge right next to a "Not yet live on Meta platform"
+     * panel — this is exactly the contradiction being fixed.
+     *
+     * Once a Flow has ever synced (meta_flow_id set), Meta's own
+     * meta_sync_status is authoritative for "is this live" — refreshed via
+     * "Sync from Meta" / "Sync Status". A Flow that has never synced at all
+     * has no Meta-side truth yet to defer to, so its local draft/published
+     * intent is shown as-is; there is no Meta state for it to contradict.
+     *
+     * Deliberately NOT a new "is this stale" age indicator: there is no
+     * dedicated "last confirmed against Meta" timestamp in the schema, and
+     * `updated_at` is bumped by any local edit, not only a real Meta check —
+     * inventing false precision here would be worse than omitting it. A
+     * fuller meta_status/sync_status/validation_status column-level split
+     * remains a separate, deferred backlog item (see Section N in the
+     * accompanying report).
+     */
+    const displayStatus = (flow) => {
+        if (!flow.meta_flow_id) {
+            return flow.status === 'published'
+                ? { pillLabel: 'Published', pillClass: STATUS_PILL_CLASSES.published, tone: 'neutral', headline: 'Published Status', subtext: 'Not yet synced to Meta.' }
+                : { pillLabel: 'Draft', pillClass: STATUS_PILL_CLASSES.draft, tone: 'neutral', headline: 'Draft Status', subtext: 'Not yet live on Meta platform' };
+        }
+
         if (flow.meta_sync_error) {
-            return { tone: 'danger', headline: 'Sync Error', subtext: flow.meta_sync_error };
+            return { pillLabel: 'Sync Failed', pillClass: STATUS_PILL_CLASSES.failed, tone: 'danger', headline: 'Sync Error', subtext: flow.meta_sync_error };
         }
         if (flow.meta_validation_errors?.length > 0) {
-            return { tone: 'danger', headline: 'Validation Errors', subtext: `${flow.meta_validation_errors.length} validation error${flow.meta_validation_errors.length === 1 ? '' : 's'} from Meta.` };
+            return {
+                pillLabel: 'Sync Failed', pillClass: STATUS_PILL_CLASSES.failed, tone: 'danger', headline: 'Validation Errors',
+                subtext: `${flow.meta_validation_errors.length} validation error${flow.meta_validation_errors.length === 1 ? '' : 's'} from Meta.`,
+            };
         }
-        if (flow.meta_sync_status === 'published') {
-            return { tone: 'success', headline: 'Published to Meta', subtext: 'Syncing with WhatsApp Flows' };
+
+        switch (flow.meta_sync_status) {
+            case 'published':
+                return { pillLabel: 'Published', pillClass: STATUS_PILL_CLASSES.published, tone: 'success', headline: 'Published to Meta', subtext: 'Live on WhatsApp' };
+            case 'deprecated':
+                return { pillLabel: 'Deprecated', pillClass: STATUS_PILL_CLASSES.deprecated, tone: 'neutral', headline: 'Deprecated', subtext: 'No longer sendable on Meta — this cannot be undone.' };
+            case 'syncing':
+                return { pillLabel: 'Syncing', pillClass: STATUS_PILL_CLASSES.draft, tone: 'neutral', headline: 'Syncing…', subtext: 'Pushing this Flow to Meta.' };
+            case 'synced_draft':
+                return { pillLabel: 'Synced Draft', pillClass: STATUS_PILL_CLASSES.draft, tone: 'neutral', headline: 'Synced Draft', subtext: 'Synced to Meta, not yet published.' };
+            default:
+                return { pillLabel: 'Draft', pillClass: STATUS_PILL_CLASSES.draft, tone: 'neutral', headline: 'Draft Status', subtext: 'Not yet live on Meta platform' };
         }
-        return { tone: 'neutral', headline: 'Draft Status', subtext: 'Not yet live on Meta platform' };
     };
 
     return (
@@ -156,11 +217,9 @@ export default function FlowsIndex({ flows, categories }) {
                         </Link>
                     </div>
                     <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                        <Button variant="outline" onClick={openImportPicker}>
-                            <Download className="mr-1.5 h-4 w-4" /> Sync Meta Flows
-                        </Button>
-                        <Button variant="outline" onClick={syncStatus} disabled={syncingStatus}>
-                            <RefreshCw className={'mr-1.5 h-4 w-4 ' + (syncingStatus ? 'animate-spin' : '')} /> {syncingStatus ? 'Syncing…' : 'Sync Status'}
+                        {/* Section E — replaces the old separate "Sync Meta Flows" (import) and "Sync Status" (refresh) buttons with one action that does both. */}
+                        <Button variant="outline" onClick={syncFromMeta} disabled={syncingStatus}>
+                            <RefreshCw className={'mr-1.5 h-4 w-4 ' + (syncingStatus ? 'animate-spin' : '')} /> {syncingStatus ? 'Syncing…' : 'Sync from Meta'}
                         </Button>
                         <Button onClick={() => setCreating(true)}>
                             <Plus className="mr-1.5 h-4 w-4" /> New flow
@@ -182,8 +241,8 @@ export default function FlowsIndex({ flows, categories }) {
 
                 <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
                     {filteredFlows.map((flow) => {
-                        const banner = statusBanner(flow);
-                        const bannerTone = STATUS_BANNER_TONE[banner.tone];
+                        const status = displayStatus(flow);
+                        const bannerTone = STATUS_BANNER_TONE[status.tone];
                         // min-h-[329px]: sized so the card itself, not just the menu, is the
                         // thing that's "big enough" — the menu portals from the trigger
                         // button's own getBoundingClientRect() (see CardActionsMenu), so its
@@ -206,13 +265,33 @@ export default function FlowsIndex({ flows, categories }) {
                                     <div className="mb-3 flex items-start justify-between gap-4">
                                         <Link href={route('client.flows.edit', flow.uuid)} className="block min-w-0 truncate text-xl font-bold uppercase text-neutral-900 hover:text-brand-600 dark:text-neutral-100">{flow.name}</Link>
                                         <CardActionsMenu isOpen={openMenu === flow.uuid} onOpenChange={(open) => setOpenMenu(open ? flow.uuid : null)} buttonLabel={'Actions for ' + flow.name}>
-                                            <button type="button" onClick={() => { setOpenMenu(null); setInfoFlow(flow); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><InfoIcon className="h-4 w-4" /> Info</button>
-                                            <Link href={route('client.flows.edit', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><Pencil className="h-4 w-4" /> Edit</Link>
-                                            <button type="button" onClick={(event) => runAction(event, flow, 'sync')} disabled={actioning !== null || flow.meta_sync_status === 'published'} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><RefreshCw className="h-4 w-4" /> Sync to Meta</button>
-                                            <button type="button" onClick={(event) => runAction(event, flow, 'publish')} disabled={actioning !== null || !flow.meta_flow_id || flow.meta_sync_status === 'published'} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><Send className="h-4 w-4" /> Publish</button>
-                                            <Link href={route('client.flows.submissions', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><FileInput className="h-4 w-4" /> View submissions</Link>
-                                            <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />
-                                            <button type="button" onClick={() => { setOpenMenu(null); setDeleteConfirm(flow); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" /> Delete</button>
+                                            <button type="button" onClick={() => { setOpenMenu(null); setInfoFlow(flow); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><InfoIcon className="h-4 w-4" /> Info</button>
+                                            {flow.meta_sync_status === 'published' ? (
+                                                // Section F/P — a Published flow's Builder is read-only (this is
+                                                // the only edit path), so its menu drops Edit/Sync-draft/Publish
+                                                // entirely rather than merely disabling them. Section P removes
+                                                // "Sync from Meta" here too — redundant with the dashboard's own
+                                                // top-header bulk action, which already refreshes every linked
+                                                // flow including this one.
+                                                <>
+                                                    <Link href={route('client.flows.edit', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><Eye className="h-4 w-4" /> Preview</Link>
+                                                    <button type="button" onClick={() => { setOpenMenu(null); setTestSendPhone(''); setTestSendState({ sending: false, error: null, success: null }); setTestSendFlow(flow); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><Send className="h-4 w-4" /> Send Test</button>
+                                                    <Link href={route('client.flows.submissions', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><FileInput className="h-4 w-4" /> View submissions</Link>
+                                                    <button type="button" onClick={(event) => runAction(event, flow, 'duplicate')} disabled={actioning !== null} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><Copy className="h-4 w-4" /> Duplicate</button>
+                                                    <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />
+                                                    <button type="button" onClick={() => { setOpenMenu(null); setDeleteConfirm(flow); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><ShieldOff className="h-4 w-4" /> Deprecate</button>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Link href={route('client.flows.edit', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><Pencil className="h-4 w-4" /> Edit</Link>
+                                                    <button type="button" onClick={(event) => runAction(event, flow, 'sync')} disabled={actioning !== null} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><RefreshCw className="h-4 w-4" /> Sync Draft to Meta</button>
+                                                    <button type="button" onClick={(event) => runAction(event, flow, 'publish-to-meta')} disabled={actioning !== null} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><Send className="h-4 w-4" /> Publish to Meta</button>
+                                                    <Link href={route('client.flows.submissions', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><FileInput className="h-4 w-4" /> View submissions</Link>
+                                                    <button type="button" onClick={(event) => runAction(event, flow, 'duplicate')} disabled={actioning !== null} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><Copy className="h-4 w-4" /> Duplicate</button>
+                                                    <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />
+                                                    <button type="button" onClick={() => { setOpenMenu(null); setDeleteConfirm(flow); }} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"><Trash2 className="h-4 w-4" /> Delete</button>
+                                                </>
+                                            )}
                                         </CardActionsMenu>
                                     </div>
 
@@ -220,8 +299,8 @@ export default function FlowsIndex({ flows, categories }) {
                                         <LayoutGrid className="h-3.5 w-3.5" /> {flow.category ?? 'Uncategorized'}
                                     </div>
 
-                                    <span className={'mt-3 inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ' + (STATUS_PILL_CLASSES[flow.status] ?? STATUS_PILL_CLASSES.draft)}>
-                                        {flow.status}
+                                    <span className={'mt-3 inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide ' + status.pillClass}>
+                                        {status.pillLabel}
                                     </span>
 
                                     <div className="mt-5 grid grid-cols-2 gap-3">
@@ -246,8 +325,8 @@ export default function FlowsIndex({ flows, categories }) {
                                             <bannerTone.Icon className="h-4 w-4" />
                                         </div>
                                         <div className="min-w-0">
-                                            <p className={'truncate text-sm font-bold ' + bannerTone.headline}>{banner.headline}</p>
-                                            <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">{banner.subtext}</p>
+                                            <p className={'truncate text-sm font-bold ' + bannerTone.headline}>{status.headline}</p>
+                                            <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">{status.subtext}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -285,50 +364,61 @@ export default function FlowsIndex({ flows, categories }) {
                 </Modal>
             )}
 
-            <ConfirmDestructiveModal show={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} onConfirm={deleteFlow} title="Delete WhatsApp Flow?" body={'This permanently removes ' + (deleteConfirm?.name ?? 'this Flow') + ' and its local definition. Type DELETE to continue.'} />
+            {/* Section G — a materially different, stronger dialog for the
+                irreversible Deprecate path than for a routine Delete: a
+                Published Flow's row and submission history are NOT removed
+                (only Meta-side usability ends), so the copy says so plainly
+                and never claims the Flow will be "removed". */}
+            {isDeprecateConfirm ? (
+                <ConfirmDestructiveModal
+                    show={!!deleteConfirm}
+                    onClose={() => setDeleteConfirm(null)}
+                    onConfirm={deleteFlow}
+                    title="Deprecate this published Flow?"
+                    body={`${deleteConfirm?.name ?? 'This Flow'} is live and published on Meta. Deprecating it is PERMANENT and cannot be undone — WhatsApp will stop accepting it, and Meta does not offer any way to un-deprecate it. Its record and past submissions are kept, only its Meta-side usability ends. Type DEPRECATE to continue.`}
+                    confirmWord="DEPRECATE"
+                    confirmLabel="Deprecate"
+                />
+            ) : (
+                <ConfirmDestructiveModal show={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} onConfirm={deleteFlow} title="Delete WhatsApp Flow?" body={'This permanently removes ' + (deleteConfirm?.name ?? 'this Flow') + ' and its local definition. Type DELETE to continue.'} />
+            )}
 
-            {/* Task 1 — the import picker, now correctly named "Sync Meta Flows". */}
-            {importState && (
-                <Modal show onClose={() => setImportState(null)}>
-                    <Modal.Header title="Sync Meta Flows" subtitle="Import Flows that exist on Meta but have no local record yet." onClose={() => setImportState(null)} />
-                    <Modal.Body>
-                        <div className="mb-3 flex items-center justify-between">
-                            <p className="text-xs text-neutral-500">Already-linked Flows are not shown — use Sync Status to refresh those.</p>
-                            <button type="button" onClick={openImportPicker} disabled={importState.loading} title="Refresh" className="rounded p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800">
-                                <RefreshCw className={'h-4 w-4 ' + (importState.loading ? 'animate-spin' : '')} />
-                            </button>
-                        </div>
-                        {importState.loading && <p className="py-6 text-center text-sm text-neutral-500">Loading Meta Flows…</p>}
-                        {importState.error && <p className="rounded-soft border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{importState.error}</p>}
-                        {!importState.loading && !importState.error && importState.candidates.length === 0 && (
-                            <p className="py-6 text-center text-sm text-neutral-500">No importable Flows — every Flow on Meta is already linked here.</p>
-                        )}
-                        {!importState.loading && importState.candidates.length > 0 && (
-                            <ul className="max-h-80 space-y-1 overflow-y-auto">
-                                {importState.candidates.map((candidate) => (
-                                    <li key={candidate.meta_flow_id} className="flex items-center justify-between gap-3 rounded-soft border border-neutral-200 px-3 py-2 dark:border-neutral-700">
-                                        <Checkbox
-                                            id={'import-' + candidate.meta_flow_id}
-                                            checked={importState.selected.includes(candidate.meta_flow_id)}
-                                            onChange={() => toggleImportSelection(candidate.meta_flow_id)}
-                                            label={candidate.name}
-                                        />
-                                        <div className="flex shrink-0 items-center gap-1.5">
-                                            {candidate.categories.map((c) => <Badge key={c} size="sm">{c}</Badge>)}
-                                            <Badge size="sm" variant={candidate.status === 'PUBLISHED' ? 'success' : 'default'}>{candidate.status}</Badge>
-                                            {candidate.validation_errors.length > 0 && <Badge size="sm" variant="danger">{candidate.validation_errors.length} error{candidate.validation_errors.length === 1 ? '' : 's'}</Badge>}
-                                        </div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
-                    </Modal.Body>
-                    <Modal.Footer>
-                        <Button variant="ghost" onClick={() => setImportState(null)}>Cancel</Button>
-                        <Button onClick={submitImport} disabled={importState.selected.length === 0 || importState.submitting}>
-                            <Download className="mr-1.5 h-4 w-4" /> {importState.submitting ? 'Importing…' : `Import${importState.selected.length ? ' (' + importState.selected.length + ')' : ''}`}
-                        </Button>
-                    </Modal.Footer>
+            {/* Section F/E — "Send Test" from a Published card's ⋮ menu.
+                Same endpoint and plausibility gate as Builder.jsx's own
+                modal; duplicated rather than shared because Builder's
+                version is scoped to `flow` from props, not a menu selection. */}
+            {testSendFlow && (
+                <Modal show onClose={() => setTestSendFlow(null)} maxWidth="sm">
+                    <Modal.Header title="Send" onClose={() => setTestSendFlow(null)} />
+                    <form onSubmit={submitTestSend}>
+                        <Modal.Body className="space-y-4">
+                            <div className="rounded-soft border border-neutral-200 bg-neutral-50 p-3 dark:border-neutral-700 dark:bg-neutral-800/50">
+                                <p className="font-medium text-neutral-900 dark:text-neutral-100">{testSendFlow.name}</p>
+                                <p className="text-xs text-neutral-500">Flow ID: {testSendFlow.meta_flow_id}</p>
+                            </div>
+                            <div>
+                                <label htmlFor="index_test_send_phone" className="mb-1.5 block text-sm font-medium text-neutral-700 dark:text-neutral-300">Phone Number</label>
+                                <div className="relative">
+                                    <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                                    <input
+                                        id="index_test_send_phone"
+                                        autoFocus
+                                        value={testSendPhone}
+                                        onChange={(e) => setTestSendPhone(e.target.value)}
+                                        placeholder="e.g. 919690309316"
+                                        className="w-full rounded-soft border border-neutral-300 bg-white py-2 pl-9 pr-3 text-sm dark:border-neutral-600 dark:bg-neutral-800"
+                                    />
+                                </div>
+                                <p className="mt-1.5 text-xs text-neutral-500">Enter number with country code, no + or spaces</p>
+                            </div>
+                            {testSendState.error && <p className="rounded-soft border border-red-200 bg-red-50 p-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{testSendState.error}</p>}
+                            {testSendState.success && <p className="rounded-soft border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{testSendState.success}</p>}
+                        </Modal.Body>
+                        <Modal.Footer>
+                            <Button type="button" variant="ghost" onClick={() => setTestSendFlow(null)}>Cancel</Button>
+                            <Button type="submit" disabled={testSendPhone.replace(/\D/g, '').length < 8 || testSendState.sending}>{testSendState.sending ? 'Sending…' : 'Send Now'}</Button>
+                        </Modal.Footer>
+                    </form>
                 </Modal>
             )}
 
@@ -486,6 +576,53 @@ function FlowOverviewPanel({ flow, webFormUrl }) {
             <InfoRow label="Submissions" value={flow.submissions_count} />
             <InfoRow label="Created on" value={flow.created_at ? new Date(flow.created_at).toLocaleDateString() : '—'} />
             <InfoRow label="Last updated" value={flow.updated_at ? new Date(flow.updated_at).toLocaleDateString() : '—'} />
+            <RawFlowJsonSection flow={flow} />
+        </div>
+    );
+}
+
+/**
+ * Section D — the compiled Meta Flow JSON, previously a permanently-visible
+ * block on the Builder page underneath "Preview Flow JSON". That button now
+ * opens the live phone-mockup preview instead (the primary preview
+ * experience); this raw view still has real debugging value (comparing
+ * exactly what Meta receives), so it moves here as a collapsed, secondary
+ * section rather than being removed — collapsed by default, and fetched
+ * lazily on first expand rather than on every Info-modal open.
+ */
+function RawFlowJsonSection({ flow }) {
+    const [open, setOpen] = useState(false);
+    const [state, setState] = useState({ loading: false, error: null, json: null });
+
+    const toggle = async () => {
+        const next = !open;
+        setOpen(next);
+        if (next && state.json === null && !state.loading) {
+            setState({ loading: true, error: null, json: null });
+            try {
+                const response = await fetch(route('client.flows.preview', flow.uuid), { headers: { Accept: 'application/json' } });
+                const body = await response.json();
+                if (!response.ok) throw new Error(body.message ?? 'Flow JSON could not be compiled.');
+                setState({ loading: false, error: null, json: body });
+            } catch (error) {
+                setState({ loading: false, error: error.message, json: null });
+            }
+        }
+    };
+
+    return (
+        <div className="py-1.5">
+            <button type="button" onClick={toggle} aria-expanded={open} className="flex w-full items-center justify-between gap-2 py-1 text-left text-sm font-medium text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100">
+                Raw compiled Meta Flow JSON
+                <ChevronDown className={'h-4 w-4 shrink-0 transition-transform ' + (open ? 'rotate-180' : '')} />
+            </button>
+            {open && (
+                <div className="mt-2">
+                    {state.loading && <p className="text-sm text-neutral-500">Loading…</p>}
+                    {state.error && <p className="rounded-soft border border-red-200 bg-red-50 p-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">{state.error}</p>}
+                    {state.json && <pre className="max-h-80 overflow-auto rounded-soft bg-neutral-50 p-3 text-xs text-neutral-700 dark:bg-neutral-950 dark:text-neutral-300">{JSON.stringify(state.json, null, 2)}</pre>}
+                </div>
+            )}
         </div>
     );
 }

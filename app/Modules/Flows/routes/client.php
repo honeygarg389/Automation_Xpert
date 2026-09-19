@@ -16,6 +16,7 @@ Route::middleware(['web', 'client-app', EnsureFlowsEnabled::class])
         Route::get('/', [WhatsappFlowController::class, 'index'])->name('index');
         Route::post('/', [WhatsappFlowController::class, 'store'])->name('store');
         Route::post('/sync-status', [WhatsappFlowController::class, 'syncStatus'])->name('sync-status');
+        Route::post('/sync-from-meta', [WhatsappFlowController::class, 'syncFromMeta'])->name('sync-from-meta');
         Route::get('/import', [WhatsappFlowController::class, 'importPicker'])->name('import.picker');
         Route::post('/import', [WhatsappFlowController::class, 'import'])->name('import.store');
         Route::get('/{flow}/submissions', [WhatsappFlowController::class, 'submissions'])->name('submissions');
@@ -25,6 +26,10 @@ Route::middleware(['web', 'client-app', EnsureFlowsEnabled::class])
         Route::get('/{flow}/preview', [WhatsappFlowController::class, 'preview'])->name('preview');
         Route::post('/{flow}/sync', [WhatsappFlowController::class, 'sync'])->name('sync');
         Route::post('/{flow}/publish', [WhatsappFlowController::class, 'publish'])->name('publish');
+        Route::post('/{flow}/publish-to-meta', [WhatsappFlowController::class, 'publishToMeta'])->name('publish-to-meta');
+        Route::post('/{flow}/pull', [WhatsappFlowController::class, 'pull'])->name('pull');
+        Route::post('/{flow}/duplicate', [WhatsappFlowController::class, 'duplicate'])->name('duplicate');
+        Route::post('/{flow}/test-send', [WhatsappFlowController::class, 'testSend'])->name('test-send');
         Route::post('/{flow}/web-form/enable', [WhatsappFlowController::class, 'enableWebForm'])->name('web-form.enable');
         Route::post('/{flow}/web-form/disable', [WhatsappFlowController::class, 'disableWebForm'])->name('web-form.disable');
         Route::post('/{flow}/web-form/regenerate', [WhatsappFlowController::class, 'regenerateWebFormSlug'])->name('web-form.regenerate');

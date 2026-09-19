@@ -3,14 +3,20 @@
 namespace App\Modules\Flows\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Modules\Automation\Services\AutomationEngine;
 use App\Modules\Flows\Models\FormSubmission;
 use App\Modules\Flows\Models\WhatsappFlow;
 use App\Modules\Flows\Services\WhatsappFlowJsonCompiler;
 use App\Modules\Flows\Services\WhatsappFlowMetaSyncService;
+use App\Modules\Shared\Models\Contact;
+use App\Modules\Shared\Services\ContactService;
+use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
+use App\Support\PhoneNumber;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -64,11 +70,86 @@ class WhatsappFlowController extends Controller
         return back()->with('success', 'Flow saved.');
     }
 
-    public function destroy(WhatsappFlow $flow): RedirectResponse
+    /**
+     * Section G — state-machine-aware removal. See
+     * WhatsappFlowMetaSyncService::removeFromMeta() for the full branching
+     * (never-synced/synced-draft/published) and why each is a genuinely
+     * different Graph API call, or none at all.
+     *
+     * On failure, nothing local changes here either — no delete() call —
+     * so a Meta-side failure never leaves the local row claiming an outcome
+     * ("deleted") that did not actually happen on Meta.
+     */
+    public function destroy(WhatsappFlow $flow, WhatsappFlowMetaSyncService $sync): RedirectResponse
     {
+        $result = $sync->removeFromMeta($flow);
+
+        if (! $result['success']) {
+            return back()->with('error', $result['message']);
+        }
+
+        // Deprecating a PUBLISHED Flow is terminal on Meta's side but is NOT
+        // a local delete — the row and its submission history stay, now
+        // reflecting meta_sync_status = deprecated (already updated by
+        // removeFromMeta()). Only the other two outcomes actually remove the
+        // local row.
+        if ($result['action'] === 'meta_deprecate') {
+            return back()->with('success', $result['message']);
+        }
+
         $flow->delete();
 
-        return to_route('client.flows.index')->with('success', 'Flow deleted.');
+        return to_route('client.flows.index')->with('success', $result['message']);
+    }
+
+    /**
+     * Section H — Duplicate: the only path to modifying a Published Flow
+     * (Section F), and generically useful for any Flow. Copies the
+     * authoring content only; meta_flow_id/meta_sync_status/web form
+     * settings/submission-limit settings are deliberately NOT copied — a
+     * duplicate starts exactly like a genuinely new Flow: an unconnected
+     * local Draft, not sharing the original's Meta link, public web-form
+     * link (public_slug is UNIQUE — it could not be copied even if wanted),
+     * or submission cap.
+     *
+     * Refinement — a source that is currently PUBLISHED on Meta gets a real
+     * Meta-side clone attached to the new copy (WhatsappFlowMetaSyncService
+     * ::cloneOnMeta(), Meta's clone_flow_id pattern), so the duplicate
+     * inherits Meta's own lineage rather than being a pure local copy that
+     * only happens to share the same JSON. A Draft source (never published)
+     * has no meaningful Meta-side identity to clone from, so it keeps the
+     * unconnected-local-copy behavior exactly as before.
+     *
+     * Section D/E (imported-flow round-trip fix) — `meta_passthrough` IS
+     * copied, unlike meta_flow_id/meta_sync_status: it is schema-preservation
+     * metadata needed for a VALID recompile (Meta's data-exchange/routing
+     * keys the visual builder doesn't edit), not a Meta-side connection —
+     * copying it changes nothing about which Meta object (if any) the
+     * duplicate is linked to.
+     */
+    public function duplicate(Request $request, WhatsappFlow $flow, WhatsappFlowMetaSyncService $sync): RedirectResponse
+    {
+        $copy = WhatsappFlow::create([
+            'workspace_id' => $this->workspaceId($request),
+            'name' => $flow->name.' (Copy)',
+            'description' => $flow->description,
+            'category' => $flow->category,
+            'status' => WhatsappFlow::STATUS_DRAFT,
+            'screens' => $flow->screens,
+            'submit_settings' => $flow->submit_settings,
+            'meta_passthrough' => $flow->meta_passthrough,
+        ]);
+
+        if ($flow->meta_flow_id && $flow->meta_sync_status === WhatsappFlow::META_SYNC_STATUS_PUBLISHED) {
+            $cloneResult = $sync->cloneOnMeta($copy, $flow->meta_flow_id);
+            if ($cloneResult['success']) {
+                return to_route('client.flows.edit', $copy)->with('success', $cloneResult['message']);
+            }
+
+            return to_route('client.flows.edit', $copy)->with('success', 'Flow duplicated locally. '.$cloneResult['message']);
+        }
+
+        return to_route('client.flows.edit', $copy)->with('success', 'Flow duplicated.');
     }
 
     public function preview(WhatsappFlow $flow, WhatsappFlowJsonCompiler $compiler): JsonResponse
@@ -94,6 +175,23 @@ class WhatsappFlowController extends Controller
             'success',
             sprintf('Sync status complete: %d updated, %d unchanged, %d failed.', $summary['updated'], $summary['unchanged'], $summary['failed'])
         );
+    }
+
+    /**
+     * Section E / Task 3 — the dashboard's single "Sync from Meta" button.
+     * Distinct from syncStatus() above (refresh-only) and
+     * importPicker()/import() below (manual picker) — both stay reachable
+     * unchanged underneath this — this does the whole reconcile in one call
+     * via WhatsappFlowMetaSyncService::syncAllFromMeta() and reports a
+     * single concrete summary through the same flash-banner convention
+     * every other action on this page already uses.
+     */
+    public function syncFromMeta(Request $request, WhatsappFlowMetaSyncService $sync): RedirectResponse
+    {
+        $summary = $sync->syncAllFromMeta($this->workspaceId($request));
+        $message = sprintf('%d updated, %d imported, %d errors.', $summary['updated'], $summary['imported'], $summary['errors']);
+
+        return back()->with($summary['errors'] > 0 ? 'error' : 'success', $message);
     }
 
     /** The picker's candidate list — Meta Flows with no local record yet. */
@@ -173,9 +271,113 @@ class WhatsappFlowController extends Controller
             return back()->with('error', 'Sync this Flow to Meta before publishing it.');
         }
 
+        $result = $sync->publishOnly($flow);
+
+        return back()->with($result['success'] ? 'success' : 'error', $result['message']);
+    }
+
+    /**
+     * Section A — the single-click "Publish to Meta" action: validate, sync,
+     * stop at Meta's validation errors, publish. See
+     * WhatsappFlowMetaSyncService::publishToMeta() for the full chain and why
+     * it composes syncToMeta()/publishOnly() rather than duplicating either.
+     * The plain sync() and publish() actions above stay reachable unchanged
+     * underneath this — "Sync Draft to Meta" still calls sync() directly.
+     */
+    public function publishToMeta(WhatsappFlow $flow, WhatsappFlowMetaSyncService $sync): RedirectResponse
+    {
         $result = $sync->publishToMeta($flow);
 
         return back()->with($result['success'] ? 'success' : 'error', $result['message']);
+    }
+
+    /**
+     * Section F — per-flow "Sync from Meta" for a Published flow: pulls
+     * Meta's current content down (the reverse direction of sync()/publish(),
+     * which push local content up — pointless once published, since a
+     * published Flow's assets are immutable on Meta's own side anyway).
+     * Reuses pullFromMeta() exactly as the bulk syncStatus() action already
+     * does for every linked Flow, just scoped to this one.
+     */
+    public function pull(WhatsappFlow $flow, WhatsappFlowMetaSyncService $sync): RedirectResponse
+    {
+        $outcome = $sync->pullFromMeta($flow);
+
+        return match ($outcome) {
+            'updated' => back()->with('success', 'Flow refreshed from Meta.'),
+            'unchanged' => back()->with('success', 'Flow is already up to date with Meta.'),
+            'failed' => back()->with('error', $flow->fresh()->meta_sync_error ?? 'Could not refresh this Flow from Meta.'),
+        };
+    }
+
+    /**
+     * Sends this Flow, for real, to one phone number — the builder's "test
+     * send" action. Reuses AutomationEngine::sendFlowTestMessage(), which
+     * itself reuses the exact interactive-payload construction and send path
+     * the whatsapp_form automation node uses (see that method's docblock),
+     * so a successful test send is genuine evidence the automation-triggered
+     * path works too, and the message appears in the real Inbox conversation
+     * for this contact — not a synthetic preview.
+     */
+    public function testSend(Request $request, WhatsappFlow $flow, AutomationEngine $automationEngine, ContactService $contacts): JsonResponse
+    {
+        if (! $flow->meta_flow_id) {
+            return response()->json(['message' => 'Sync this Flow to Meta before sending a test.'], 422);
+        }
+
+        $waba = WhatsappBusinessAccount::query()
+            ->where('workspace_id', $flow->workspace_id)
+            ->where('status', 'active')
+            ->first();
+        if (! $waba) {
+            return response()->json(['message' => 'Connect an active WhatsApp Business Account before sending a test message.'], 422);
+        }
+
+        $data = $request->validate(['phone_number' => ['required', 'string', 'max:32']]);
+
+        // The reference UI's own hint asks for digits only, with the country
+        // code but no leading "+" — but a stray "+" a user types anyway must
+        // not become the malformed "++91…" PhoneNumber::normalizeForImport()
+        // would then reject, so one is stripped before one is added back.
+        // With no explicit country selector on this modal, prefixing "+" and
+        // routing through the explicit-E164 path is the only one of
+        // PhoneNumber's two paths that fits a bare "country code + number"
+        // string — the local-number path requires a $defaultCountry this
+        // modal does not collect.
+        $raw = ltrim(trim($data['phone_number']), '+');
+        $normalized = PhoneNumber::normalizeForImport('+'.$raw, null);
+        if ($normalized['error'] !== null) {
+            return response()->json(['message' => $normalized['error']], 422);
+        }
+        $phoneE164 = $normalized['phone'];
+
+        // find-or-create — but ONLY the create half goes through upsert().
+        // upsert() merges its $data into an EXISTING row on the update path,
+        // so calling it unconditionally would silently overwrite a real
+        // contact's own name/source with this action's test-send values.
+        // Reusing an already-known contact must leave it untouched.
+        $contact = Contact::query()
+            ->where('workspace_id', $flow->workspace_id)
+            ->where('phone_e164', $phoneE164)
+            ->first();
+        if (! $contact) {
+            $contact = $contacts->upsert($flow->workspace_id, [
+                'phone_e164' => $phoneE164,
+                'first_name' => 'Test Contact',
+                // Distinct from organic sources (manual/whatsapp_inbound/…)
+                // so a test-send contact is never mistaken for a real lead.
+                'source' => 'flow_test_send',
+            ], dispatchCreatedEvent: false);
+        }
+
+        $flowToken = 'flow_test_'.Str::random(10);
+        $result = $automationEngine->sendFlowTestMessage($flow->workspace_id, $contact, $flow->meta_flow_id, $flow->name, $flowToken);
+
+        if ($result['status'] !== 'ok') {
+            return response()->json(['message' => $result['message']], 422);
+        }
+
+        return response()->json(['message' => 'Test message sent to '.$phoneE164.'.']);
     }
 
     /**

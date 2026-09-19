@@ -49,6 +49,7 @@ use Illuminate\Support\Str;
  * @property string|null $meta_sync_status
  * @property list<array<string,mixed>>|null $meta_validation_errors
  * @property string|null $meta_sync_error
+ * @property array<string,mixed>|null $meta_passthrough
  * @property bool $web_form_enabled
  * @property string|null $public_slug
  * @property bool $recaptcha_enabled
@@ -73,6 +74,14 @@ class WhatsappFlow extends Model
     public const META_SYNC_STATUS_PUBLISHED = 'published';
 
     public const META_SYNC_STATUS_FAILED = 'failed';
+
+    /**
+     * Terminal on Meta's side (error 139004: "Can't delete published Flow...
+     * deprecate instead") — see WhatsappFlowMetaSyncService::removeFromMeta().
+     * Not a soft-delete: a deprecated Flow's row and submission history stay,
+     * only its Meta-side usability ends.
+     */
+    public const META_SYNC_STATUS_DEPRECATED = 'deprecated';
 
     public const STATUSES = [
         self::STATUS_DRAFT,
@@ -103,6 +112,7 @@ class WhatsappFlow extends Model
         'meta_sync_status',
         'meta_validation_errors',
         'meta_sync_error',
+        'meta_passthrough',
         'web_form_enabled',
         'public_slug',
         'recaptcha_enabled',
@@ -116,6 +126,7 @@ class WhatsappFlow extends Model
             'screens' => 'array',
             'submit_settings' => 'array',
             'meta_validation_errors' => 'array',
+            'meta_passthrough' => 'array',
             'web_form_enabled' => 'boolean',
             'recaptcha_enabled' => 'boolean',
             'max_submissions' => 'integer',

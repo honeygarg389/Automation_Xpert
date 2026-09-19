@@ -154,4 +154,30 @@ describe('field settings panel', () => {
         // Helper text precedes Required in document order — they are stacked, not overlapping.
         expect(helperInput.compareDocumentPosition(requiredToggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
+
+    /**
+     * Section B (imported-flow round-trip fix) — a brand-new field's
+     * auto-generated Name must never take the "field_1" shape (Meta rejects
+     * a bare numeric disambiguation suffix on this identifier class); it
+     * must be alphabetic instead ("field", then "field_a", "field_b", ...).
+     */
+    it('auto-generates alphabetic, never numeric-suffixed, default Names for new fields', () => {
+        render(<FlowsBuilder flow={baseFlow()} categories={['LEAD_GENERATION']} fieldTypes={FIELD_TYPES} />);
+
+        // Adding a field auto-expands ONLY its own settings panel (collapsing
+        // any other), so each new field's generated Name is read one at a
+        // time. "Email"/"Phone" are used (not "Text Input") because the
+        // fixture's own pre-existing field is itself type "text", whose
+        // summary row's own accessible name already contains the substring
+        // "Text Input" via its type badge.
+        fireEvent.click(screen.getByRole('button', { name: /^Email$/i }));
+        const firstName = screen.getByLabelText('Name').value;
+
+        fireEvent.click(screen.getByRole('button', { name: /^Phone$/i }));
+        const secondName = screen.getByLabelText('Name').value;
+
+        expect(firstName).toBe('field');
+        expect(secondName).toBe('field_a');
+        [firstName, secondName].forEach((name) => expect(name).not.toMatch(/_[0-9]+$/));
+    });
 });

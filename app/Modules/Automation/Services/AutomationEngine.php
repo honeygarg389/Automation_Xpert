@@ -24,6 +24,7 @@ use App\Modules\Shared\Models\ContactTag;
 use App\Modules\Shared\Models\Conversation;
 use App\Modules\Shared\Models\Message;
 use App\Modules\Shared\Services\ChannelManager;
+use App\Modules\Whatsapp\Services\CloudApiClient;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -1278,31 +1279,139 @@ class AutomationEngine
         }
         $body = $this->renderTokens((string) ($data['body'] ?? ''), $contact, $context);
         $cta = (string) ($data['flow_cta'] ?? 'Open form');
+        // The default flow_{runId} token correlates directly. Persist custom
+        // tokens too, since they cannot be safely reverse-engineered later.
+        $flowToken = (string) (($data['flow_token'] ?? '') ?: 'flow_'.$run->id);
+        $screen = ! empty($data['screen']) ? (string) $data['screen'] : null;
 
+        $interactive = $this->buildFlowInteractivePayload($flowId, $body, $cta, $flowToken, $screen);
+
+        $result = $this->sendWhatsappPayload($run, 'interactive', $body, ['interactive' => $interactive]);
+        $result['context_update'] = ['_whatsapp_flow_token' => $flowToken];
+
+        return $result;
+    }
+
+    /**
+     * Send a WhatsApp Flow message directly to a contact, OUTSIDE of any
+     * Automation run — the Flow builder's own "test send" action
+     * (Client\WhatsappFlowController::testSend()).
+     *
+     * Reuses the EXACT payload construction (buildFlowInteractivePayload())
+     * and send path (sendMessageToContact()) executeWhatsappForm() itself
+     * uses above, so a test send is real evidence the automation-triggered
+     * path produces the identical payload shape — not a parallel,
+     * unverified mechanism. It goes through the same Message/Conversation/
+     * channel-driver path, so it appears in the real Inbox conversation for
+     * this contact like any other outbound message.
+     *
+     * ⚠️ Unlike an automation-triggered send, there is no AutomationRun
+     * here — WhatsappFlowSubmissionListener::flowForRun() attributes a
+     * completed reply back to a WhatsappFlow ONLY through an AutomationRun's
+     * stored node data. So if the recipient completes this Flow, Slice 5
+     * still captures it as a genuine FormSubmission (real proof the
+     * webhook/decode/persist path works end to end), but with
+     * `whatsapp_flow_id` and `automation_run_id` left null — there is no run
+     * to attribute it through. Fabricating a synthetic Automation/
+     * AutomationRun just to backfill that attribution would be duplicating
+     * machinery, not reusing it, so this deliberately does not do that.
+     *
+     * @return array<string, mixed>
+     */
+    public function sendFlowTestMessage(int $workspaceId, Contact $contact, string $flowId, string $flowName, string $flowToken): array
+    {
+        $interactive = $this->buildFlowInteractivePayload(
+            $flowId, 'Test message: '.$flowName, 'Open Flow', $flowToken,
+            mode: $this->flowSendModeFor($workspaceId, $flowId)
+        );
+
+        // 'sent_by' is a fixed 4-value enum (human/bot/automation/broadcast) —
+        // it distinguishes broad categories, not this specific action. 'human'
+        // is correct here: a logged-in workspace user triggered this by hand,
+        // it did not fire from an Automation node. The finer traceability the
+        // task actually asked for — "this contact/message came from a test
+        // send" — lives on the Contact's own `source` (set by
+        // WhatsappFlowController::testSend()), which is the right layer for
+        // it.
+        return $this->sendMessageToContact($workspaceId, $contact, 'whatsapp', 'interactive', 'Test message: '.$flowName, ['interactive' => $interactive], 'human');
+    }
+
+    /**
+     * Meta's interactive "flow" message payload — shared by the
+     * whatsapp_form automation node (executeWhatsappForm()) and any other
+     * direct-send caller (sendFlowTestMessage()), so both produce the
+     * identical payload shape rather than two independently-maintained
+     * copies of Meta's contract.
+     *
+     * $mode is deliberately omitted (left null) unless a caller has already
+     * determined it — see flowSendModeFor()'s docblock for why this can
+     * never be assumed and must be checked case by case.
+     *
+     * @return array<string, mixed>
+     */
+    private function buildFlowInteractivePayload(string $flowId, string $body, string $cta, string $flowToken, ?string $screen = null, ?string $mode = null): array
+    {
         $params = [
             'flow_message_version' => '3',
             'flow_id' => $flowId,
             'flow_cta' => mb_substr($cta, 0, 20),
             'flow_action' => 'navigate',
-            'flow_token' => (string) (($data['flow_token'] ?? '') ?: 'flow_'.$run->id),
+            'flow_token' => $flowToken,
         ];
-        if (! empty($data['screen'])) {
-            $params['flow_action_payload'] = ['screen' => (string) $data['screen']];
+        if ($screen !== null && $screen !== '') {
+            $params['flow_action_payload'] = ['screen' => $screen];
+        }
+        if ($mode !== null) {
+            $params['mode'] = $mode;
         }
 
-        $interactive = [
+        return [
             'type' => 'flow',
             'body' => ['text' => mb_substr($body !== '' ? $body : $cta, 0, 1024)],
             'action' => ['name' => 'flow', 'parameters' => $params],
         ];
+    }
 
-        $result = $this->sendWhatsappPayload($run, 'interactive', $body, ['interactive' => $interactive]);
+    /**
+     * Confirmed live against Meta's real Send Message API during this
+     * session's diagnosis: `mode: 'draft'` is REQUIRED when sending a Flow
+     * that is currently in Draft status on Meta ("Sending a flow in a draft
+     * state requires setting the mode to 'draft'.", error 131009) — and,
+     * verified symmetrically the same way, is REJECTED outright if present
+     * on a Flow that ISN'T Draft ("The flow is not in a draft state, but
+     * the mode is set to 'draft'.", the same error code). There is no safe
+     * universal default; it has to be correct in both directions or the
+     * send fails either way.
+     *
+     * A FRESH getFlow() call is used rather than the locally-stored
+     * meta_sync_status deliberately: this session's own diagnosis proved
+     * local status can be stale relative to Meta's real state (flows stuck
+     * reporting a failure locally while Meta's copy was actually fine, and
+     * the reverse) — exactly the class of mismatch that would silently
+     * reintroduce this same 131009 failure from the other direction. The
+     * one extra round-trip is negligible for a low-frequency, user-
+     * initiated action like Send Test.
+     *
+     * If the check itself is inconclusive (no active WABA, a network
+     * failure, or a status this method doesn't recognize), this returns
+     * null — omitting `mode` entirely, which is the behavior that already
+     * works for the common (published) case — rather than guessing a
+     * status that could just as easily break a currently-working send.
+     */
+    private function flowSendModeFor(int $workspaceId, string $flowId): ?string
+    {
+        $client = CloudApiClient::forWorkspace($workspaceId);
+        if (! $client) {
+            return null;
+        }
 
-        // The default flow_{runId} token correlates directly. Persist custom
-        // tokens too, since they cannot be safely reverse-engineered later.
-        $result['context_update'] = ['_whatsapp_flow_token' => $params['flow_token']];
+        try {
+            $status = $client->getFlow($flowId)->json('status');
+        } catch (\Throwable) {
+            return null;
+        }
 
-        return $result;
+        return $status === 'DRAFT' ? 'draft' : null;
     }
 
     // ─── COMMERCE nodes ───────────────────────────────────────────────────────
@@ -1570,7 +1679,27 @@ class AutomationEngine
             return $this->dispatchSms($run, $contact, $body ?? '', $sentBy);
         }
 
-        $target = $this->resolveChannelTarget($run->automation->workspace_id, $contact, $channel);
+        return $this->sendMessageToContact($run->automation->workspace_id, $contact, $channel, $type, $body, $payload, $sentBy);
+    }
+
+    /**
+     * The actual outbound send: resolve a channel account + conversation for
+     * $contact in $workspaceId, persist a Message row, send it via the
+     * channel driver, and dispatch MessageSent.
+     *
+     * Extracted out of dispatchMessage() so the part that genuinely needs an
+     * AutomationRun (resolving $contact/$workspaceId from it) is separate
+     * from the part that doesn't — dispatchMessage() now just resolves those
+     * two values and defers here, and any other caller that already has a
+     * real Contact + workspace (sendFlowTestMessage()) can call this
+     * directly without needing an AutomationRun to exist at all.
+     *
+     * @param  array<string, mixed>|null  $payload
+     * @return array<string, mixed>
+     */
+    private function sendMessageToContact(int $workspaceId, Contact $contact, string $channel, string $type, ?string $body, ?array $payload, string $sentBy): array
+    {
+        $target = $this->resolveChannelTarget($workspaceId, $contact, $channel);
         if ($target['error']) {
             return ['status' => $target['soft'] ? 'skipped' : 'error', 'message' => $target['error']];
         }

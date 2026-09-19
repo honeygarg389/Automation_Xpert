@@ -282,15 +282,30 @@ class CloudApiClient
             ->delete(self::BASE."/{$wabaId}/message_templates", ['name' => $name]);
     }
 
-    /** Create a draft WhatsApp Flow in the supplied WhatsApp Business Account. */
-    public function createFlow(string $wabaId, string $name, string $category): Response
+    /**
+     * Create a draft WhatsApp Flow in the supplied WhatsApp Business Account.
+     *
+     * $cloneFlowId is Meta's documented Create-Flow-with-clone pattern: when
+     * given an existing Flow ID, the new Flow is created as a genuine
+     * Meta-side clone of it (inheriting that Flow's own lineage) instead of
+     * an unrelated blank Flow that a separate JSON upload merely happens to
+     * make look the same. See
+     * WhatsappFlowMetaSyncService::cloneOnMeta() for the one caller that
+     * passes it — duplicating a Flow that is currently PUBLISHED on Meta.
+     */
+    public function createFlow(string $wabaId, string $name, string $category, ?string $cloneFlowId = null): Response
     {
+        $payload = [
+            'name' => $name,
+            'categories' => [$category],
+        ];
+        if ($cloneFlowId !== null) {
+            $payload['clone_flow_id'] = $cloneFlowId;
+        }
+
         return Http::withToken($this->accessToken)
             ->timeout(30)
-            ->post(self::BASE."/{$wabaId}/flows", [
-                'name' => $name,
-                'categories' => [$category],
-            ]);
+            ->post(self::BASE."/{$wabaId}/flows", $payload);
     }
 
     /** Upload a Flow JSON asset. Meta returns structural validation errors in this response. */
@@ -313,6 +328,31 @@ class CloudApiClient
         return Http::withToken($this->accessToken)
             ->timeout(30)
             ->post(self::BASE."/{$flowId}/publish");
+    }
+
+    /**
+     * Delete a Flow. Meta only allows this while the Flow is still DRAFT —
+     * error 139004 ("Can't delete published Flow...") is returned for a Flow
+     * that has ever been published; deprecateFlow() is the only valid action
+     * at that point. See WhatsappFlowMetaSyncService::removeFromMeta().
+     */
+    public function deleteFlow(string $flowId): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->delete(self::BASE."/{$flowId}");
+    }
+
+    /**
+     * Deprecate a PUBLISHED Flow. Irreversible on Meta's side — the only
+     * valid state change once a Flow must stop being sendable after having
+     * gone live, per Meta's own error-139004 guidance.
+     */
+    public function deprecateFlow(string $flowId): Response
+    {
+        return Http::withToken($this->accessToken)
+            ->timeout(30)
+            ->post(self::BASE."/{$flowId}/deprecate");
     }
 
     /** List every Flow Meta has for this WhatsApp Business Account (lightweight fields only — for an import picker, not full content). */

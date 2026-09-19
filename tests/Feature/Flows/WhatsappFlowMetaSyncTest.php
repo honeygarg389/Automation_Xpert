@@ -2,9 +2,10 @@
 
 namespace Tests\Feature\Flows;
 
-use App\Modules\Flows\Models\WhatsappFlow;
-use App\Modules\Flows\Services\WhatsappFlowMetaSyncService;
 use App\Models\Plan;
+use App\Modules\Flows\Models\WhatsappFlow;
+use App\Modules\Flows\Services\WhatsappFlowJsonCompiler;
+use App\Modules\Flows\Services\WhatsappFlowMetaSyncService;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Support\WorkspaceContext;
@@ -77,7 +78,10 @@ class WhatsappFlowMetaSyncTest extends TestCase
         $this->assertSame('meta-flow-1', $flow->fresh()->meta_flow_id);
         $this->assertSame(WhatsappFlow::META_SYNC_STATUS_SYNCED_DRAFT, $flow->fresh()->meta_sync_status);
 
-        $this->assertTrue($service->publishToMeta($flow->fresh())['success']);
+        // publishOnly() — not the chained publishToMeta() — because this
+        // Flow was already synced above; re-running the full chain would
+        // sync a second time and break the assertSentCount(3) below.
+        $this->assertTrue($service->publishOnly($flow->fresh())['success']);
         $flow = $flow->fresh();
         $this->assertSame(WhatsappFlow::STATUS_PUBLISHED, $flow->status);
         $this->assertSame(WhatsappFlow::META_SYNC_STATUS_PUBLISHED, $flow->meta_sync_status);
@@ -155,6 +159,98 @@ class WhatsappFlowMetaSyncTest extends TestCase
             ->assertRedirect()
             ->assertSessionHas('error', 'Sync this Flow to Meta before publishing it.');
         Http::assertNothingSent();
+    }
+
+    /**
+     * Task 2 — Graph error 139001, confirmed live against Meta's real API
+     * during diagnosis: "Updating attempt failed" / "Flow can only be
+     * modified in Draft status", returned when a Flow's Meta-side copy has
+     * been deprecated or published directly on Meta. Must produce a
+     * specific message (not the generic fallback) AND self-heal the local
+     * meta_sync_status via one follow-up getFlow() call.
+     */
+    #[Test]
+    public function flow_not_in_draft_status_produces_a_specific_message_and_reconciles_local_status_to_deprecated(): void
+    {
+        [$flow] = $this->connectedFlow();
+        $flow->update(['meta_flow_id' => 'meta-flow-deprecated']);
+        Http::fake([
+            'https://graph.facebook.com/v20.0/meta-flow-deprecated/assets' => Http::response([
+                'error' => [
+                    'message' => 'Updating attempt failed', 'type' => 'OAuthException', 'code' => 139001,
+                    'error_subcode' => 4016010, 'error_user_title' => "Flow can't be updated",
+                    'error_user_msg' => 'Flow can only be modified in Draft status',
+                ],
+            ], 400),
+            'https://graph.facebook.com/v20.0/meta-flow-deprecated?*' => Http::response(['id' => 'meta-flow-deprecated', 'status' => 'DEPRECATED']),
+        ]);
+
+        $result = app(WhatsappFlowMetaSyncService::class)->syncToMeta($flow->fresh());
+
+        $this->assertFalse($result['success']);
+        $this->assertStringContainsString('no longer in Draft status', $result['message']);
+        $this->assertNotSame('Meta could not sync this Flow. Please try again or review your WhatsApp connection.', $result['message'], 'Must not fall through to the generic catch-all fallback.');
+        $flow = $flow->fresh();
+        $this->assertSame(WhatsappFlow::META_SYNC_STATUS_DEPRECATED, $flow->meta_sync_status, 'Self-healing must reconcile local status to what Meta actually reports.');
+        $this->assertNull($flow->meta_sync_error, 'Deprecated is a normal terminal state (Section G) — not a standing error the dashboard badge should keep flagging red forever.');
+    }
+
+    #[Test]
+    public function flow_not_in_draft_status_reconciles_to_published_when_thats_metas_real_current_status(): void
+    {
+        [$flow] = $this->connectedFlow();
+        $flow->update(['meta_flow_id' => 'meta-flow-live']);
+        Http::fake([
+            'https://graph.facebook.com/v20.0/meta-flow-live/assets' => Http::response([
+                'error' => ['message' => 'Updating attempt failed', 'type' => 'OAuthException', 'code' => 139001],
+            ], 400),
+            'https://graph.facebook.com/v20.0/meta-flow-live?*' => Http::response(['id' => 'meta-flow-live', 'status' => 'PUBLISHED']),
+        ]);
+
+        $result = app(WhatsappFlowMetaSyncService::class)->syncToMeta($flow->fresh());
+
+        $this->assertFalse($result['success']);
+        $this->assertSame(WhatsappFlow::META_SYNC_STATUS_PUBLISHED, $flow->fresh()->meta_sync_status);
+    }
+
+    /**
+     * Task 3 — pullFromMeta()'s 'unchanged' branch used to skip the
+     * update() call entirely, so a stale meta_sync_error from an earlier
+     * failed pull attempt could sit there indefinitely once local content
+     * happened to already match Meta's. Confirmed as the exact mechanism
+     * behind the diagnosed flows (id=6/id=10 in that session) showing a
+     * stale "Sync Error" banner despite Meta's own validation_errors being
+     * empty.
+     */
+    #[Test]
+    public function a_pull_that_finds_nothing_changed_still_clears_a_stale_meta_sync_error(): void
+    {
+        [$flow] = $this->connectedFlow();
+        $flow->update([
+            'meta_flow_id' => 'meta-flow-stale',
+            'meta_sync_error' => 'Meta Flow JSON could not be read. Review the Flow JSON and try again.',
+        ]);
+        // Deliberately NOT ->fresh(): MySQL's JSON column storage does not
+        // preserve object key insertion order the way PHP's own array
+        // literals do, and PHP's `===` on arrays IS order-sensitive — a
+        // real, pre-existing quirk of this column type, unrelated to this
+        // fix, that would otherwise make an 'unchanged' comparison flicker
+        // to 'updated' after any re-fetch. Comparing the same in-memory
+        // $flow (never round-tripped through a real SELECT) against a
+        // decompile() of its own freshly-compiled content is exactly how
+        // pullFromMeta()'s real caller (importFlow()) uses it too.
+        $metaJson = app(WhatsappFlowJsonCompiler::class)->compile($flow);
+        Http::fake([
+            'https://graph.facebook.com/v20.0/meta-flow-stale/assets' => Http::response(['data' => [
+                ['asset_type' => 'FLOW_JSON', 'name' => 'flow.json', 'download_url' => 'https://assets.test/meta-flow-stale.json'],
+            ]]),
+            'https://assets.test/meta-flow-stale.json' => Http::response($metaJson),
+        ]);
+
+        $outcome = app(WhatsappFlowMetaSyncService::class)->pullFromMeta($flow);
+
+        $this->assertSame('unchanged', $outcome, 'Local content already matches what Meta has — this must be the "unchanged" branch, the one that used to skip clearing the error.');
+        $this->assertNull($flow->fresh()->meta_sync_error, 'A successful pull — even one finding nothing to change — is proof the Flow is fine and must clear a stale error.');
     }
 
     #[Test]
