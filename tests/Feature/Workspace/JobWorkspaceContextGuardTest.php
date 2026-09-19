@@ -53,6 +53,11 @@ class JobWorkspaceContextGuardTest extends TestCase
         'App\Modules\Ecommerce\Jobs\ProcessEcommerceWebhookJob',
         'App\Modules\Ecommerce\Jobs\CheckAbandonedCartJob',
         'App\Modules\Leads\Jobs\ScrapeLeadsJob',
+        // Phase 2 slice 2. Resolves workspace_id from the pos_webhook_events
+        // row named by its own payload (EstablishesWorkspaceContext::from(
+        // PosWebhookEvent::class, $eventId)) — same shape as
+        // ProcessEcommerceWebhookJob above.
+        'App\Modules\Restaurant\Jobs\ProcessPosWebhookEventJob',
         'App\Modules\Social\Jobs\PublishSocialPostJob',
         'App\Modules\Whatsapp\Jobs\TemplateSyncJob',
 

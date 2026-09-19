@@ -56,6 +56,9 @@ use Illuminate\Support\Carbon;
  * @property string|null $raw_body
  * @property string|null $failure_reason
  * @property int $attempts
+ * @property Carbon|null $processing_started_at
+ * @property Carbon|null $processed_at
+ * @property Carbon|null $failed_at
  */
 class PosWebhookEvent extends Model
 {
@@ -63,6 +66,14 @@ class PosWebhookEvent extends Model
     use HasFactory;
 
     public const STATUS_PENDING = 'pending';
+
+    /**
+     * Claimed by exactly one `ProcessPosWebhookEventJob` run, which holds a
+     * time-limited LEASE on the row (`processing_started_at`). A lease older
+     * than `ProcessPosWebhookEventJob::LEASE_MINUTES` is presumed dead (the
+     * worker was killed) and is reclaimable by the stalled-event sweep.
+     */
+    public const STATUS_PROCESSING = 'processing';
 
     public const STATUS_PROCESSED = 'processed';
 
@@ -78,6 +89,7 @@ class PosWebhookEvent extends Model
 
     public const STATUSES = [
         self::STATUS_PENDING,
+        self::STATUS_PROCESSING,
         self::STATUS_PROCESSED,
         self::STATUS_FAILED,
         self::STATUS_QUARANTINED,
@@ -102,6 +114,9 @@ class PosWebhookEvent extends Model
         return [
             'received_at' => 'datetime',
             'raw_payload' => 'array',
+            'processing_started_at' => 'datetime',
+            'processed_at' => 'datetime',
+            'failed_at' => 'datetime',
         ];
     }
 

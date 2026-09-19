@@ -2,11 +2,13 @@
 
 namespace Tests\Feature\Restaurant;
 
+use App\Modules\Restaurant\Jobs\ProcessPosWebhookEventJob;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\PosWebhookEvent;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\PosConnectionProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -30,6 +32,17 @@ class PosConnectionActivationIngressIntegrationTest extends TestCase
     #[Test]
     public function a_connection_created_tokened_and_activated_through_the_service_accepts_a_real_petpooja_delivery(): void
     {
+        // This test pins INGRESS acceptance: what the controller persists at
+        // the moment it says 200. Since Phase 2 slice 2 the controller also
+        // dispatches ProcessPosWebhookEventJob, which the suite's
+        // QUEUE_CONNECTION=sync would run inline and move the event on from
+        // `pending`. The payload below is Phase 1B's pre-documentation shape
+        // (no properties.Order), which that job now — correctly — fails
+        // permanently. Faking the queue keeps this assertion about ingress-time
+        // state, exactly as PetpoojaWebhookIngressTest does class-wide;
+        // end-to-end processing is PetpoojaOrderProcessingEndToEndTest's job.
+        Queue::fake();
+
         $service = app(PosConnectionProvisioningService::class);
         $outlet = RestaurantOutlet::factory()->create();
 
@@ -77,5 +90,10 @@ class PosConnectionActivationIngressIntegrationTest extends TestCase
         $this->assertSame($connection->workspace_id, $event->workspace_id);
         $this->assertSame(hash('sha256', $rawBody), $event->payload_hash);
         $this->assertNotNull($connection->fresh()->last_event_at);
+
+        // And the valid, authenticated orderdetails event was handed to the
+        // processing job exactly once.
+        Queue::assertPushed(ProcessPosWebhookEventJob::class, fn (ProcessPosWebhookEventJob $job) => $job->eventId === $event->id);
+        Queue::assertPushed(ProcessPosWebhookEventJob::class, 1);
     }
 }

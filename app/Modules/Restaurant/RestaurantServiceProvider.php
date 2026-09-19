@@ -2,18 +2,17 @@
 
 namespace App\Modules\Restaurant;
 
+use App\Modules\Restaurant\Console\Commands\SweepStalledPosWebhookEventsCommand;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Restaurant — foundation schema.
+ * Restaurant — foundation schema, Petpooja ingress, and order processing.
  *
- * This slice ships schema and models only: legal document versioning +
- * acceptance tracking, restaurant outlets, POS connections, POS webhook
- * event capture, and the supporting Contact/Workspace/AuditLog columns.
- * Nothing is wired to a route yet — the three route files are placeholders,
- * following the Smart QR module's convention (see SmartQrServiceProvider),
- * so that Phase 1B can add admin/client/public surfaces without touching
- * this provider.
+ * Phase 1B added the public webhook ingress (capture only). Phase 2 slice 2
+ * added `ProcessPosWebhookEventJob`/`RestaurantBill` — turning a captured
+ * `pending` event into a durable bill — plus this provider's
+ * `SweepStalledPosWebhookEventsCommand` registration, the safety net for
+ * that job (see the command's own docblock).
  */
 class RestaurantServiceProvider extends ServiceProvider
 {
@@ -23,5 +22,11 @@ class RestaurantServiceProvider extends ServiceProvider
         $this->loadRoutesFrom(__DIR__.'/routes/admin.php');
         $this->loadRoutesFrom(__DIR__.'/routes/client.php');
         $this->loadRoutesFrom(__DIR__.'/routes/public.php');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                SweepStalledPosWebhookEventsCommand::class,
+            ]);
+        }
     }
 }

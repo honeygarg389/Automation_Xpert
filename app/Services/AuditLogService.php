@@ -59,4 +59,35 @@ class AuditLogService
             'url' => $request->fullUrl(),
         ]);
     }
+
+    /**
+     * Log an action with no HTTP request behind it — a queued job or console
+     * command, where there is no `$request->user()`/admin-guard user to pull
+     * an actor from.
+     *
+     * `log()`/`logAdmin()` both unconditionally call `request()->user()` (or
+     * the admin guard), which is meaningless in a queue worker; calling
+     * either from a job would either record a bogus/empty actor or throw.
+     * This writes `actor_admin_id`/`user_id` as null (there is no actor — the
+     * platform itself performed the action) and `ip`/`user_agent`/`url` as
+     * null (there is no request), attributing the entry to `$workspaceId`
+     * instead, which a worker always has once it has established tenant
+     * context.
+     *
+     * @param  array<string, mixed>|null  $meta
+     */
+    public function logSystem(
+        string $action,
+        ?Model $auditable,
+        int $workspaceId,
+        ?array $meta = null
+    ): AuditLog {
+        return AuditLog::create([
+            'workspace_id' => $workspaceId,
+            'action' => $action,
+            'auditable_type' => $auditable ? $auditable->getMorphClass() : null,
+            'auditable_id' => $auditable?->getKey(),
+            'meta' => $meta,
+        ]);
+    }
 }
