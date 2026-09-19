@@ -116,7 +116,7 @@ class AutomationEngine
             $run->update(['resume_node_id' => null]);
         } else {
             // Find trigger node and start from the first node after it
-            $triggerNode = $nodes->first(fn ($n) => ($n['type'] ?? '') === 'trigger');
+            $triggerNode = $nodes->first(fn ($n) => self::isTriggerNode($n));
             if (! $triggerNode) {
                 $run->update(['status' => 'failed', 'error' => 'No trigger node.', 'completed_at' => now()]);
 
@@ -206,8 +206,7 @@ class AutomationEngine
         $contact = $this->sampleContact((int) $automation->workspace_id);
         $context = array_merge($this->defaultTestContext(), $context);
 
-        $isTrigger = fn ($n) => in_array($n['type'] ?? '', ['trigger', 'triggerNode'], true) || isset($n['data']['triggerType']);
-        $trigger = $nodesC->first($isTrigger);
+        $trigger = $nodesC->first(fn ($n) => self::isTriggerNode($n));
 
         if (! $trigger) {
             return ['ok' => false, 'error' => 'Add a trigger to start the automation.', 'steps' => []];
@@ -378,6 +377,19 @@ class AutomationEngine
         $s = trim($s);
 
         return mb_strlen($s) > $n ? mb_substr($s, 0, $n).'…' : $s;
+    }
+
+    /**
+     * The Builder persists the trigger as 'triggerNode' while seeded and generated
+     * automations use 'trigger'; the trigger's data may also carry only triggerType.
+     * Every "which node is the trigger" lookup must go through here.
+     *
+     * @param  array<string, mixed>  $node
+     */
+    private static function isTriggerNode(array $node): bool
+    {
+        return in_array($node['type'] ?? '', ['trigger', 'triggerNode'], true)
+            || isset($node['data']['triggerType']);
     }
 
     private function executeNode(array $node, AutomationRun $run, array $context): array
