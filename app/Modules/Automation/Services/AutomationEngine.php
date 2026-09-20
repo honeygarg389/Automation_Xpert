@@ -1332,9 +1332,17 @@ class AutomationEngine
      */
     public function sendFlowTestMessage(int $workspaceId, Contact $contact, string $flowId, string $flowName, string $flowToken): array
     {
+        $preflight = $this->flowSendPreflight($workspaceId, $flowId);
+
+        // Meta has already said this Flow cannot be sent and why; returning that
+        // beats attempting the send and surfacing its raw 131009 rejection.
+        if ($preflight['blocked'] !== null) {
+            return ['status' => 'error', 'message' => $preflight['blocked']];
+        }
+
         $interactive = $this->buildFlowInteractivePayload(
             $flowId, 'Test message: '.$flowName, 'Open Flow', $flowToken,
-            mode: $this->flowSendModeFor($workspaceId, $flowId)
+            mode: $preflight['mode']
         );
 
         // 'sent_by' is a fixed 4-value enum (human/bot/automation/broadcast) —
@@ -1356,7 +1364,7 @@ class AutomationEngine
      * copies of Meta's contract.
      *
      * $mode is deliberately omitted (left null) unless a caller has already
-     * determined it — see flowSendModeFor()'s docblock for why this can
+     * determined it — see flowSendPreflight()'s docblock for why this can
      * never be assumed and must be checked case by case.
      *
      * @return array<string, mixed>
@@ -1405,25 +1413,88 @@ class AutomationEngine
      * initiated action like Send Test.
      *
      * If the check itself is inconclusive (no active WABA, a network
-     * failure, or a status this method doesn't recognize), this returns
-     * null — omitting `mode` entirely, which is the behavior that already
+     * failure, or a status this method doesn't recognize), `mode` is
+     * null — omitting it entirely, which is the behavior that already
      * works for the common (published) case — rather than guessing a
      * status that could just as easily break a currently-working send.
+     *
+     * The SAME response also carries `health_status`, which already says
+     * whether Meta will accept a send and, when it won't, why — e.g. a
+     * DEPRECATED Flow is BLOCKED with error 131009 and Meta's own
+     * "clone the flow" guidance. That is read here from the one getFlow()
+     * call rather than a second round trip, and only turns into `blocked`
+     * when the FLOW entity is explicitly BLOCKED. Deliberately NOT "anything
+     * but AVAILABLE": a Flow in Draft is sendable here (mode 'draft'), and a
+     * merely LIMITED state is not proof a send fails — blocking it would
+     * break a send that currently works, whereas letting it through only
+     * leaves Meta's own rejection as the fallback, as before. Absent or
+     * unrecognised health data likewise means "proceed", never "block".
+     *
+     * @return array{mode:?string, blocked:?string}
      */
-    private function flowSendModeFor(int $workspaceId, string $flowId): ?string
+    private function flowSendPreflight(int $workspaceId, string $flowId): array
     {
+        $none = ['mode' => null, 'blocked' => null];
+
         $client = CloudApiClient::forWorkspace($workspaceId);
         if (! $client) {
-            return null;
+            return $none;
         }
 
         try {
-            $status = $client->getFlow($flowId)->json('status');
+            $flow = $client->getFlow($flowId)->json();
         } catch (\Throwable) {
+            return $none;
+        }
+        if (! is_array($flow)) {
+            return $none;
+        }
+
+        return [
+            'mode' => ($flow['status'] ?? null) === 'DRAFT' ? 'draft' : null,
+            'blocked' => $this->blockedReasonFromHealthStatus($flow['health_status'] ?? null),
+        ];
+    }
+
+    /**
+     * The FLOW entity's own explanation, verbatim from Meta, when it reports
+     * it BLOCKED; null for every other state or shape. error_description and
+     * possible_solution are joined unless the description already contains the
+     * solution, so neither Meta's wording is lost nor repeated.
+     */
+    private function blockedReasonFromHealthStatus(mixed $health): ?string
+    {
+        if (! is_array($health) || ! is_array($health['entities'] ?? null)) {
             return null;
         }
 
-        return $status === 'DRAFT' ? 'draft' : null;
+        foreach ($health['entities'] as $entity) {
+            if (! is_array($entity) || strtoupper((string) ($entity['entity_type'] ?? '')) !== 'FLOW') {
+                continue;
+            }
+            if (strtoupper((string) ($entity['can_send_message'] ?? '')) !== 'BLOCKED') {
+                return null;
+            }
+
+            foreach ((array) ($entity['errors'] ?? []) as $error) {
+                if (! is_array($error)) {
+                    continue;
+                }
+                $description = trim((string) ($error['error_description'] ?? ''));
+                if ($description === '') {
+                    continue;
+                }
+                $solution = trim((string) ($error['possible_solution'] ?? ''));
+
+                return ($solution === '' || stripos($description, $solution) !== false)
+                    ? $description
+                    : $description.' '.$solution;
+            }
+
+            return 'Meta reports this Flow cannot currently send messages. Check its status in WhatsApp Manager.';
+        }
+
+        return null;
     }
 
     // ─── COMMERCE nodes ───────────────────────────────────────────────────────

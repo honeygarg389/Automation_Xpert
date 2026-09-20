@@ -12,6 +12,7 @@ use Illuminate\Support\Carbon;
  * @property int $automation_id
  * @property int|null $contact_id
  * @property string $status
+ * @property string|null $error
  * @property array<string, mixed>|null $context
  * @property Automation|null $automation
  * @property Carbon|null $started_at

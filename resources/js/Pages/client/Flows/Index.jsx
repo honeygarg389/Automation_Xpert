@@ -166,14 +166,27 @@ export default function FlowsIndex({ flows, categories }) {
      * accompanying report).
      */
     const displayStatus = (flow) => {
+        // 'failed' used to have no case anywhere here, so a Flow whose last sync
+        // failed read "Draft" by two routes: (1) meta_flow_id set + failed with no
+        // error text (reconcileStatus's unreconcilable path) fell to the switch
+        // default; (2) meta_flow_id NULL + failed WITH an error (fail() when no WABA
+        // is connected or Meta rejects createFlow) hit the early never-synced return
+        // below and never reached the switch at all. Both now route through here.
+        const syncFailed = () => ({
+            pillLabel: 'Sync Failed', pillClass: STATUS_PILL_CLASSES.failed, tone: 'danger', headline: 'Sync Error',
+            subtext: flow.meta_sync_error || 'The last sync to Meta did not complete. Try syncing again.',
+        });
+
         if (!flow.meta_flow_id) {
+            if (flow.meta_sync_status === 'failed') return syncFailed();
+
             return flow.status === 'published'
                 ? { pillLabel: 'Published', pillClass: STATUS_PILL_CLASSES.published, tone: 'neutral', headline: 'Published Status', subtext: 'Not yet synced to Meta.' }
                 : { pillLabel: 'Draft', pillClass: STATUS_PILL_CLASSES.draft, tone: 'neutral', headline: 'Draft Status', subtext: 'Not yet live on Meta platform' };
         }
 
         if (flow.meta_sync_error) {
-            return { pillLabel: 'Sync Failed', pillClass: STATUS_PILL_CLASSES.failed, tone: 'danger', headline: 'Sync Error', subtext: flow.meta_sync_error };
+            return syncFailed();
         }
         if (flow.meta_validation_errors?.length > 0) {
             return {
@@ -185,6 +198,8 @@ export default function FlowsIndex({ flows, categories }) {
         switch (flow.meta_sync_status) {
             case 'published':
                 return { pillLabel: 'Published', pillClass: STATUS_PILL_CLASSES.published, tone: 'success', headline: 'Published to Meta', subtext: 'Live on WhatsApp' };
+            case 'failed':
+                return syncFailed();
             case 'deprecated':
                 return { pillLabel: 'Deprecated', pillClass: STATUS_PILL_CLASSES.deprecated, tone: 'neutral', headline: 'Deprecated', subtext: 'No longer sendable on Meta — this cannot be undone.' };
             case 'syncing':
