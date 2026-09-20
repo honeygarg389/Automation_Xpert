@@ -89,7 +89,7 @@ class WhatsappFlowTestSendTest extends TestCase
      * all. The draft-mode fix's fresh getFlow() check needs exactly that;
      * connectWaba() alone (no phone number) is what every OTHER test in
      * this file relies on to keep CloudApiClient::forWorkspace() returning
-     * null, so flowSendModeFor() short-circuits before any HTTP call —
+     * null, so flowSendPreflight() short-circuits before any HTTP call —
      * this variant is only for the tests that need the check to actually run.
      */
     private function connectWabaWithPhoneNumber(int $workspaceId): void
@@ -294,6 +294,205 @@ class WhatsappFlowTestSendTest extends TestCase
 
         $message = WorkspaceContext::for($workspace->id, fn () => Message::where('direction', 'out')->latest('id')->first());
         $this->assertArrayNotHasKey('mode', $message->payload['interactive']['action']['parameters']);
+    }
+
+    /**
+     * Meta's Flow `health_status` shape: a top-level can_send_message plus one
+     * entity per thing that can block a send (FLOW, WABA, BUSINESS, APP), each
+     * with its own can_send_message and errors[]. The wording below is what
+     * Meta itself returned for a deprecated Flow (error 131009) — the point of
+     * the preflight is to surface THAT text instead of the raw send failure.
+     *
+     * @param  list<mixed>  $flowErrors  deliberately loose: Meta's data, and one test feeds it a malformed entry
+     * @return array<string,mixed>
+     */
+    private function healthStatus(string $flowState, array $flowErrors = [], string $wabaState = 'AVAILABLE'): array
+    {
+        return [
+            'can_send_message' => $flowState === 'AVAILABLE' ? $wabaState : $flowState,
+            'entities' => [
+                ['entity_type' => 'FLOW', 'id' => 'meta-flow-x', 'can_send_message' => $flowState, 'errors' => $flowErrors],
+                ['entity_type' => 'WABA', 'id' => 'waba-1', 'can_send_message' => $wabaState],
+            ],
+        ];
+    }
+
+    private function driverThatMustNotSend(): void
+    {
+        $driver = Mockery::mock(ChannelDriverInterface::class);
+        $driver->shouldNotReceive('send');
+        $this->app->instance(WhatsappDriver::class, $driver);
+    }
+
+    /**
+     * Before this, a deprecated Flow's Send Test attempted the send and
+     * surfaced Meta's raw 131009 rejection. Meta had already said, on the
+     * getFlow() call the send makes anyway, exactly why the send cannot work
+     * and what to do about it — that text is what the user needs to see.
+     */
+    #[Test]
+    public function a_blocked_flow_returns_metas_own_explanation_without_attempting_the_send(): void
+    {
+        $this->driverThatMustNotSend();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->connectWabaWithPhoneNumber($workspace->id);
+        $flow = $this->syncedFlow($workspace->id, 'meta-flow-deprecated', 'Old Flow');
+        Http::fake(['https://graph.facebook.com/v20.0/meta-flow-deprecated?*' => Http::response([
+            'id' => 'meta-flow-deprecated',
+            'status' => 'DEPRECATED',
+            'health_status' => $this->healthStatus('BLOCKED', [[
+                'error_code' => 131009,
+                'error_description' => 'Your WhatsApp Flow is in a DEPRECATED state.',
+                'possible_solution' => 'Please clone the flow if you want to send it.',
+            ]]),
+        ])]);
+
+        $this->actingAs($user)
+            ->postJson(route('client.flows.test-send', $flow->uuid), ['phone_number' => '919690309316'])
+            ->assertStatus(422)
+            ->assertJson(['message' => 'Your WhatsApp Flow is in a DEPRECATED state. Please clone the flow if you want to send it.']);
+
+        // Nothing was attempted: no driver send (Mockery would fail on it), no Message row.
+        $this->assertSame(0, WorkspaceContext::for($workspace->id, fn () => Message::where('direction', 'out')->count()));
+    }
+
+    #[Test]
+    public function a_blocked_flow_does_not_repeat_a_solution_the_description_already_contains(): void
+    {
+        $this->driverThatMustNotSend();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->connectWabaWithPhoneNumber($workspace->id);
+        $flow = $this->syncedFlow($workspace->id, 'meta-flow-whole', 'Whole Text Flow');
+        $whole = 'Your WhatsApp Flow is in a DEPRECATED state. Please clone the flow if you want to send it.';
+        Http::fake(['https://graph.facebook.com/v20.0/meta-flow-whole?*' => Http::response([
+            'id' => 'meta-flow-whole',
+            'status' => 'DEPRECATED',
+            'health_status' => $this->healthStatus('BLOCKED', [[
+                'error_description' => $whole,
+                'possible_solution' => 'Please clone the flow if you want to send it.',
+            ]]),
+        ])]);
+
+        $this->actingAs($user)
+            ->postJson(route('client.flows.test-send', $flow->uuid), ['phone_number' => '919690309316'])
+            ->assertStatus(422)
+            ->assertJson(['message' => $whole]);
+    }
+
+    #[Test]
+    public function a_blocked_flow_with_no_error_detail_still_gets_a_clear_message_not_a_silent_send(): void
+    {
+        $this->driverThatMustNotSend();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->connectWabaWithPhoneNumber($workspace->id);
+        $flow = $this->syncedFlow($workspace->id, 'meta-flow-nodetail', 'No Detail Flow');
+        Http::fake(['https://graph.facebook.com/v20.0/meta-flow-nodetail?*' => Http::response([
+            'id' => 'meta-flow-nodetail',
+            'status' => 'PUBLISHED',
+            'health_status' => $this->healthStatus('BLOCKED'),
+        ])]);
+
+        $response = $this->actingAs($user)
+            ->postJson(route('client.flows.test-send', $flow->uuid), ['phone_number' => '919690309316'])
+            ->assertStatus(422);
+
+        $this->assertStringContainsString('cannot currently send messages', $response->json('message'));
+    }
+
+    /** The errors[] list is Meta's data; a malformed entry must degrade to the generic message, not a 500. */
+    #[Test]
+    public function a_malformed_error_entry_from_meta_degrades_to_the_generic_blocked_message(): void
+    {
+        $this->driverThatMustNotSend();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->connectWabaWithPhoneNumber($workspace->id);
+        $flow = $this->syncedFlow($workspace->id, 'meta-flow-malformed', 'Malformed');
+        Http::fake(['https://graph.facebook.com/v20.0/meta-flow-malformed?*' => Http::response([
+            'id' => 'meta-flow-malformed',
+            'status' => 'PUBLISHED',
+            'health_status' => $this->healthStatus('BLOCKED', ['unexpected string entry']),
+        ])]);
+
+        $response = $this->actingAs($user)
+            ->postJson(route('client.flows.test-send', $flow->uuid), ['phone_number' => '919690309316'])
+            ->assertStatus(422);
+
+        $this->assertStringContainsString('cannot currently send messages', $response->json('message'));
+    }
+
+    /** POSITIVE CONTROL: the same route and payload for a healthy Flow must still send. */
+    #[Test]
+    public function an_available_flow_still_sends_exactly_as_before(): void
+    {
+        $this->fakeDriver();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->connectWabaWithPhoneNumber($workspace->id);
+        $flow = $this->syncedFlow($workspace->id, 'meta-flow-healthy', 'Healthy Flow');
+        Http::fake(['https://graph.facebook.com/v20.0/meta-flow-healthy?*' => Http::response([
+            'id' => 'meta-flow-healthy',
+            'status' => 'PUBLISHED',
+            'health_status' => $this->healthStatus('AVAILABLE'),
+        ])]);
+
+        $this->actingAs($user)
+            ->postJson(route('client.flows.test-send', $flow->uuid), ['phone_number' => '919690309316'])
+            ->assertOk()
+            ->assertJson(['message' => 'Test message sent to +919690309316.']);
+
+        $message = WorkspaceContext::for($workspace->id, fn () => Message::where('direction', 'out')->latest('id')->first());
+        $this->assertArrayNotHasKey('mode', $message->payload['interactive']['action']['parameters']);
+    }
+
+    /**
+     * A DRAFT flow is deliberately sendable here (mode:'draft'). Only BLOCKED
+     * stops a send — a merely non-AVAILABLE state (LIMITED) is not proof a send
+     * will fail, and blocking it would break the working draft test-send.
+     */
+    #[Test]
+    public function a_limited_draft_flow_is_still_sent_in_draft_mode(): void
+    {
+        $this->fakeDriver();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->connectWabaWithPhoneNumber($workspace->id);
+        $flow = $this->syncedFlow($workspace->id, 'meta-flow-limited', 'Limited Draft');
+        Http::fake(['https://graph.facebook.com/v20.0/meta-flow-limited?*' => Http::response([
+            'id' => 'meta-flow-limited',
+            'status' => 'DRAFT',
+            'health_status' => $this->healthStatus('LIMITED', [['error_description' => 'Flow is in draft.']]),
+        ])]);
+
+        $this->actingAs($user)
+            ->postJson(route('client.flows.test-send', $flow->uuid), ['phone_number' => '919690309316'])
+            ->assertOk();
+
+        $message = WorkspaceContext::for($workspace->id, fn () => Message::where('direction', 'out')->latest('id')->first());
+        $this->assertSame('draft', $message->payload['interactive']['action']['parameters']['mode'] ?? null);
+    }
+
+    /** Only the FLOW entity gates this send — a blocked WABA/business is a different problem with a different fix. */
+    #[Test]
+    public function a_blocked_non_flow_entity_does_not_stop_the_send(): void
+    {
+        $this->fakeDriver();
+        ['user' => $user, 'workspace' => $workspace, 'client' => $client] = $this->createWorkspaceContext();
+        $this->grantFlowsToClient($client);
+        $this->connectWabaWithPhoneNumber($workspace->id);
+        $flow = $this->syncedFlow($workspace->id, 'meta-flow-wabablocked', 'WABA Blocked');
+        Http::fake(['https://graph.facebook.com/v20.0/meta-flow-wabablocked?*' => Http::response([
+            'id' => 'meta-flow-wabablocked',
+            'status' => 'PUBLISHED',
+            'health_status' => $this->healthStatus('AVAILABLE', [], 'BLOCKED'),
+        ])]);
+
+        $this->actingAs($user)
+            ->postJson(route('client.flows.test-send', $flow->uuid), ['phone_number' => '919690309316'])
+            ->assertOk();
     }
 
     #[Test]

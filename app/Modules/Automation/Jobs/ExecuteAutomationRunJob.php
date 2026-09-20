@@ -66,7 +66,11 @@ class ExecuteAutomationRunJob implements ShouldQueue
         try {
             $engine->executeRun($run);
         } catch (\Throwable $e) {
-            $run->update(['status' => 'failed', 'error_message' => $e->getMessage()]);
+            // The column is `error` (see the automation_runs migration and
+            // AutomationRun::$fillable), and the Runs page reads `run.error`. This
+            // used to write `error_message`, which is neither a column nor fillable,
+            // so Eloquent silently discarded it and a failed run carried no reason.
+            $run->update(['status' => 'failed', 'error' => $e->getMessage()]);
             AutomationFailed::dispatch($run, $e->getMessage());
             throw $e;
         }
