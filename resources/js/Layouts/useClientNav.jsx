@@ -100,6 +100,18 @@ export default function useClientNav() {
         { label: t('nav.chat_widget'),   href: safeRoute('client.whatsapp.widget.index'),         icon: whatsappNavIcon, activePattern: 'client.whatsapp.widget.*' },
     ];
 
+    // Workspace administrators—not staff—control the future-delivery
+    // preferences. The route independently enforces this; hiding is only the
+    // discoverability half of the boundary.
+    if (isClientAdmin) {
+        messagingItems.push({
+            label: t('nav.restaurant_messaging'),
+            href: safeRoute('client.restaurant.messaging.index'),
+            icon: <MessageSquare className={iconClass} />,
+            activePattern: 'client.restaurant.messaging.*',
+        });
+    }
+
     const broadcastItems = [
         { label: t('nav.campaigns'),    href: safeRoute('client.campaigns.index'),    icon: <Radio className={iconClass} />,        activePattern: 'client.campaigns.*' },
         { label: t('nav.sms_gateways'), href: safeRoute('client.sms-gateways.index'), icon: <MessageSquare className={iconClass} />, activePattern: 'client.sms-gateways.*' },

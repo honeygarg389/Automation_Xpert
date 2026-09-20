@@ -91,6 +91,11 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         Route::put('/outlets/{outlet}', [RestaurantOutletController::class, 'update'])
             ->name('outlets.update')->middleware('permission:manage_pos_connections');
 
+        // Phase 2 messaging settings — intentionally a dedicated write path,
+        // not part of the ordinary outlet identity form.
+        Route::put('/outlets/{outlet}/messaging-settings', [RestaurantOutletController::class, 'updateMessagingSettings'])
+            ->name('outlets.messaging-settings.update')->middleware('permission:manage_pos_connections');
+
         Route::post('/outlets/{outlet}/archive', [RestaurantOutletController::class, 'archive'])
             ->name('outlets.archive')->middleware('permission:manage_pos_connections');
 

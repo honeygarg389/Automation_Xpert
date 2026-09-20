@@ -3,6 +3,7 @@
 namespace App\Modules\Restaurant\Services;
 
 use App\Models\AdminUser;
+use App\Models\User;
 use App\Models\Workspace;
 use App\Modules\Restaurant\Exceptions\OutletHasActiveConnectionException;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
@@ -74,6 +75,62 @@ class RestaurantOutletService
                 meta: ['workspace_id' => $outlet->workspace_id],
                 admin: $actor,
             );
+
+            return $outlet->refresh();
+        });
+    }
+
+    /**
+     * Atomically persists the two independent Phase 2 messaging preferences.
+     *
+     * This is intentionally the only settings-write path: it records both the
+     * before and resulting values with the correct actor type, and it performs
+     * no delivery, dispatch, event, webhook, or HTTP side effect. Future
+     * delivery jobs must read these flags when they are introduced; this method
+     * merely stores operator intent.
+     */
+    public function updateMessagingSettings(
+        RestaurantOutlet $outlet,
+        bool $digitalBillEnabled,
+        bool $feedbackRequestEnabled,
+        AdminUser|User $actor,
+    ): RestaurantOutlet {
+        return DB::transaction(function () use ($outlet, $digitalBillEnabled, $feedbackRequestEnabled, $actor) {
+            $oldValues = [
+                'digital_bill_enabled' => (bool) $outlet->digital_bill_enabled,
+                'feedback_request_enabled' => (bool) $outlet->feedback_request_enabled,
+            ];
+            $newValues = [
+                'digital_bill_enabled' => $digitalBillEnabled,
+                'feedback_request_enabled' => $feedbackRequestEnabled,
+            ];
+
+            $outlet->update($newValues);
+
+            if ($actor instanceof AdminUser) {
+                $this->auditLog->logAdmin(
+                    action: 'restaurant.outlet.messaging_settings_updated',
+                    targetType: RestaurantOutlet::class,
+                    targetId: $outlet->id,
+                    meta: ['workspace_id' => $outlet->workspace_id, 'outlet_id' => $outlet->id],
+                    admin: $actor,
+                    oldValues: $oldValues,
+                    newValues: $newValues,
+                    workspaceId: $outlet->workspace_id,
+                );
+            } else {
+                // AuditLogService::log() resolves the authenticated web user,
+                // which is this owner on the client-app request path. Passing
+                // workspace_id explicitly keeps the durable audit row useful
+                // outside a client-wide audit view as well.
+                $this->auditLog->log(
+                    action: 'restaurant.outlet.messaging_settings_updated',
+                    auditable: $outlet,
+                    oldValues: $oldValues,
+                    newValues: $newValues,
+                    workspaceId: $outlet->workspace_id,
+                );
+            }
 
             return $outlet->refresh();
         });

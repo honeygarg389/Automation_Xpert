@@ -9,12 +9,17 @@ use Illuminate\Http\Request;
 
 class AuditLogService
 {
+    /**
+     * @param  array<string, mixed>|null  $oldValues
+     * @param  array<string, mixed>|null  $newValues
+     */
     public function log(
         string $action,
         ?Model $auditable = null,
         ?array $oldValues = null,
         ?array $newValues = null,
-        ?Request $request = null
+        ?Request $request = null,
+        ?int $workspaceId = null,
     ): AuditLog {
         $request = $request ?? request();
         $user = $request->user();
@@ -22,6 +27,7 @@ class AuditLogService
         return AuditLog::create([
             'user_id' => $user?->id,
             'client_id' => $user?->client_id,
+            'workspace_id' => $workspaceId,
             'action' => $action,
             'auditable_type' => $auditable ? $auditable->getMorphClass() : null,
             'auditable_id' => $auditable?->getKey(),
@@ -36,6 +42,10 @@ class AuditLogService
     /**
      * Log an action performed by an admin (platform admin user).
      * Uses actor_admin_id and optional meta (plan_id, billing_cycle, reason, etc.).
+     *
+     * @param  array<string, mixed>|null  $meta
+     * @param  array<string, mixed>|null  $oldValues
+     * @param  array<string, mixed>|null  $newValues
      */
     public function logAdmin(
         string $action,
@@ -43,17 +53,23 @@ class AuditLogService
         ?int $targetId = null,
         ?array $meta = null,
         ?AdminUser $admin = null,
-        ?Request $request = null
+        ?Request $request = null,
+        ?array $oldValues = null,
+        ?array $newValues = null,
+        ?int $workspaceId = null,
     ): AuditLog {
         $request = $request ?? request();
         $admin = $admin ?? $request->user('admin');
 
         return AuditLog::create([
             'actor_admin_id' => $admin?->id,
+            'workspace_id' => $workspaceId,
             'action' => $action,
             'auditable_type' => $targetType,
             'auditable_id' => $targetId,
             'meta' => $meta,
+            'old_values' => $oldValues,
+            'new_values' => $newValues,
             'ip' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'url' => $request->fullUrl(),

@@ -71,6 +71,8 @@ const makeOutlet = (over = {}) => ({
     connection_state: 'not_connected',
     connection_uuid: null,
     authorized_for_live_pos: false,
+    digital_bill_enabled: false,
+    feedback_request_enabled: false,
     ...over,
 });
 
@@ -200,6 +202,34 @@ describe('Outlets directory — Edit outlet item', () => {
         await openActionsMenu(row);
 
         expect(screen.queryByRole('button', { name: 'Edit outlet' })).toBeNull();
+    });
+});
+
+describe('Outlets directory — Messaging settings action', () => {
+    beforeEach(() => {
+        grantedPermissions = ['view_pos_connections', 'manage_pos_connections', 'authorize_pos_outlets'];
+    });
+
+    it('shows the independent Messaging settings action and its no-send modal only to an eligible admin', async () => {
+        renderPage();
+        const row = screen.getByText('Downtown Branch').closest('tr');
+        const user = await openActionsMenu(row);
+
+        await user.click(screen.getByRole('button', { name: 'Messaging settings' }));
+
+        expect(screen.getByText('Messaging settings — Downtown Branch')).toBeTruthy();
+        expect(screen.getByText('Both are off by default. Changing these controls does not send anything.')).toBeTruthy();
+        expect(screen.getByRole('checkbox', { name: /Digital Bill/i })).not.toBeChecked();
+        expect(screen.getByRole('checkbox', { name: /Feedback Request/i })).not.toBeChecked();
+    });
+
+    it('does not show Messaging settings to an admin without manage_pos_connections', async () => {
+        grantedPermissions = ['view_pos_connections'];
+        renderPage({ connection_uuid: 'conn-uuid-1' });
+        const row = screen.getByText('Downtown Branch').closest('tr');
+        await openActionsMenu(row);
+
+        expect(screen.queryByRole('button', { name: 'Messaging settings' })).toBeNull();
     });
 });
 

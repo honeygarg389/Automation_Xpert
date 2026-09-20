@@ -2,7 +2,7 @@ import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Badge, Button, Card, Dropdown, Input, Modal, Pagination, Select } from '@/Components/ui';
-import { Archive, BadgeCheck, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, Settings, ShieldCheck } from 'lucide-react';
+import { Archive, BadgeCheck, MessageSquare, MoreVertical, Pencil, Plug, Plus, RotateCcw, Search, Settings, ShieldCheck } from 'lucide-react';
 
 const OUTLET_STATUS_VARIANTS = { active: 'success', archived: 'default' };
 
@@ -70,6 +70,7 @@ export default function Index({ outlets, workspaces, filters }) {
     const [archivingOutlet, setArchivingOutlet] = useState(null);
     const [restoringOutlet, setRestoringOutlet] = useState(null);
     const [authorizingOutlet, setAuthorizingOutlet] = useState(null);
+    const [messagingSettingsOutlet, setMessagingSettingsOutlet] = useState(null);
 
     const rows = outlets.data ?? [];
 
@@ -217,6 +218,7 @@ export default function Index({ outlets, workspaces, filters }) {
                                             canManage={canManage}
                                             canAuthorizeForLivePos={canAuthorizeForLivePos}
                                             onEdit={() => setEditingOutlet(o)}
+                                            onMessagingSettings={() => setMessagingSettingsOutlet(o)}
                                             onAuthorize={() => setAuthorizingOutlet(o)}
                                             onArchive={() => setArchivingOutlet(o)}
                                             onRestore={() => setRestoringOutlet(o)}
@@ -239,6 +241,7 @@ export default function Index({ outlets, workspaces, filters }) {
 
             <AddOutletModal show={addOpen} onClose={() => setAddOpen(false)} workspaceOptions={workspaceOptions} />
             <EditOutletModal outlet={editingOutlet} onClose={() => setEditingOutlet(null)} />
+            <MessagingSettingsModal outlet={messagingSettingsOutlet} onClose={() => setMessagingSettingsOutlet(null)} />
             <ArchiveOutletModal outlet={archivingOutlet} onClose={() => setArchivingOutlet(null)} />
             <RestoreOutletModal outlet={restoringOutlet} onClose={() => setRestoringOutlet(null)} />
             <AuthorizeOutletModal outlet={authorizingOutlet} onClose={() => setAuthorizingOutlet(null)} />
@@ -263,12 +266,16 @@ export default function Index({ outlets, workspaces, filters }) {
  * connection to configure, must never see a three-dot button that opens an
  * empty menu.
  */
-function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, onAuthorize, onArchive, onRestore }) {
+function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, onMessagingSettings, onAuthorize, onArchive, onRestore }) {
     const hasConfigure = !!outlet.connection_uuid;
     const hasEdit = canManage && outlet.status === 'active';
+    // Messaging preferences remain meaningful operational records even when
+    // an outlet is archived, so they are available to any eligible admin
+    // rather than being coupled to the identity-edit lifecycle.
+    const hasMessagingSettings = canManage;
     const hasAuthorize = canAuthorizeForLivePos && outlet.status === 'active' && !outlet.authorized_for_live_pos;
     const hasArchive = canManage && outlet.status === 'active';
-    const hasAnyMenuAction = hasConfigure || hasEdit || hasAuthorize || hasArchive;
+    const hasAnyMenuAction = hasConfigure || hasEdit || hasMessagingSettings || hasAuthorize || hasArchive;
     const canRestore = canManage && outlet.status === 'archived';
 
     return (
@@ -311,6 +318,12 @@ function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, o
                                 Edit outlet
                             </Dropdown.Item>
                         )}
+                        {hasMessagingSettings && (
+                            <Dropdown.Item onClick={onMessagingSettings}>
+                                <MessageSquare className="mr-2 inline h-4 w-4" />
+                                Messaging settings
+                            </Dropdown.Item>
+                        )}
                         {hasAuthorize && (
                             <Dropdown.Item
                                 onClick={onAuthorize}
@@ -323,7 +336,7 @@ function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, o
                         )}
                         {hasArchive && (
                             <>
-                                {(hasConfigure || hasEdit || hasAuthorize) && <Dropdown.Divider />}
+                                {(hasConfigure || hasEdit || hasMessagingSettings || hasAuthorize) && <Dropdown.Divider />}
                                 <Dropdown.Item
                                     onClick={onArchive}
                                     title="Archive outlet"
@@ -339,6 +352,83 @@ function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, o
                 </Dropdown>
             )}
         </div>
+    );
+}
+
+function MessagingSettingsModal({ outlet, onClose }) {
+    if (!outlet) return null;
+
+    return (
+        <Modal show={!!outlet} onClose={onClose} maxWidth="md">
+            <MessagingSettingsForm key={outlet.uuid} outlet={outlet} onClose={onClose} />
+        </Modal>
+    );
+}
+
+function MessagingSettingsForm({ outlet, onClose }) {
+    const { data, setData, put, processing, errors } = useForm({
+        digital_bill_enabled: Boolean(outlet.digital_bill_enabled),
+        feedback_request_enabled: Boolean(outlet.feedback_request_enabled),
+    });
+
+    const submit = (event) => {
+        event.preventDefault();
+        put(route('admin.restaurant.outlets.messaging-settings.update', outlet.uuid), {
+            preserveScroll: true,
+            onSuccess: onClose,
+        });
+    };
+
+    return (
+        <form onSubmit={submit}>
+            <Modal.Header title={`Messaging settings — ${outlet.name}`} onClose={onClose} />
+            <Modal.Body className="space-y-4">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">
+                    Both are off by default. Changing these controls does not send anything.
+                </p>
+                <MessagingToggle
+                    id={`digital-bill-${outlet.uuid}`}
+                    label="Digital Bill"
+                    description="Allow future Digital Bill delivery work for this outlet."
+                    checked={data.digital_bill_enabled}
+                    onChange={(checked) => setData('digital_bill_enabled', checked)}
+                />
+                <MessagingToggle
+                    id={`feedback-request-${outlet.uuid}`}
+                    label="Feedback Request"
+                    description="Allow future Feedback Request delivery work for this outlet."
+                    checked={data.feedback_request_enabled}
+                    onChange={(checked) => setData('feedback_request_enabled', checked)}
+                />
+                {(errors.digital_bill_enabled || errors.feedback_request_enabled) && (
+                    <p className="text-sm text-coral-600 dark:text-coral-400">
+                        {errors.digital_bill_enabled || errors.feedback_request_enabled}
+                    </p>
+                )}
+            </Modal.Body>
+            <Modal.Footer>
+                <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+                <Button type="submit" variant="primary" disabled={processing}>Save settings</Button>
+            </Modal.Footer>
+        </form>
+    );
+}
+
+function MessagingToggle({ id, label, description, checked, onChange }) {
+    return (
+        <label htmlFor={id} className="flex cursor-pointer items-start gap-3 rounded-soft border border-neutral-200 p-3 dark:border-neutral-700">
+            <input
+                id={id}
+                type="checkbox"
+                checked={checked}
+                onChange={(event) => onChange(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-neutral-300 text-brand-600 focus:ring-brand-500"
+            />
+            <span>
+                <span className="block text-sm font-medium text-neutral-900 dark:text-neutral-100">{label}</span>
+                <span className="mt-0.5 block text-xs text-neutral-500 dark:text-neutral-400">{description}</span>
+            </span>
+        </label>
     );
 }
 
