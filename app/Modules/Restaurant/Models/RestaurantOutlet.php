@@ -21,6 +21,8 @@ use Illuminate\Support\Str;
  * @property string|null $address
  * @property string|null $timezone
  * @property string $status
+ * @property bool $digital_bill_enabled
+ * @property bool $feedback_request_enabled
  * @property Carbon|null $pos_live_authorized_at
  * @property int|null $pos_live_authorized_by_admin_id
  */
@@ -66,11 +68,15 @@ class RestaurantOutlet extends Model
         'address',
         'timezone',
         'status',
+        'digital_bill_enabled',
+        'feedback_request_enabled',
         'pos_live_authorized_at',
         'pos_live_authorized_by_admin_id',
     ];
 
     protected $casts = [
+        'digital_bill_enabled' => 'boolean',
+        'feedback_request_enabled' => 'boolean',
         'pos_live_authorized_at' => 'datetime',
     ];
 

@@ -90,6 +90,8 @@ class RestaurantOutletController extends Controller
                     'status' => $outlet->status,
                     'connection_state' => $connection ? $connection->status : 'not_connected',
                     'connection_uuid' => $connection?->uuid,
+                    'digital_bill_enabled' => $outlet->digital_bill_enabled,
+                    'feedback_request_enabled' => $outlet->feedback_request_enabled,
                     // Gate 5 of the six-gate live activation invariant — never
                     // required for a sandbox connection, only surfaced here so
                     // an admin can satisfy it ahead of requesting a live one.
@@ -164,6 +166,28 @@ class RestaurantOutletController extends Controller
         );
 
         return back()->with('success', 'Outlet updated.');
+    }
+
+    /**
+     * Phase 2 — deliberately separate from update(): outlet identity and
+     * future-message preferences have different product/audit semantics.
+     * Saving these booleans never sends anything.
+     */
+    public function updateMessagingSettings(Request $request, RestaurantOutlet $outlet): RedirectResponse
+    {
+        $data = $request->validate([
+            'digital_bill_enabled' => ['present', 'boolean'],
+            'feedback_request_enabled' => ['present', 'boolean'],
+        ]);
+
+        app(RestaurantOutletService::class)->updateMessagingSettings(
+            outlet: $outlet,
+            digitalBillEnabled: (bool) $data['digital_bill_enabled'],
+            feedbackRequestEnabled: (bool) $data['feedback_request_enabled'],
+            actor: $request->user('admin'),
+        );
+
+        return back()->with('success', 'Messaging settings updated. No messages were sent.');
     }
 
     public function archive(Request $request, RestaurantOutlet $outlet): RedirectResponse

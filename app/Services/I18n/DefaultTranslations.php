@@ -91,6 +91,7 @@ class DefaultTranslations
     {
         return [
             'sidebar.menu' => 'Menu',
+            'nav.restaurant_messaging' => 'Restaurant Messaging',
         ];
     }
 

@@ -165,6 +165,27 @@ class RestaurantMigrationRollbackTest extends TestCase
     }
 
     #[Test]
+    public function messaging_settings_migration_backfills_existing_outlets_to_off_via_its_database_defaults(): void
+    {
+        $this->rollbackRestaurantMigrations('2026_09_20_100300_add_messaging_settings_to_restaurant_outlets_table');
+
+        $workspace = Workspace::factory()->create();
+        $outletId = DB::table('restaurant_outlets')->insertGetId([
+            'uuid' => (string) Str::uuid(),
+            'workspace_id' => $workspace->id,
+            'name' => 'Pre-existing outlet',
+            'status' => RestaurantOutlet::STATUS_ACTIVE,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        Artisan::call('migrate', ['--path' => self::RESTAURANT_MIGRATIONS_PATH]);
+
+        $this->assertSame(0, (int) DB::table('restaurant_outlets')->where('id', $outletId)->value('digital_bill_enabled'));
+        $this->assertSame(0, (int) DB::table('restaurant_outlets')->where('id', $outletId)->value('feedback_request_enabled'));
+    }
+
+    #[Test]
     public function the_global_step_calculation_accounts_for_a_newer_restaurant_migration_and_interleaved_module_migrations(): void
     {
         // Fabricated, independent of whatever migrations actually exist on

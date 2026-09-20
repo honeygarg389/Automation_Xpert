@@ -1,16 +1,17 @@
 <?php
 
-/*
- * Restaurant — client (tenant) surface. Placeholder.
- *
- * Follow SmartQrServiceProvider's client.php precedent: this file is loaded
- * outside the app's own tenant route groups, so declare 'web' + 'client-app'
- * (+ any entitlement-gating middleware) and a distinct prefix/name here:
- *
- *   Route::middleware(['web', 'client-app'])
- *       ->prefix('app/restaurant')
- *       ->name('client.restaurant.')
- *       ->group(function () {
- *           // ...
- *       });
+use App\Modules\Restaurant\Http\Controllers\Client\RestaurantMessagingSettingsController;
+use Illuminate\Support\Facades\Route;
+
+/**
+ * Restaurant's tenant surface is intentionally limited to current-workspace
+ * messaging preferences. Admin-only outlet/POS lifecycle controls stay in
+ * routes/admin.php and are never exposed through this group.
  */
+Route::middleware(['web', 'client-app'])
+    ->prefix('app/restaurant/messaging-settings')
+    ->name('client.restaurant.messaging.')
+    ->group(function (): void {
+        Route::get('/', [RestaurantMessagingSettingsController::class, 'index'])->name('index');
+        Route::put('/outlets/{outlet}', [RestaurantMessagingSettingsController::class, 'update'])->name('outlets.update');
+    });
