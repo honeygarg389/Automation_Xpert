@@ -121,7 +121,13 @@ class PetpoojaOrderIngestionService
             'contact_id' => $contactId,
             'provider' => $event->provider,
             'external_order_id' => $externalOrderId,
+            // The upsert bypasses Eloquent's creating hook. Supply a token for
+            // the INSERT branch only; it is deliberately excluded from the
+            // UPDATE list so corrected POS payloads never invalidate a shared
+            // public link.
+            'public_token' => RestaurantBill::generatePublicToken(),
             'source_order_status' => $this->sourceOrderStatus(data_get($order, 'status')),
+            'source_order_type' => $this->sourceOrderType(data_get($order, 'order_type')),
             'source_created_on_raw' => $rawCreatedOn,
             'customer_name' => $this->stringOrNull(data_get($customer, 'name')),
             'customer_phone_raw' => $this->stringOrNull(data_get($customer, 'phone')),
@@ -150,7 +156,7 @@ class PetpoojaOrderIngestionService
         DB::table('restaurant_bills')->upsert(
             [$row + ['created_at' => now()]],
             ['connection_id', 'external_order_id'],
-            array_values(array_diff(array_keys($row), ['received_at'])),
+            array_values(array_diff(array_keys($row), ['received_at', 'public_token'])),
         );
 
         /** @var int $billId */
@@ -306,6 +312,13 @@ class PetpoojaOrderIngestionService
         $status = $this->stringOrNull($value);
 
         return $status === null ? null : Str::limit($status, 32, '');
+    }
+
+    private function sourceOrderType(mixed $value): ?string
+    {
+        $type = $this->stringOrNull($value);
+
+        return $type === null ? null : Str::limit($type, 64, '');
     }
 
     /**

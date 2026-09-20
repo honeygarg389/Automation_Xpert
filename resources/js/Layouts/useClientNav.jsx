@@ -110,6 +110,12 @@ export default function useClientNav() {
             icon: <MessageSquare className={iconClass} />,
             activePattern: 'client.restaurant.messaging.*',
         });
+        messagingItems.push({
+            label: t('nav.restaurant_branding'),
+            href: safeRoute('client.restaurant.branding.index'),
+            icon: <Image className={iconClass} />,
+            activePattern: 'client.restaurant.branding.*',
+        });
     }
 
     const broadcastItems = [

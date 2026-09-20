@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Restaurant\Http\Controllers\Client\RestaurantBrandingController;
 use App\Modules\Restaurant\Http\Controllers\Client\RestaurantMessagingSettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -14,4 +15,13 @@ Route::middleware(['web', 'client-app'])
     ->group(function (): void {
         Route::get('/', [RestaurantMessagingSettingsController::class, 'index'])->name('index');
         Route::put('/outlets/{outlet}', [RestaurantMessagingSettingsController::class, 'update'])->name('outlets.update');
+    });
+
+Route::middleware(['web', 'client-app'])
+    ->prefix('app/restaurant/branding')
+    ->name('client.restaurant.branding.')
+    ->group(function (): void {
+        Route::get('/', [RestaurantBrandingController::class, 'index'])->name('index');
+        Route::put('/', [RestaurantBrandingController::class, 'update'])->name('update');
+        Route::put('/outlets/{outlet}', [RestaurantBrandingController::class, 'updateOutlet'])->name('outlets.update');
     });

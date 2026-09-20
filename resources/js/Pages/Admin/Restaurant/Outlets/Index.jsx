@@ -87,6 +87,11 @@ export default function Index({ outlets, workspaces, filters }) {
                 <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-100">Outlets</h1>
                 {canManage && (
                     <div className="flex gap-3">
+                        <Link href={route('admin.restaurant.branding.index')}>
+                            <Button variant="secondary">
+                                <Settings className="mr-1.5 h-4 w-4" /> Restaurant Branding
+                            </Button>
+                        </Link>
                         <Link href={route('admin.restaurant.connections.create')}>
                             <Button variant="secondary">
                                 <Plug className="mr-1.5 h-4 w-4" /> New Petpooja Connection
