@@ -134,6 +134,7 @@ class PetpoojaOrderIngestionServiceTest extends TestCase
         $this->assertSame('2025-04-04 11:45:35', $bill->source_created_on_raw);
         $this->assertSame('Success', $bill->source_order_status);
         $this->assertSame($event->received_at->format('Y-m-d H:i:s'), $bill->received_at);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $bill->public_token, 'The raw-query upsert path must generate the same opaque public token as Eloquent creation.');
 
         $items = json_decode($bill->order_items, true);
         $this->assertCount(1, $items);

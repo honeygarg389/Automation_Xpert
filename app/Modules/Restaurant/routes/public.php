@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Restaurant\Http\Controllers\Public\PetpoojaWebhookController;
+use App\Modules\Restaurant\Http\Controllers\Public\PublicRestaurantBillController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -23,4 +24,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware(['web', 'throttle:webhooks'])->group(function () {
     Route::post('webhooks/pos/petpooja', PetpoojaWebhookController::class)
         ->name('public.pos.petpooja');
+});
+
+Route::middleware(['web', 'throttle:60,1'])->group(function () {
+    Route::get('b/{token}', PublicRestaurantBillController::class)
+        ->where('token', '[a-f0-9]{64}')
+        ->name('public.restaurant.bills.show');
 });

@@ -45,7 +45,10 @@ use Illuminate\Support\Carbon;
  * @property int|null $contact_id
  * @property string $provider
  * @property string $external_order_id
+ * @property string|null $public_token
+ * @property Carbon|null $public_access_revoked_at
  * @property string|null $source_order_status
+ * @property string|null $source_order_type
  * @property string|null $source_created_on_raw
  * @property string|null $customer_name
  * @property string|null $customer_phone_raw
@@ -53,6 +56,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $core_total
  * @property string|null $discount_total
  * @property string|null $tax_total
+ * @property string|null $currency_code
+ * @property string|null $currency_symbol
  * @property array<int, mixed>|null $order_items
  * @property array<int, mixed>|null $taxes
  * @property array<int, mixed>|null $discounts
@@ -74,14 +79,14 @@ class RestaurantBill extends Model
         'contact_id',
         'provider',
         'external_order_id',
-        'source_order_status',
+        'source_order_status', 'source_order_type',
         'source_created_on_raw',
         'customer_name',
         'customer_phone_raw',
         'total',
         'core_total',
         'discount_total',
-        'tax_total',
+        'tax_total', 'currency_code', 'currency_symbol',
         'order_items',
         'taxes',
         'discounts',
@@ -97,12 +102,28 @@ class RestaurantBill extends Model
             'discounts' => 'array',
             'placed_at' => 'datetime',
             'received_at' => 'datetime',
+            'public_access_revoked_at' => 'datetime',
         ];
     }
 
     protected static function newFactory(): RestaurantBillFactory
     {
         return RestaurantBillFactory::new();
+    }
+
+    protected static function booted(): void
+    {
+        // A public link is a bearer credential. It is intentionally never
+        // fillable: direct model creation and the ingestion upsert each use
+        // this server-side generator rather than accepting client input.
+        static::creating(function (self $bill): void {
+            $bill->public_token = self::generatePublicToken();
+        });
+    }
+
+    public static function generatePublicToken(): string
+    {
+        return bin2hex(random_bytes(32));
     }
 
     /** @return BelongsTo<PosConnection, $this> */

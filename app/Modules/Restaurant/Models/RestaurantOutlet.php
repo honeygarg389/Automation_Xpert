@@ -19,6 +19,8 @@ use Illuminate\Support\Str;
  * @property int $workspace_id
  * @property string $name
  * @property string|null $address
+ * @property string|null $public_phone
+ * @property string|null $public_website
  * @property string|null $timezone
  * @property string $status
  * @property bool $digital_bill_enabled
@@ -66,6 +68,8 @@ class RestaurantOutlet extends Model
         'workspace_id',
         'name',
         'address',
+        'public_phone',
+        'public_website',
         'timezone',
         'status',
         'digital_bill_enabled',

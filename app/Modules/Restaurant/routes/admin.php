@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Restaurant\Http\Controllers\Admin\PosConnectionController;
+use App\Modules\Restaurant\Http\Controllers\Admin\RestaurantBrandingController;
 use App\Modules\Restaurant\Http\Controllers\Admin\RestaurantOutletController;
 use Illuminate\Support\Facades\Route;
 
@@ -109,4 +110,11 @@ Route::middleware(['web', 'auth:admin', 'demo'])
         // everyone who may manage outlets should automatically be able to do.
         Route::post('/outlets/{outlet}/authorize-live-pos', [RestaurantOutletController::class, 'authorizeLivePos'])
             ->name('outlets.authorize-live-pos')->middleware('permission:authorize_pos_outlets');
+
+        Route::get('/branding', [RestaurantBrandingController::class, 'index'])
+            ->name('branding.index')->middleware('permission:manage_pos_connections');
+        Route::put('/branding/{workspace}', [RestaurantBrandingController::class, 'update'])
+            ->name('branding.update')->middleware('permission:manage_pos_connections');
+        Route::put('/branding/{workspace}/outlets/{outlet}', [RestaurantBrandingController::class, 'updateOutlet'])
+            ->name('branding.outlets.update')->middleware('permission:manage_pos_connections');
     });

@@ -22,6 +22,7 @@ class RestaurantBillFactory extends Factory
             'provider' => PosConnection::PROVIDER_PETPOOJA,
             'external_order_id' => (string) fake()->unique()->numberBetween(1, 1000000),
             'source_order_status' => 'Success',
+            'source_order_type' => null,
             'source_created_on_raw' => null,
             'total' => fake()->randomFloat(2, 50, 5000),
             'core_total' => fake()->randomFloat(2, 50, 5000),
