@@ -58,6 +58,12 @@ class JobWorkspaceContextGuardTest extends TestCase
         // PosWebhookEvent::class, $eventId)) — same shape as
         // ProcessEcommerceWebhookJob above.
         'App\Modules\Restaurant\Jobs\ProcessPosWebhookEventJob',
+        // Restaurant Digital Bill provider send. Resolves workspace_id from the
+        // delivery-ledger row named by its own payload (EstablishesWorkspaceContext::
+        // from(RestaurantDigitalBillDelivery::class, $deliveryId)) — the same
+        // shape as ProcessPosWebhookEventJob above. It accepts only that trusted
+        // ledger id, never a workspace or a contact from the caller.
+        'App\Modules\Restaurant\Jobs\SendRestaurantDigitalBillJob',
         'App\Modules\Social\Jobs\PublishSocialPostJob',
         'App\Modules\Whatsapp\Jobs\TemplateSyncJob',
 
