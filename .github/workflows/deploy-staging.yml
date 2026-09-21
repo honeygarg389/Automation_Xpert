@@ -1,0 +1,29 @@
+name: Deploy Staging
+
+on:
+  push:
+    branches:
+      - staging
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: automationxpert-staging-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy AutomationXpert Staging
+    runs-on:
+      - self-hosted
+      - Linux
+      - X64
+
+    timeout-minutes: 30
+
+    steps:
+      - name: Deploy staging
+        run: sudo -n /usr/local/bin/deploy-automationxpert-staging
