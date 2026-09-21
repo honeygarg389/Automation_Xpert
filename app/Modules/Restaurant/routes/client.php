@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Restaurant\Http\Controllers\Client\RestaurantBrandingController;
+use App\Modules\Restaurant\Http\Controllers\Client\RestaurantDigitalBillDeliveryConfigController;
 use App\Modules\Restaurant\Http\Controllers\Client\RestaurantMessagingSettingsController;
 use Illuminate\Support\Facades\Route;
 
@@ -15,6 +16,8 @@ Route::middleware(['web', 'client-app'])
     ->group(function (): void {
         Route::get('/', [RestaurantMessagingSettingsController::class, 'index'])->name('index');
         Route::put('/outlets/{outlet}', [RestaurantMessagingSettingsController::class, 'update'])->name('outlets.update');
+        Route::put('/outlets/{outlet}/digital-bill-delivery-config', [RestaurantDigitalBillDeliveryConfigController::class, 'update'])
+            ->name('outlets.digital-bill-delivery-config.update');
     });
 
 Route::middleware(['web', 'client-app'])

@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Str;
 
@@ -131,6 +132,12 @@ class RestaurantOutlet extends Model
     public function posConnections(): HasMany
     {
         return $this->hasMany(PosConnection::class, 'outlet_id');
+    }
+
+    /** @return HasOne<RestaurantDigitalBillDeliveryConfig, $this> */
+    public function digitalBillDeliveryConfig(): HasOne
+    {
+        return $this->hasOne(RestaurantDigitalBillDeliveryConfig::class, 'outlet_id');
     }
 
     /**

@@ -21,9 +21,9 @@ import MessagingSettings from '@/Pages/client/Restaurant/MessagingSettings';
 describe('Restaurant Messaging settings page', () => {
     it('renders only the supplied workspace outlets with independent controls and clear no-send copy', () => {
         render(<MessagingSettings outlets={[
-            { uuid: 'outlet-a', name: 'Downtown', digital_bill_enabled: false, feedback_request_enabled: true },
-            { uuid: 'outlet-b', name: 'Airport', digital_bill_enabled: true, feedback_request_enabled: false },
-        ]} />);
+            { uuid: 'outlet-a', name: 'Downtown', digital_bill_enabled: false, feedback_request_enabled: true, digital_bill_delivery_config: null },
+            { uuid: 'outlet-b', name: 'Airport', digital_bill_enabled: true, feedback_request_enabled: false, digital_bill_delivery_config: { whatsapp_phone_number_id: 9, whatsapp_template_id: 11 } },
+        ]} digitalBillDeliveryOptions={{ senders: [{ id: 9, label: 'Sender', templates: [{ id: 11, label: 'Digital Bill (en)' }] }] }} />);
 
         expect(screen.getByRole('heading', { name: 'Restaurant Messaging' })).toBeTruthy();
         expect(screen.getByText(/Changing settings does not send any message/i)).toBeTruthy();
@@ -36,5 +36,8 @@ describe('Restaurant Messaging settings page', () => {
         expect(screen.getAllByRole('checkbox', { name: /Digital Bill/i })[1]).toBeChecked();
         expect(screen.getAllByRole('checkbox', { name: /Feedback Request/i })[1]).not.toBeChecked();
         expect(screen.getAllByRole('button', { name: 'Save settings' })).toHaveLength(2);
+        expect(screen.getAllByText('Digital Bill delivery configuration')).toHaveLength(2);
+        expect(screen.getAllByText('Configuration is revalidated before any future delivery.')).toHaveLength(2);
+        expect(screen.getAllByRole('button', { name: 'Save delivery configuration' })).toHaveLength(2);
     });
 });

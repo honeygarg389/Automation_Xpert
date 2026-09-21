@@ -51,6 +51,8 @@ final class RestaurantOutboundPolicy
 
     public const REASON_TEMPLATE_NOT_APPROVED = 'template_not_approved';
 
+    public const REASON_TEMPLATE_NOT_UTILITY = 'template_not_utility';
+
     /**
      * Re-loads every mutable record in the current trusted workspace before a
      * future delivery caller can act. Callers supply only record identities;
@@ -142,8 +144,9 @@ final class RestaurantOutboundPolicy
             return RestaurantOutboundDecision::block($purpose, self::REASON_WHATSAPP_SENDER_NOT_READY, $workspaceId, $bill->id, $outlet->id, $contact->id);
         }
 
-        if (! $this->isApprovedTemplateForSender($templateId, $workspaceId, $sender->waba_id)) {
-            return RestaurantOutboundDecision::block($purpose, self::REASON_TEMPLATE_NOT_APPROVED, $workspaceId, $bill->id, $outlet->id, $contact->id);
+        $templateEligibility = $this->templateEligibilityForPurpose($purpose, $templateId, $workspaceId, $sender->waba_id);
+        if ($templateEligibility !== null) {
+            return RestaurantOutboundDecision::block($purpose, $templateEligibility, $workspaceId, $bill->id, $outlet->id, $contact->id);
         }
 
         return RestaurantOutboundDecision::allow($purpose, $workspaceId, $bill->id, $outlet->id, $contact->id);
@@ -186,13 +189,25 @@ final class RestaurantOutboundPolicy
         return $businessAccount;
     }
 
-    private function isApprovedTemplateForSender(int $templateId, int $workspaceId, string $wabaId): bool
+    private function templateEligibilityForPurpose(string $purpose, int $templateId, int $workspaceId, string $wabaId): ?string
     {
-        return WhatsappTemplate::query()
+        /** @var WhatsappTemplate|null $template */
+        $template = WhatsappTemplate::query()
             ->whereKey($templateId)
             ->where('workspace_id', $workspaceId)
             ->where('waba_id', $wabaId)
-            ->where('status', 'APPROVED')
-            ->exists();
+            ->first();
+
+        if ($template === null || $template->status !== 'APPROVED') {
+            return self::REASON_TEMPLATE_NOT_APPROVED;
+        }
+
+        // Only Digital Bill has a settled category rule. Feedback remains
+        // purpose-aware rather than inheriting a generic category bypass.
+        if ($purpose === RestaurantOutboundPurpose::DIGITAL_BILL && $template->category !== 'UTILITY') {
+            return self::REASON_TEMPLATE_NOT_UTILITY;
+        }
+
+        return null;
     }
 }

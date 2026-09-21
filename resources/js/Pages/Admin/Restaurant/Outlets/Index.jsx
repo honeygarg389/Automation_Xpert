@@ -37,7 +37,7 @@ const CONNECTION_STATE_VARIANTS = {
  * workspace's "Use existing outlet" dropdown on the New Connection page
  * (RestaurantOutlet::eligibleForNewConnection()), and in no other workspace's.
  */
-export default function Index({ outlets, workspaces, filters }) {
+export default function Index({ outlets, workspaces, filters, digitalBillDeliveryOptions = {} }) {
     const page = usePage();
     const permissions = page.props.auth?.permissions ?? [];
     const canManage = permissions.includes('manage_pos_connections');
@@ -71,6 +71,7 @@ export default function Index({ outlets, workspaces, filters }) {
     const [restoringOutlet, setRestoringOutlet] = useState(null);
     const [authorizingOutlet, setAuthorizingOutlet] = useState(null);
     const [messagingSettingsOutlet, setMessagingSettingsOutlet] = useState(null);
+    const [deliveryConfigurationOutlet, setDeliveryConfigurationOutlet] = useState(null);
 
     const rows = outlets.data ?? [];
 
@@ -224,6 +225,7 @@ export default function Index({ outlets, workspaces, filters }) {
                                             canAuthorizeForLivePos={canAuthorizeForLivePos}
                                             onEdit={() => setEditingOutlet(o)}
                                             onMessagingSettings={() => setMessagingSettingsOutlet(o)}
+                                            onDeliveryConfiguration={() => setDeliveryConfigurationOutlet(o)}
                                             onAuthorize={() => setAuthorizingOutlet(o)}
                                             onArchive={() => setArchivingOutlet(o)}
                                             onRestore={() => setRestoringOutlet(o)}
@@ -247,6 +249,7 @@ export default function Index({ outlets, workspaces, filters }) {
             <AddOutletModal show={addOpen} onClose={() => setAddOpen(false)} workspaceOptions={workspaceOptions} />
             <EditOutletModal outlet={editingOutlet} onClose={() => setEditingOutlet(null)} />
             <MessagingSettingsModal outlet={messagingSettingsOutlet} onClose={() => setMessagingSettingsOutlet(null)} />
+            <DigitalBillDeliveryConfigModal outlet={deliveryConfigurationOutlet} options={digitalBillDeliveryOptions[String(deliveryConfigurationOutlet?.workspace_id)] ?? { senders: [] }} onClose={() => setDeliveryConfigurationOutlet(null)} />
             <ArchiveOutletModal outlet={archivingOutlet} onClose={() => setArchivingOutlet(null)} />
             <RestoreOutletModal outlet={restoringOutlet} onClose={() => setRestoringOutlet(null)} />
             <AuthorizeOutletModal outlet={authorizingOutlet} onClose={() => setAuthorizingOutlet(null)} />
@@ -271,7 +274,7 @@ export default function Index({ outlets, workspaces, filters }) {
  * connection to configure, must never see a three-dot button that opens an
  * empty menu.
  */
-function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, onMessagingSettings, onAuthorize, onArchive, onRestore }) {
+function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, onMessagingSettings, onDeliveryConfiguration, onAuthorize, onArchive, onRestore }) {
     const hasConfigure = !!outlet.connection_uuid;
     const hasEdit = canManage && outlet.status === 'active';
     // Messaging preferences remain meaningful operational records even when
@@ -329,6 +332,12 @@ function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, o
                                 Messaging settings
                             </Dropdown.Item>
                         )}
+                        {canManage && (
+                            <Dropdown.Item onClick={onDeliveryConfiguration}>
+                                <Settings className="mr-2 inline h-4 w-4" />
+                                Digital Bill delivery configuration
+                            </Dropdown.Item>
+                        )}
                         {hasAuthorize && (
                             <Dropdown.Item
                                 onClick={onAuthorize}
@@ -357,6 +366,36 @@ function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, o
                 </Dropdown>
             )}
         </div>
+    );
+}
+
+function DigitalBillDeliveryConfigModal({ outlet, options, onClose }) {
+    if (!outlet) return null;
+    return <Modal show={!!outlet} onClose={onClose} maxWidth="md"><DigitalBillDeliveryConfigForm key={outlet.uuid} outlet={outlet} options={options} onClose={onClose} /></Modal>;
+}
+
+function DigitalBillDeliveryConfigForm({ outlet, options, onClose }) {
+    const initialSenderId = outlet.digital_bill_delivery_config?.whatsapp_phone_number_id ?? '';
+    const { data, setData, put, processing, errors } = useForm({
+        whatsapp_phone_number_id: initialSenderId,
+        whatsapp_template_id: outlet.digital_bill_delivery_config?.whatsapp_template_id ?? '',
+    });
+    const sender = options.senders?.find((item) => Number(item.id) === Number(data.whatsapp_phone_number_id));
+    const submit = (event) => {
+        event.preventDefault();
+        put(route('admin.restaurant.outlets.digital-bill-delivery-config.update', outlet.uuid), { preserveScroll: true, onSuccess: onClose });
+    };
+    return (
+        <form onSubmit={submit}>
+            <Modal.Header title={`Digital Bill delivery configuration — ${outlet.name}`} onClose={onClose} />
+            <Modal.Body className="space-y-4">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400">Configuration is revalidated before any future delivery.</p>
+                <Select label="WhatsApp sender" value={data.whatsapp_phone_number_id} onChange={(e) => { setData('whatsapp_phone_number_id', e.target.value); setData('whatsapp_template_id', ''); }} options={[{ value: '', label: 'Select a sender' }, ...(options.senders ?? []).map((item) => ({ value: item.id, label: item.label }))]} />
+                <Select label="Approved Utility template" value={data.whatsapp_template_id} onChange={(e) => setData('whatsapp_template_id', e.target.value)} options={[{ value: '', label: sender ? 'Select a Utility template' : 'Select a sender first' }, ...((sender?.templates ?? []).map((item) => ({ value: item.id, label: item.label })))]} disabled={!sender} />
+                {(errors.whatsapp_phone_number_id || errors.whatsapp_template_id) && <p className="text-sm text-coral-600 dark:text-coral-400">{errors.whatsapp_phone_number_id || errors.whatsapp_template_id}</p>}
+            </Modal.Body>
+            <Modal.Footer><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={processing}>Save configuration</Button></Modal.Footer>
+        </form>
     );
 }
 
