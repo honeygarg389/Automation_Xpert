@@ -248,7 +248,7 @@ class PosConnectionController extends Controller
             ],
             'recentEvents' => $recentEvents,
             'recentRejections' => $recentRejections,
-            'webhookUrl' => url('/webhooks/pos/petpooja'),
+            'webhookUrl' => rtrim(config('app.api_url'), '/').'/webhooks/pos/petpooja',
             // For the guarded move flow's target picker — same shape as create().
             'workspaces' => $this->workspaceOptions(),
             'outlets' => $this->outletOptionsWithConnectionState(),
