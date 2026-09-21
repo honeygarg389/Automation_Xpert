@@ -6,6 +6,7 @@ use App\Jobs\Middleware\EstablishesWorkspaceContext;
 use App\Modules\Restaurant\Exceptions\UnprocessablePosWebhookEventException;
 use App\Modules\Restaurant\Models\PosWebhookEvent;
 use App\Modules\Restaurant\Services\PetpoojaOrderIngestionService;
+use App\Modules\Restaurant\Services\RestaurantDigitalBillDeliveryService;
 use App\Services\AuditLogService;
 use App\Support\Retry\Jitter;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -70,11 +71,12 @@ use Illuminate\Support\Str;
  * Contact and RestaurantOutlet are `BelongsToWorkspace`). See
  * `EstablishesWorkspaceContext`'s own docblock for the incident history.
  *
- * ─── Scope: bill ingestion ONLY ─────────────────────────────────────────────
+ * ─── Scope: bill ingestion plus durable Digital Bill scheduling ─────────────
  *
  * This job never sends a WhatsApp message, digital bill, feedback request,
  * outbound webhook, or any external HTTP request, and never dispatches
- * another job. See `PetpoojaOrderIngestionService`'s docblock.
+ * direct provider call. Scheduling is policy-gated and the dedicated delivery
+ * job is the only send boundary.
  */
 class ProcessPosWebhookEventJob implements ShouldQueue
 {
@@ -116,7 +118,7 @@ class ProcessPosWebhookEventJob implements ShouldQueue
         return [EstablishesWorkspaceContext::from(PosWebhookEvent::class, $this->eventId)];
     }
 
-    public function handle(PetpoojaOrderIngestionService $ingestion, AuditLogService $audit): void
+    public function handle(PetpoojaOrderIngestionService $ingestion, AuditLogService $audit, RestaurantDigitalBillDeliveryService $digitalBills): void
     {
         // Whole-second precision on purpose: the DB column stores no
         // fraction, and this exact value is the fencing token every later
@@ -163,12 +165,26 @@ class ProcessPosWebhookEventJob implements ShouldQueue
         try {
             $billId = $ingestion->ingest($event);
 
-            $completed = $this->ownedRow($claimedAt)->update([
-                'processing_status' => PosWebhookEvent::STATUS_PROCESSED,
-                'processed_at' => now(),
-                'failure_reason' => null,
-                'updated_at' => now(),
-            ]);
+            // The event completion and ledger creation share one outer
+            // transaction. If the scheduling write fails, this event is NOT
+            // stranded as `processed` without a delivery record; the normal
+            // pre-provider retry path can claim it again. The delivery
+            // service's afterCommit callback therefore runs only after both
+            // records have committed.
+            $completed = DB::transaction(function () use ($claimedAt, $digitalBills, $billId): int {
+                $completed = $this->ownedRow($claimedAt)->update([
+                    'processing_status' => PosWebhookEvent::STATUS_PROCESSED,
+                    'processed_at' => now(),
+                    'failure_reason' => null,
+                    'updated_at' => now(),
+                ]);
+
+                if ($completed === 1) {
+                    $digitalBills->schedule($billId);
+                }
+
+                return $completed;
+            });
 
             if ($completed === 1) {
                 $audit->logSystem(

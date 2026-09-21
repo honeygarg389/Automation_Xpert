@@ -117,6 +117,14 @@ Schedule::command('restaurant:sweep-stalled-webhook-events')
     ->withoutOverlapping()
     ->onOneServer();
 
+// A stale `sending` row crossed the provider boundary, so it is terminally
+// unknown rather than re-dispatched. This command performs no send itself.
+Schedule::command('restaurant:mark-stalled-digital-bill-deliveries-unknown')
+    ->everyFiveMinutes()
+    ->name('restaurant-mark-stalled-digital-bill-deliveries-unknown')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // ── Smart QR raw scan retention (R-4 amendment) ─────────────────────────────
 //
 // ⚠️ DELETES CUSTOMER DATA, and it runs AFTER the aggregator by design — GUARD 2
