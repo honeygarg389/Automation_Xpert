@@ -3,6 +3,7 @@
 use App\Modules\Restaurant\Http\Controllers\Admin\PosConnectionController;
 use App\Modules\Restaurant\Http\Controllers\Admin\RestaurantBrandingController;
 use App\Modules\Restaurant\Http\Controllers\Admin\RestaurantDigitalBillDeliveryConfigController;
+use App\Modules\Restaurant\Http\Controllers\Admin\RestaurantFeedbackDeliveryConfigController;
 use App\Modules\Restaurant\Http\Controllers\Admin\RestaurantOutletController;
 use Illuminate\Support\Facades\Route;
 
@@ -100,6 +101,8 @@ Route::middleware(['web', 'auth:admin', 'demo'])
 
         Route::put('/outlets/{outlet}/digital-bill-delivery-config', [RestaurantDigitalBillDeliveryConfigController::class, 'update'])
             ->name('outlets.digital-bill-delivery-config.update')->middleware('permission:manage_pos_connections');
+        Route::put('/outlets/{outlet}/feedback-delivery-config', [RestaurantFeedbackDeliveryConfigController::class, 'update'])
+            ->name('outlets.feedback-delivery-config.update')->middleware('permission:manage_pos_connections');
 
         Route::post('/outlets/{outlet}/archive', [RestaurantOutletController::class, 'archive'])
             ->name('outlets.archive')->middleware('permission:manage_pos_connections');

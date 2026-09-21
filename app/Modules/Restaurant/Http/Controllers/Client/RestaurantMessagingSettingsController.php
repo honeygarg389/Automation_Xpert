@@ -5,12 +5,10 @@ namespace App\Modules\Restaurant\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
-use App\Modules\Restaurant\Services\RestaurantDigitalBillDeliveryConfigService;
 use App\Modules\Restaurant\Services\RestaurantOutletService;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Inertia\Response;
 
 /**
@@ -21,20 +19,7 @@ class RestaurantMessagingSettingsController extends Controller
 {
     public function index(Request $request): Response
     {
-        $this->ensureWorkspaceAdministrator($request);
-        $workspaceId = $this->workspaceId($request);
-
-        $deliveryService = app(RestaurantDigitalBillDeliveryConfigService::class);
-
-        return Inertia::render('client/Restaurant/MessagingSettings', [
-            'outlets' => RestaurantOutlet::query()
-                ->where('workspace_id', $workspaceId)
-                ->orderBy('name')
-                ->get()
-                ->map(fn (RestaurantOutlet $outlet): array => $this->outletPayload($outlet))
-                ->values(),
-            'digitalBillDeliveryOptions' => $deliveryService->optionsForWorkspace($workspaceId),
-        ]);
+        return app(RestaurantProfileMessagingController::class)->index($request);
     }
 
     public function update(Request $request, RestaurantOutlet $outlet): RedirectResponse
@@ -70,20 +55,5 @@ class RestaurantMessagingSettingsController extends Controller
     private function workspaceId(Request $request): int
     {
         return (int) (WorkspaceContext::id() ?? $request->user()->workspace_id);
-    }
-
-    /** @return array{uuid: string, name: string, digital_bill_enabled: bool, feedback_request_enabled: bool, digital_bill_delivery_config: array{whatsapp_phone_number_id: int|null, whatsapp_template_id: int|null}|null} */
-    private function outletPayload(RestaurantOutlet $outlet): array
-    {
-        return [
-            'uuid' => $outlet->uuid,
-            'name' => $outlet->name,
-            'digital_bill_enabled' => $outlet->digital_bill_enabled,
-            'feedback_request_enabled' => $outlet->feedback_request_enabled,
-            'digital_bill_delivery_config' => $outlet->digitalBillDeliveryConfig === null ? null : [
-                'whatsapp_phone_number_id' => $outlet->digitalBillDeliveryConfig->whatsapp_phone_number_id,
-                'whatsapp_template_id' => $outlet->digitalBillDeliveryConfig->whatsapp_template_id,
-            ],
-        ];
     }
 }

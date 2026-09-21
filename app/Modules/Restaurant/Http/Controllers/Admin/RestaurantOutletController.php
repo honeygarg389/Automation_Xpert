@@ -8,6 +8,7 @@ use App\Modules\Restaurant\Exceptions\OutletHasActiveConnectionException;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\RestaurantDigitalBillDeliveryConfigService;
+use App\Modules\Restaurant\Services\RestaurantFeedbackDeliveryConfigService;
 use App\Modules\Restaurant\Services\RestaurantOutletService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,7 +62,7 @@ class RestaurantOutletController extends Controller
         // simply the wrong fact. Loaded unfiltered here — "not connected"
         // must mean zero connection ROWS, never zero NON-ARCHIVED ones.
         $outlets = RestaurantOutlet::query()
-            ->with(['workspace:id,name', 'posConnections' => fn ($q) => $q->latest('id'), 'digitalBillDeliveryConfig'])
+            ->with(['workspace:id,name', 'posConnections' => fn ($q) => $q->latest('id'), 'digitalBillDeliveryConfig', 'feedbackDeliveryConfig'])
             ->where('status', $status)
             ->when($search !== '', function ($query) use ($search) {
                 $query->where(function ($q) use ($search) {
@@ -98,6 +99,13 @@ class RestaurantOutletController extends Controller
                         'whatsapp_phone_number_id' => $outlet->digitalBillDeliveryConfig->whatsapp_phone_number_id,
                         'whatsapp_template_id' => $outlet->digitalBillDeliveryConfig->whatsapp_template_id,
                     ],
+                    'feedback_delivery_config' => $outlet->feedbackDeliveryConfig === null ? null : [
+                        'whatsapp_phone_number_id' => $outlet->feedbackDeliveryConfig->whatsapp_phone_number_id,
+                        'whatsapp_template_id' => $outlet->feedbackDeliveryConfig->whatsapp_template_id,
+                        'timing_preference' => $outlet->feedbackDeliveryConfig->timing_preference,
+                        'next_day_at' => $outlet->feedbackDeliveryConfig->next_day_at?->format('H:i'),
+                        'google_review_url' => $outlet->feedbackDeliveryConfig->google_review_url,
+                    ],
                     // Gate 5 of the six-gate live activation invariant — never
                     // required for a sandbox connection, only surfaced here so
                     // an admin can satisfy it ahead of requesting a live one.
@@ -116,8 +124,10 @@ class RestaurantOutletController extends Controller
             ]);
 
         $deliveryOptions = [];
+        $feedbackOptions = [];
         foreach ($outlets->getCollection()->pluck('workspace_id')->unique() as $id) {
             $deliveryOptions[(string) $id] = app(RestaurantDigitalBillDeliveryConfigService::class)->optionsForWorkspace((int) $id);
+            $feedbackOptions[(string) $id] = app(RestaurantFeedbackDeliveryConfigService::class)->optionsForWorkspace((int) $id);
         }
 
         return Inertia::render('Admin/Restaurant/Outlets/Index', [
@@ -125,6 +135,7 @@ class RestaurantOutletController extends Controller
             'workspaces' => $workspaces,
             'filters' => ['search' => $search, 'workspace_id' => $workspaceId, 'status' => $status],
             'digitalBillDeliveryOptions' => $deliveryOptions,
+            'feedbackDeliveryOptions' => $feedbackOptions,
         ]);
     }
 

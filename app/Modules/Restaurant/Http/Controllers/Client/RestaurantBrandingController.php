@@ -5,26 +5,20 @@ namespace App\Modules\Restaurant\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Workspace;
-use App\Modules\Restaurant\Models\RestaurantBrandProfile;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\RestaurantBrandProfileService;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Inertia\Inertia;
 use Inertia\Response;
 
 class RestaurantBrandingController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
-        $workspace = $this->workspace($request);
-        $profile = RestaurantBrandProfile::query()->where('workspace_id', $workspace->id)->first();
+        $this->workspace($request);
 
-        return Inertia::render('client/Restaurant/Branding', [
-            'profile' => $this->profile($profile),
-            'outlets' => RestaurantOutlet::query()->where('workspace_id', $workspace->id)->orderBy('name')->get(['id', 'uuid', 'name', 'public_phone', 'public_website']),
-        ]);
+        return redirect()->route('client.restaurant.profile-messaging.index');
     }
 
     public function update(Request $request): RedirectResponse
@@ -66,18 +60,5 @@ class RestaurantBrandingController extends Controller
             'logo' => ['nullable', 'image', 'max:2048'],
             'cover' => ['nullable', 'image', 'max:4096'],
         ]);
-    }
-
-    /** @return array<string, mixed> */
-    private function profile(?RestaurantBrandProfile $profile): array
-    {
-        return [
-            'brand_name' => $profile?->brand_name,
-            'primary_color' => $profile?->primary_color,
-            'thank_you_note' => $profile?->thank_you_note,
-            'social_links' => $profile === null ? [] : ($profile->social_links ?? []),
-            'logo_url' => $profile?->logoUrl(),
-            'cover_url' => $profile?->coverUrl(),
-        ];
     }
 }
