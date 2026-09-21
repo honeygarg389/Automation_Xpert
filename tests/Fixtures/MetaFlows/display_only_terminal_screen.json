@@ -1,0 +1,33 @@
+{
+    "version": "7.3",
+    "screens": [
+        {
+            "id": "WELCOME_SCREEN",
+            "title": "Welcome",
+            "terminal": true,
+            "success": true,
+            "data": {},
+            "layout": {
+                "type": "SingleColumnLayout",
+                "children": [
+                    {
+                        "type": "TextHeading",
+                        "text": "Hello World"
+                    },
+                    {
+                        "type": "TextBody",
+                        "text": "Let's start building things!"
+                    },
+                    {
+                        "type": "Footer",
+                        "label": "Complete",
+                        "on-click-action": {
+                            "name": "complete",
+                            "payload": {}
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}

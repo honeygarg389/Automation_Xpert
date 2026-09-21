@@ -49,6 +49,7 @@ use Illuminate\Support\Str;
  * @property string|null $meta_sync_status
  * @property list<array<string,mixed>>|null $meta_validation_errors
  * @property string|null $meta_sync_error
+ * @property string|null $import_unsupported_reason
  * @property array<string,mixed>|null $meta_passthrough
  * @property bool $web_form_enabled
  * @property string|null $public_slug
@@ -112,6 +113,7 @@ class WhatsappFlow extends Model
         'meta_sync_status',
         'meta_validation_errors',
         'meta_sync_error',
+        'import_unsupported_reason',
         'meta_passthrough',
         'web_form_enabled',
         'public_slug',
@@ -119,6 +121,17 @@ class WhatsappFlow extends Model
         'max_submissions',
         'limit_error_message',
     ];
+
+    /**
+     * True when Meta holds content this Flow's local screens do not faithfully
+     * represent (see WhatsappFlowJsonCompiler::decompile()). Compiling and
+     * uploading such a row would overwrite the real content on Meta with
+     * placeholder or stale screens, so every upload path checks this first.
+     */
+    public function isLossyImport(): bool
+    {
+        return $this->import_unsupported_reason !== null && $this->import_unsupported_reason !== '';
+    }
 
     protected function casts(): array
     {

@@ -23,6 +23,19 @@ class WhatsappFlowJsonCompiler
     ];
 
     /**
+     * Meta components that collect a value. Used only to word a refusal
+     * precisely ("collects input fields (a, b)" vs "has other content") — it is
+     * NOT a support list: anything on a terminal screen beyond a single heading
+     * is refused either way.
+     *
+     * @var list<string>
+     */
+    private const INPUT_COMPONENT_TYPES = [
+        'TextInput', 'TextArea', 'Dropdown', 'RadioButtonsGroup', 'CheckboxGroup',
+        'DatePicker', 'CalendarPicker', 'OptIn', 'ChipsSelector', 'PhotoPicker', 'DocumentPicker',
+    ];
+
+    /**
      * @return array<string, mixed>
      */
     public function compile(WhatsappFlow $flow): array
@@ -160,8 +173,25 @@ class WhatsappFlowJsonCompiler
      * of these keys — callers should treat an empty array as "nothing to
      * persist", not overwrite an existing value with it.
      *
+     * ⚠️ LOSSLESS OR REFUSE. This is the ONLY way local content is derived from
+     * Meta's, and a later compile() is what writes it back. So nothing it cannot
+     * hold may be quietly discarded: a terminal screen with input fields or any
+     * content beyond a confirmation heading, a screen with no Form, content
+     * beside the Form, and any component type outside the internal vocabulary
+     * all raise UnsupportedMetaFlowShapeException with a reason that names the
+     * screen and what would be lost. A malformed payload stays a plain
+     * InvalidArgumentException.
+     *
+     * KNOWN REMAINING GAP: properties OF a supported component that the
+     * internal model has no field for (max-chars, pattern, visible, init-value,
+     * an option's description, a Footer's non-linear `next`) are still not
+     * carried. Closing that needs a per-component key whitelist — a separate
+     * decision, since it would newly refuse flows that import today.
+     *
      * @param  array<string, mixed>  $metaFlowJson
      * @return array{screens:list<array{id:string,title:string,fields:list<array<string,mixed>>}>,submit_settings:array{button_text:string,success_message:string},meta_passthrough:array<string,mixed>}
+     *
+     * @throws UnsupportedMetaFlowShapeException
      */
     public function decompile(array $metaFlowJson): array
     {
@@ -188,13 +218,23 @@ class WhatsappFlowJsonCompiler
                 throw new InvalidArgumentException('Meta Flow JSON contains an invalid screen.');
             }
 
+            $screenLabel = $this->screenLabel($metaScreen, $screenIndex + 1);
+
             if (($metaScreen['terminal'] ?? false) === true || ($metaScreen['id'] ?? null) === 'SUCCESS') {
+                // This used to `continue` unconditionally, discarding the whole
+                // screen. That is only correct for OUR OWN confirmation screen
+                // (one heading + a Footer). A terminal screen carrying real input
+                // fields — or any other content — vanished without an error
+                // whenever the rest of the Flow was parseable, and the next
+                // "Sync Draft to Meta" then recompiled the Flow WITHOUT them and
+                // deleted them from Meta's draft. Refuse instead of dropping.
+                $this->assertTerminalScreenIsOnlyAConfirmation($metaScreen, $screenLabel);
                 $submitSettings['success_message'] = $this->successMessageFor($metaScreen, $submitSettings['success_message']);
 
                 continue;
             }
 
-            $form = $this->formForScreen($metaScreen);
+            $form = $this->formForScreen($metaScreen, $screenLabel);
             $children = $form['children'] ?? null;
             if (! is_array($children)) {
                 throw new InvalidArgumentException(sprintf('Meta screen %d has no Form children.', $screenIndex + 1));
@@ -211,11 +251,11 @@ class WhatsappFlowJsonCompiler
 
                     continue;
                 }
-                $fields[] = $this->fieldFromComponent($component, $screenIndex + 1, $componentIndex + 1, count($fields) + 1, $usedFieldNames);
+                $fields[] = $this->fieldFromComponent($component, $screenIndex + 1, $componentIndex + 1, count($fields) + 1, $usedFieldNames, $screenLabel);
             }
 
             if ($fields === []) {
-                throw new InvalidArgumentException(sprintf('Meta screen %d contains no supported fields.', $screenIndex + 1));
+                throw new UnsupportedMetaFlowShapeException(sprintf('%s has no input fields or headings, which isn\'t supported for editing yet.', $screenLabel));
             }
             if ($screenIndex + 1 === count($metaScreens) - 1 && $footerLabel !== null && trim($footerLabel) !== '') {
                 $submitSettings['button_text'] = trim($footerLabel);
@@ -230,7 +270,7 @@ class WhatsappFlowJsonCompiler
         }
 
         if ($screens === []) {
-            throw new InvalidArgumentException('Meta Flow JSON must contain at least one non-terminal screen.');
+            throw new UnsupportedMetaFlowShapeException('This Flow has no input screens to edit: it only contains a final confirmation screen.');
         }
 
         $metaPassthrough = [];
@@ -247,20 +287,123 @@ class WhatsappFlowJsonCompiler
      * @param  array<string, mixed>  $screen
      * @return array<string, mixed>
      */
-    private function formForScreen(array $screen): array
+    private function formForScreen(array $screen, string $screenLabel): array
     {
         $children = $screen['layout']['children'] ?? null;
         if (! is_array($children)) {
             throw new InvalidArgumentException('Meta screen layout must contain children.');
         }
 
+        $form = null;
+        $outside = [];
         foreach ($children as $child) {
+            if (is_array($child) && ($child['type'] ?? null) === 'Form' && $form === null) {
+                $form = $child;
+
+                continue;
+            }
+            $outside[] = is_array($child) && is_string($child['type'] ?? null) ? $child['type'] : 'unknown';
+        }
+
+        if ($form === null) {
+            throw new UnsupportedMetaFlowShapeException(sprintf(
+                '%s has no form: its components sit directly on the screen, or it is a static information screen. That isn\'t supported for editing yet.',
+                $screenLabel
+            ));
+        }
+
+        // Only the Form's children were ever read, so anything beside it (a
+        // TextBody above the form, a second Form) was silently ignored here and
+        // then absent from the next recompile.
+        if ($outside !== []) {
+            throw new UnsupportedMetaFlowShapeException(sprintf(
+                '%s has content outside its form (%s), which would be lost when the Flow is re-synced.',
+                $screenLabel,
+                implode(', ', array_unique($outside))
+            ));
+        }
+
+        return $form;
+    }
+
+    /**
+     * `Screen "ID"` — the id Meta stores, so the reason points at something the user can find on Meta.
+     *
+     * @param  array<string, mixed>  $screen
+     */
+    private function screenLabel(array $screen, int $position): string
+    {
+        $id = is_string($screen['id'] ?? null) && trim($screen['id']) !== '' ? $screen['id'] : '#'.$position;
+
+        return sprintf('Screen "%s"', $id);
+    }
+
+    /**
+     * A screen's components, looking through its Form when it has one. A screen
+     * with no Form (Meta's own builder emits these) has its components directly
+     * under the layout.
+     *
+     * @param  array<string, mixed>  $screen
+     * @return list<mixed>
+     */
+    private function componentsOf(array $screen): array
+    {
+        $components = [];
+        foreach ((array) ($screen['layout']['children'] ?? []) as $child) {
             if (is_array($child) && ($child['type'] ?? null) === 'Form') {
-                return $child;
+                array_push($components, ...array_values((array) ($child['children'] ?? [])));
+            } else {
+                $components[] = $child;
             }
         }
 
-        throw new InvalidArgumentException('Meta screen layout must contain a Form.');
+        return $components;
+    }
+
+    /**
+     * The only terminal screen decompile() may discard is a plain confirmation:
+     * at most one TextHeading (which becomes the success message) and a Footer.
+     * Anything else on it is content the internal model has nowhere to keep.
+     *
+     * @param  array<string, mixed>  $screen
+     */
+    private function assertTerminalScreenIsOnlyAConfirmation(array $screen, string $screenLabel): void
+    {
+        $inputs = [];
+        $other = [];
+        $headings = 0;
+
+        foreach ($this->componentsOf($screen) as $component) {
+            $type = is_array($component) && is_string($component['type'] ?? null) ? $component['type'] : 'unknown';
+
+            if ($type === 'Footer') {
+                continue;
+            }
+            if ($type === 'TextHeading' && ++$headings === 1) {
+                continue;
+            }
+            if (in_array($type, self::INPUT_COMPONENT_TYPES, true)) {
+                $inputs[] = is_string($component['name'] ?? null) ? $component['name'] : $type;
+
+                continue;
+            }
+            $other[] = $type;
+        }
+
+        if ($inputs !== []) {
+            throw new UnsupportedMetaFlowShapeException(sprintf(
+                '%s is a final (terminal) screen that also collects input fields (%s). Flows with input fields on their final screen aren\'t supported for editing yet.',
+                $screenLabel,
+                implode(', ', $inputs)
+            ));
+        }
+        if ($other !== []) {
+            throw new UnsupportedMetaFlowShapeException(sprintf(
+                '%s is a final (terminal) screen with content beyond a single confirmation heading (%s), which would be lost when the Flow is re-synced.',
+                $screenLabel,
+                implode(', ', array_unique($other))
+            ));
+        }
     }
 
     /**
@@ -268,7 +411,7 @@ class WhatsappFlowJsonCompiler
      * @param  array<string,true>  $usedFieldNames  Mutated to record every name returned across the whole decompile() call — see MetaFlowIdentifier::normalize().
      * @return array{id:string,type:string,label:string,name:string,required:bool,helper_text:string|null,options:list<array{id:string,title:string}>,step:int,order:int}
      */
-    private function fieldFromComponent(array $component, int $step, int $componentPosition, int $order, array &$usedFieldNames): array
+    private function fieldFromComponent(array $component, int $step, int $componentPosition, int $order, array &$usedFieldNames, string $screenLabel): array
     {
         $metaType = $component['type'] ?? null;
         if ($metaType === 'TextHeading') {
@@ -286,13 +429,17 @@ class WhatsappFlowJsonCompiler
         }
 
         $type = match ($metaType) {
-            'TextInput' => $this->inputTypeFromComponent($component),
+            'TextInput' => $this->inputTypeFromComponent($component, $screenLabel),
             'TextArea' => 'textarea',
             'Dropdown' => 'select',
             'RadioButtonsGroup' => 'radio',
             'CheckboxGroup' => 'checkbox',
             'DatePicker' => 'date',
-            default => throw new InvalidArgumentException('Meta Flow JSON contains unsupported component type '.var_export($metaType, true).'.'),
+            default => throw new UnsupportedMetaFlowShapeException(sprintf(
+                '%s uses the %s component, which isn\'t supported for editing yet.',
+                $screenLabel,
+                is_string($metaType) ? "'{$metaType}'" : 'an unrecognised'
+            )),
         };
         $rawName = $component['name'] ?? null;
         if (! is_string($rawName) || $rawName === '') {
@@ -313,18 +460,22 @@ class WhatsappFlowJsonCompiler
             'name' => $name,
             'required' => (bool) ($component['required'] ?? false),
             'helper_text' => is_string($component['helper-text'] ?? null) ? $component['helper-text'] : null,
-            'options' => $this->optionsFromComponent($component, $type),
+            'options' => $this->optionsFromComponent($component, $type, $screenLabel),
             'step' => $step,
             'order' => $order,
         ];
     }
 
     /** @param array<string,mixed> $component */
-    private function inputTypeFromComponent(array $component): string
+    private function inputTypeFromComponent(array $component, string $screenLabel): string
     {
         $inputType = $component['input-type'] ?? 'text';
         if (! is_string($inputType) || ! in_array($inputType, ['text', 'number', 'email', 'phone'], true)) {
-            throw new InvalidArgumentException('Meta TextInput has an unsupported input-type.');
+            throw new UnsupportedMetaFlowShapeException(sprintf(
+                '%s has a text input with input type %s, which isn\'t supported for editing yet.',
+                $screenLabel,
+                is_string($inputType) ? "'{$inputType}'" : 'an unrecognised value'
+            ));
         }
 
         return $inputType;
@@ -334,36 +485,40 @@ class WhatsappFlowJsonCompiler
      * @param  array<string, mixed>  $component
      * @return list<array{id:string,title:string}>
      */
-    private function optionsFromComponent(array $component, string $type): array
+    private function optionsFromComponent(array $component, string $type, string $screenLabel): array
     {
         if (! in_array($type, ['select', 'radio', 'checkbox'], true)) {
             return [];
         }
         $source = $component['data-source'] ?? [];
         if (! is_array($source)) {
-            throw new InvalidArgumentException('Meta choice component data-source must be an array.');
+            throw new UnsupportedMetaFlowShapeException(sprintf('%s has a choice field whose options come from dynamic data, which isn\'t supported for editing yet.', $screenLabel));
         }
 
-        return array_values(array_map(function (mixed $option): array {
+        return array_values(array_map(function (mixed $option) use ($screenLabel): array {
             if (! is_array($option) || ! is_string($option['id'] ?? null) || ! is_string($option['title'] ?? null)) {
-                throw new InvalidArgumentException('Meta choice options require string id and title values.');
+                throw new UnsupportedMetaFlowShapeException(sprintf('%s has a choice field with options that aren\'t plain id/title pairs, which isn\'t supported for editing yet.', $screenLabel));
             }
 
             return ['id' => $option['id'], 'title' => $option['title']];
         }, $source));
     }
 
-    /** @param array<string,mixed> $screen */
+    /**
+     * The confirmation heading of a terminal screen already vetted by
+     * assertTerminalScreenIsOnlyAConfirmation(). Looks through the Form when
+     * there is one and directly at the layout when there is not — the old
+     * version needed a Form and silently fell back to the default message
+     * without one, losing the heading text.
+     *
+     * @param  array<string,mixed>  $screen
+     */
     private function successMessageFor(array $screen, string $fallback): string
     {
-        try {
-            foreach ($this->formForScreen($screen)['children'] ?? [] as $component) {
-                if (is_array($component) && ($component['type'] ?? null) === 'TextHeading' && is_string($component['text'] ?? null)) {
-                    return $component['text'];
-                }
+        foreach ($this->componentsOf($screen) as $component) {
+            if (is_array($component) && ($component['type'] ?? null) === 'TextHeading' && is_string($component['text'] ?? null)) {
+                return $component['text'];
             }
-        } catch (InvalidArgumentException) {
-            return $fallback;
         }
 
         return $fallback;

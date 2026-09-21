@@ -134,6 +134,8 @@ export default function FlowsBuilder({ flow, categories, fieldTypes }) {
     const [savedSnapshot, setSavedSnapshot] = useState(() => dirtySnapshot(data));
     const isDirty = dirtySnapshot(data) !== savedSnapshot;
     const isPublished = flow.meta_sync_status === 'published';
+    // A lossy import holds PLACEHOLDER screens, so both upload buttons below would overwrite the real content on Meta. The server refuses regardless; this explains why.
+    const isLossyImport = !!flow.import_unsupported_reason;
     const metaBadge = META_STATUS_BADGE[flow.meta_sync_status] ?? { label: 'Draft', className: 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400' };
     const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
     const goBack = () => {
@@ -271,9 +273,9 @@ export default function FlowsBuilder({ flow, categories, fieldTypes }) {
                     ) : (
                         <>
                             {/* Section A — "Sync Draft to Meta" is the old sync-only action, kept exactly as it behaved before, just demoted to a smaller secondary button. */}
-                            <button type="button" disabled={metaAction !== null} onClick={() => runMetaAction('sync')} className="rounded-lg border border-neutral-300 px-2.5 py-2 text-xs font-medium text-neutral-600 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300" title="Push the current draft to Meta without publishing it">{metaAction === 'sync' ? 'Syncing…' : 'Sync Draft to Meta'}</button>
+                            <button type="button" disabled={metaAction !== null || isLossyImport} onClick={() => runMetaAction('sync')} className="rounded-lg border border-neutral-300 px-2.5 py-2 text-xs font-medium text-neutral-600 disabled:opacity-50 dark:border-neutral-600 dark:text-neutral-300" title={isLossyImport ? flow.import_guard_message : 'Push the current draft to Meta without publishing it'}>{metaAction === 'sync' ? 'Syncing…' : 'Sync Draft to Meta'}</button>
                             {/* Section A — the new smart chain: validate, sync, check for validation errors, publish, refresh status — stopping cleanly at the first failure. Always enabled; the chain itself decides whether the Flow is ready. */}
-                            <button type="button" disabled={metaAction !== null} onClick={() => runMetaAction('publish-to-meta')} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{metaAction === 'publish-to-meta' ? 'Publishing…' : 'Publish to Meta'}</button>
+                            <button type="button" disabled={metaAction !== null || isLossyImport} onClick={() => runMetaAction('publish-to-meta')} className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50" title={isLossyImport ? flow.import_guard_message : undefined}>{metaAction === 'publish-to-meta' ? 'Publishing…' : 'Publish to Meta'}</button>
                             <button disabled={processing} className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-800 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-neutral-100 dark:text-neutral-900"><Save className="h-4 w-4" /> {processing ? 'Saving…' : 'Save Changes'}</button>
                         </>
                     )}
@@ -286,6 +288,15 @@ export default function FlowsBuilder({ flow, categories, fieldTypes }) {
                 which only made sense while editing a Published flow was still
                 possible. Now it explains the read-only state and points at the
                 one way to change anything: Duplicate. */}
+            {isLossyImport && (
+                <div className="flex items-start gap-2 rounded-soft border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="space-y-1">
+                        <p className="font-semibold">{flow.import_guard_message}</p>
+                        <p>{flow.import_unsupported_reason}</p>
+                    </div>
+                </div>
+            )}
             {isPublished && (
                 <div className="flex items-start gap-2 rounded-soft border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

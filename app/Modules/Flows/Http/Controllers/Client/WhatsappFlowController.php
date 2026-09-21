@@ -138,6 +138,11 @@ class WhatsappFlowController extends Controller
             'screens' => $flow->screens,
             'submit_settings' => $flow->submit_settings,
             'meta_passthrough' => $flow->meta_passthrough,
+            // Carried, unlike meta_flow_id/meta_sync_status. The copy holds the SAME
+            // placeholder screens, and when the source is Published it is also given
+            // a Meta-side clone of the REAL content just below — so an unguarded copy
+            // is exactly a placeholder waiting to be synced over its own clone.
+            'import_unsupported_reason' => $flow->import_unsupported_reason,
         ]);
 
         if ($flow->meta_flow_id && $flow->meta_sync_status === WhatsappFlow::META_SYNC_STATUS_PUBLISHED) {
@@ -494,6 +499,10 @@ class WhatsappFlowController extends Controller
             'meta_sync_status' => $flow->meta_sync_status,
             'meta_validation_errors' => $flow->meta_validation_errors,
             'meta_sync_error' => $flow->meta_sync_error,
+            'import_unsupported_reason' => $flow->import_unsupported_reason,
+            // The refusal wording has ONE definition (the service's constant); the pages
+            // display it rather than carrying a second copy that could drift.
+            'import_guard_message' => $flow->isLossyImport() ? WhatsappFlowMetaSyncService::LOSSY_IMPORT_MESSAGE : null,
             'field_count' => collect($flow->screens)->sum(fn (array $screen) => count($screen['fields'])),
             'step_count' => count($flow->screens),
             'submissions_count' => $flow->submissions_count ?? $flow->submissions()->count(),

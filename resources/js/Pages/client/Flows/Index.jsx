@@ -26,6 +26,8 @@ const STATUS_BANNER_TONE = {
     success: { box: 'bg-emerald-50 dark:bg-emerald-900/10', iconWrap: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300', headline: 'text-emerald-700 dark:text-emerald-300', Icon: Rocket },
     danger: { box: 'bg-red-50 dark:bg-red-950/20', iconWrap: 'bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-300', headline: 'text-red-700 dark:text-red-300', Icon: AlertTriangle },
     neutral: { box: 'bg-neutral-50 dark:bg-neutral-800/50', iconWrap: 'bg-neutral-200 text-neutral-500 dark:bg-neutral-700 dark:text-neutral-300', headline: 'text-neutral-900 dark:text-neutral-100', Icon: Pencil },
+    // Not a failure and not an error: the Flow is fine on Meta, this app just can't represent it.
+    warning: { box: 'bg-amber-50 dark:bg-amber-950/20', iconWrap: 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-300', headline: 'text-amber-800 dark:text-amber-300', Icon: AlertTriangle },
 };
 
 export default function FlowsIndex({ flows, categories }) {
@@ -165,7 +167,13 @@ export default function FlowsIndex({ flows, categories }) {
      * remains a separate, deferred backlog item (see Section N in the
      * accompanying report).
      */
-    const displayStatus = (flow) => {
+    const metaStatusFor = (flow) => {
+        // A lossy import (import_unsupported_reason) stores its reason in
+        // meta_sync_error too, but that is NOT a sync failure — the Flow is fine on
+        // Meta, this app just can't represent it. displayStatus() below owns that
+        // state, so the "meta_sync_error means Sync Failed" rules skip it.
+        const lossy = !!flow.import_unsupported_reason;
+
         // 'failed' used to have no case anywhere here, so a Flow whose last sync
         // failed read "Draft" by two routes: (1) meta_flow_id set + failed with no
         // error text (reconcileStatus's unreconcilable path) fell to the switch
@@ -178,14 +186,14 @@ export default function FlowsIndex({ flows, categories }) {
         });
 
         if (!flow.meta_flow_id) {
-            if (flow.meta_sync_status === 'failed') return syncFailed();
+            if (flow.meta_sync_status === 'failed' && !lossy) return syncFailed();
 
             return flow.status === 'published'
                 ? { pillLabel: 'Published', pillClass: STATUS_PILL_CLASSES.published, tone: 'neutral', headline: 'Published Status', subtext: 'Not yet synced to Meta.' }
                 : { pillLabel: 'Draft', pillClass: STATUS_PILL_CLASSES.draft, tone: 'neutral', headline: 'Draft Status', subtext: 'Not yet live on Meta platform' };
         }
 
-        if (flow.meta_sync_error) {
+        if (flow.meta_sync_error && !lossy) {
             return syncFailed();
         }
         if (flow.meta_validation_errors?.length > 0) {
@@ -209,6 +217,19 @@ export default function FlowsIndex({ flows, categories }) {
             default:
                 return { pillLabel: 'Draft', pillClass: STATUS_PILL_CLASSES.draft, tone: 'neutral', headline: 'Draft Status', subtext: 'Not yet live on Meta platform' };
         }
+    };
+
+    /**
+     * The card's status: Meta's own state for the pill (a healthy Published Flow
+     * still reads Published), and — for a lossy import — a warning banner giving
+     * the specific reason instead of a red "Sync Failed" for something that
+     * never failed to sync.
+     */
+    const displayStatus = (flow) => {
+        const status = metaStatusFor(flow);
+        if (!flow.import_unsupported_reason) return status;
+
+        return { ...status, tone: 'warning', headline: 'Editing not supported', subtext: flow.import_unsupported_reason };
     };
 
     return (
@@ -299,8 +320,9 @@ export default function FlowsIndex({ flows, categories }) {
                                             ) : (
                                                 <>
                                                     <Link href={route('client.flows.edit', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><Pencil className="h-4 w-4" /> Edit</Link>
-                                                    <button type="button" onClick={(event) => runAction(event, flow, 'sync')} disabled={actioning !== null} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><RefreshCw className="h-4 w-4" /> Sync Draft to Meta</button>
-                                                    <button type="button" onClick={(event) => runAction(event, flow, 'publish-to-meta')} disabled={actioning !== null} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><Send className="h-4 w-4" /> Publish to Meta</button>
+                                                    {/* A lossy import holds placeholder screens: both of these would upload them over the real content on Meta. The server refuses regardless (WhatsappFlowMetaSyncService); this only explains why. */}
+                                                    <button type="button" onClick={(event) => runAction(event, flow, 'sync')} disabled={actioning !== null || !!flow.import_unsupported_reason} title={flow.import_unsupported_reason ? flow.import_guard_message : undefined} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><RefreshCw className="h-4 w-4" /> Sync Draft to Meta</button>
+                                                    <button type="button" onClick={(event) => runAction(event, flow, 'publish-to-meta')} disabled={actioning !== null || !!flow.import_unsupported_reason} title={flow.import_unsupported_reason ? flow.import_guard_message : undefined} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><Send className="h-4 w-4" /> Publish to Meta</button>
                                                     <Link href={route('client.flows.submissions', flow.uuid)} onClick={() => setOpenMenu(null)} className="flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-neutral-50 dark:hover:bg-neutral-800"><FileInput className="h-4 w-4" /> View submissions</Link>
                                                     <button type="button" onClick={(event) => runAction(event, flow, 'duplicate')} disabled={actioning !== null} className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-neutral-50 disabled:opacity-50 dark:hover:bg-neutral-800"><Copy className="h-4 w-4" /> Duplicate</button>
                                                     <div className="my-1 border-t border-neutral-100 dark:border-neutral-800" />
@@ -341,7 +363,7 @@ export default function FlowsIndex({ flows, categories }) {
                                         </div>
                                         <div className="min-w-0">
                                             <p className={'truncate text-sm font-bold ' + bannerTone.headline}>{status.headline}</p>
-                                            <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">{status.subtext}</p>
+                                            <p className="truncate text-xs text-neutral-500 dark:text-neutral-400" title={status.subtext}>{status.subtext}</p>
                                         </div>
                                     </div>
                                 </div>

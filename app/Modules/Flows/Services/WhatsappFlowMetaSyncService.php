@@ -21,15 +21,42 @@ class WhatsappFlowMetaSyncService
 {
     public const MISSING_MANAGEMENT_PERMISSION_MESSAGE = 'Your WhatsApp connection needs additional permissions to manage Flows. Please reconnect your WhatsApp Business Account.';
 
+    public const LOSSY_IMPORT_MESSAGE = 'This Flow\'s imported content could not be fully represented and cannot be synced until support is added — contact support or recreate this Flow\'s content manually.';
+
     public function __construct(
         private readonly WhatsappFlowJsonCompiler $compiler,
     ) {}
+
+    /**
+     * ⚠️ THE PLACEHOLDER-OVERWRITE GUARD. A Flow whose Meta content decompile()
+     * could not represent holds placeholder (or stale) screens locally, so
+     * compiling and uploading them would REPLACE the real content on Meta —
+     * silently, and for a Draft, irreversibly. Every entry point that uploads or
+     * publishes local content asks this first, and refuses WITHOUT touching the
+     * row (no "syncing", no "failed"): nothing was attempted, so nothing is
+     * recorded. Enforced here, not only in the controller, so no caller — a
+     * route, a job, a future action — can bypass it.
+     *
+     * @return array{success:false,message:string,validation_errors:list<array<string,mixed>>}|null
+     */
+    private function refuseIfLossyImport(WhatsappFlow $flow): ?array
+    {
+        if (! $flow->isLossyImport()) {
+            return null;
+        }
+
+        return ['success' => false, 'message' => self::LOSSY_IMPORT_MESSAGE, 'validation_errors' => []];
+    }
 
     /**
      * @return array{success:bool,message:string,validation_errors:list<array<string,mixed>>}
      */
     public function syncToMeta(WhatsappFlow $flow): array
     {
+        if (($refused = $this->refuseIfLossyImport($flow)) !== null) {
+            return $refused;
+        }
+
         $flow->update([
             'meta_sync_status' => WhatsappFlow::META_SYNC_STATUS_SYNCING,
             'meta_sync_error' => null,
@@ -116,6 +143,12 @@ class WhatsappFlowMetaSyncService
      */
     public function publishToMeta(WhatsappFlow $flow): array
     {
+        // Before the compile below: on a refusal it would record a "failed" status
+        // on a Flow this action never actually attempted.
+        if (($refused = $this->refuseIfLossyImport($flow)) !== null) {
+            return $refused;
+        }
+
         try {
             $this->compiler->compile($flow);
         } catch (InvalidArgumentException $exception) {
@@ -142,6 +175,13 @@ class WhatsappFlowMetaSyncService
      */
     public function publishOnly(WhatsappFlow $flow): array
     {
+        // Publishing makes whatever is on Meta permanent and immutable. For a Flow
+        // this app cannot represent, the user cannot see or verify that content
+        // here, so this is refused too even though it uploads nothing itself.
+        if (($refused = $this->refuseIfLossyImport($flow)) !== null) {
+            return $refused;
+        }
+
         if (! $flow->meta_flow_id) {
             return $this->fail($flow, 'Sync this Flow to Meta before publishing it.');
         }
@@ -342,8 +382,10 @@ class WhatsappFlowMetaSyncService
                 // successful pull — even one that finds nothing to change —
                 // is still positive proof the Flow is fine, and must clear
                 // it, not just a pull that also changes content.
-                if ($flow->meta_sync_error !== null) {
-                    $flow->update(['meta_sync_error' => null]);
+                // The same applies to import_unsupported_reason: a clean decompile
+                // is the ONLY thing that lifts the placeholder-overwrite guard.
+                if ($flow->meta_sync_error !== null || $flow->isLossyImport()) {
+                    $flow->update(['meta_sync_error' => null, 'import_unsupported_reason' => null]);
                 }
 
                 return 'unchanged';
@@ -359,10 +401,19 @@ class WhatsappFlowMetaSyncService
                 // default rather than persisting a meaningless empty object.
                 'meta_passthrough' => $decompiled['meta_passthrough'] !== [] ? $decompiled['meta_passthrough'] : null,
                 'meta_sync_error' => null,
+                'import_unsupported_reason' => null,
             ]);
 
             return 'updated';
+        } catch (UnsupportedMetaFlowShapeException $exception) {
+            // Deterministic and about the Flow itself: retrying cannot fix it, so
+            // it must not read as the "try again" read failure below. Local
+            // screens are deliberately left untouched — they are whatever the
+            // row already held — and the row is now guarded against uploads.
+            return $this->pullUnsupported($flow, $exception->getMessage());
         } catch (Throwable) {
+            // A genuinely unreadable payload or an unexpected failure. Structural
+            // refusals no longer land here.
             return $this->pullFailure($flow, 'Meta Flow JSON could not be read. Review the Flow JSON and try again.');
         }
     }
@@ -732,6 +783,23 @@ class WhatsappFlowMetaSyncService
     private function pullFailure(WhatsappFlow $flow, string $message): string
     {
         $flow->update(['meta_sync_error' => $message]);
+
+        return 'failed';
+    }
+
+    /**
+     * Records that Meta holds content this app cannot represent. The reason goes
+     * to BOTH columns on purpose: meta_sync_error is what every existing surface
+     * (the pull flash, the Info modal) already reads, so the honest text replaces
+     * the old misleading one everywhere at once; import_unsupported_reason is the
+     * durable classification the upload guard keys on, which a later network
+     * error overwriting meta_sync_error cannot erase.
+     *
+     * @return 'failed'
+     */
+    private function pullUnsupported(WhatsappFlow $flow, string $reason): string
+    {
+        $flow->update(['meta_sync_error' => $reason, 'import_unsupported_reason' => $reason]);
 
         return 'failed';
     }
