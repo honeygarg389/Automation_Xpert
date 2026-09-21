@@ -63,6 +63,7 @@ import Index from '@/Pages/Admin/Restaurant/Outlets/Index';
 
 const makeOutlet = (over = {}) => ({
     uuid: 'outlet-uuid-1',
+    workspace_id: 1,
     workspace_name: 'Test Workspace',
     name: 'Downtown Branch',
     address: '1 Main St',
@@ -82,6 +83,7 @@ const renderPage = (outletsOver = {}) =>
             outlets={{ data: [makeOutlet(outletsOver)], links: [], current_page: 1, last_page: 1, total: 1 }}
             workspaces={[{ id: 1, name: 'Test Workspace', client_name: null }]}
             filters={{ search: '', workspace_id: '', status: 'active' }}
+            digitalBillDeliveryOptions={{ 1: { senders: [] } }}
         />
     );
 
@@ -230,6 +232,21 @@ describe('Outlets directory — Messaging settings action', () => {
         await openActionsMenu(row);
 
         expect(screen.queryByRole('button', { name: 'Messaging settings' })).toBeNull();
+    });
+});
+
+describe('Outlets directory — Digital Bill delivery configuration action', () => {
+    beforeEach(() => {
+        grantedPermissions = ['view_pos_connections', 'manage_pos_connections'];
+    });
+
+    it('shows the separate configuration modal only to an eligible admin', async () => {
+        renderPage();
+        const row = screen.getByText('Downtown Branch').closest('tr');
+        const user = await openActionsMenu(row);
+        await user.click(screen.getByRole('button', { name: 'Digital Bill delivery configuration' }));
+        expect(screen.getByText('Digital Bill delivery configuration — Downtown Branch')).toBeTruthy();
+        expect(screen.getByText('Configuration is revalidated before any future delivery.')).toBeTruthy();
     });
 });
 

@@ -82,6 +82,7 @@ class WhatsappPhoneNumber extends Model
         ];
     }
 
+    /** @return BelongsTo<WhatsappBusinessAccount, $this> */
     public function businessAccount(): BelongsTo
     {
         return $this->belongsTo(WhatsappBusinessAccount::class, 'waba_id_fk');
