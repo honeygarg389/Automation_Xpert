@@ -31,7 +31,7 @@ final class PublicRestaurantBillPresenter
                 'name' => $this->text($outlet?->name, 128),
                 'address' => $this->text($outlet?->address, 512),
                 'phone' => $this->text($outlet?->public_phone, 32),
-                'website' => $this->safeUrl($outlet?->public_website),
+                'website' => $this->safeUrl($outlet?->public_website) ?? $this->safeUrl($brand?->website),
             ],
             'bill' => [
                 'number' => $this->text($bill->external_order_id, 64),
@@ -103,7 +103,7 @@ final class PublicRestaurantBillPresenter
     private function socialLinks(?array $links): array
     {
         $approved = [];
-        foreach (['instagram', 'facebook', 'x', 'youtube'] as $key) {
+        foreach (['instagram', 'facebook', 'google', 'x', 'youtube'] as $key) {
             $url = $this->safeUrl($links[$key] ?? null);
             if ($url !== null) {
                 $approved[$key] = $url;

@@ -37,7 +37,7 @@ const CONNECTION_STATE_VARIANTS = {
  * workspace's "Use existing outlet" dropdown on the New Connection page
  * (RestaurantOutlet::eligibleForNewConnection()), and in no other workspace's.
  */
-export default function Index({ outlets, workspaces, filters, digitalBillDeliveryOptions = {} }) {
+export default function Index({ outlets, workspaces, filters, digitalBillDeliveryOptions = {}, feedbackDeliveryOptions = {} }) {
     const page = usePage();
     const permissions = page.props.auth?.permissions ?? [];
     const canManage = permissions.includes('manage_pos_connections');
@@ -72,6 +72,7 @@ export default function Index({ outlets, workspaces, filters, digitalBillDeliver
     const [authorizingOutlet, setAuthorizingOutlet] = useState(null);
     const [messagingSettingsOutlet, setMessagingSettingsOutlet] = useState(null);
     const [deliveryConfigurationOutlet, setDeliveryConfigurationOutlet] = useState(null);
+    const [feedbackConfigurationOutlet, setFeedbackConfigurationOutlet] = useState(null);
 
     const rows = outlets.data ?? [];
 
@@ -226,6 +227,7 @@ export default function Index({ outlets, workspaces, filters, digitalBillDeliver
                                             onEdit={() => setEditingOutlet(o)}
                                             onMessagingSettings={() => setMessagingSettingsOutlet(o)}
                                             onDeliveryConfiguration={() => setDeliveryConfigurationOutlet(o)}
+                                            onFeedbackConfiguration={() => setFeedbackConfigurationOutlet(o)}
                                             onAuthorize={() => setAuthorizingOutlet(o)}
                                             onArchive={() => setArchivingOutlet(o)}
                                             onRestore={() => setRestoringOutlet(o)}
@@ -250,6 +252,7 @@ export default function Index({ outlets, workspaces, filters, digitalBillDeliver
             <EditOutletModal outlet={editingOutlet} onClose={() => setEditingOutlet(null)} />
             <MessagingSettingsModal outlet={messagingSettingsOutlet} onClose={() => setMessagingSettingsOutlet(null)} />
             <DigitalBillDeliveryConfigModal outlet={deliveryConfigurationOutlet} options={digitalBillDeliveryOptions[String(deliveryConfigurationOutlet?.workspace_id)] ?? { senders: [] }} onClose={() => setDeliveryConfigurationOutlet(null)} />
+            <FeedbackDeliveryConfigModal outlet={feedbackConfigurationOutlet} options={feedbackDeliveryOptions[String(feedbackConfigurationOutlet?.workspace_id)] ?? { senders: [] }} onClose={() => setFeedbackConfigurationOutlet(null)} />
             <ArchiveOutletModal outlet={archivingOutlet} onClose={() => setArchivingOutlet(null)} />
             <RestoreOutletModal outlet={restoringOutlet} onClose={() => setRestoringOutlet(null)} />
             <AuthorizeOutletModal outlet={authorizingOutlet} onClose={() => setAuthorizingOutlet(null)} />
@@ -274,7 +277,7 @@ export default function Index({ outlets, workspaces, filters, digitalBillDeliver
  * connection to configure, must never see a three-dot button that opens an
  * empty menu.
  */
-function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, onMessagingSettings, onDeliveryConfiguration, onAuthorize, onArchive, onRestore }) {
+function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, onMessagingSettings, onDeliveryConfiguration, onFeedbackConfiguration, onAuthorize, onArchive, onRestore }) {
     const hasConfigure = !!outlet.connection_uuid;
     const hasEdit = canManage && outlet.status === 'active';
     // Messaging preferences remain meaningful operational records even when
@@ -338,6 +341,11 @@ function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, o
                                 Digital Bill delivery configuration
                             </Dropdown.Item>
                         )}
+                        {canManage && (
+                            <Dropdown.Item onClick={onFeedbackConfiguration}>
+                                <MessageSquare className="mr-2 inline h-4 w-4" /> Feedback configuration
+                            </Dropdown.Item>
+                        )}
                         {hasAuthorize && (
                             <Dropdown.Item
                                 onClick={onAuthorize}
@@ -372,6 +380,18 @@ function OutletRowActions({ outlet, canManage, canAuthorizeForLivePos, onEdit, o
 function DigitalBillDeliveryConfigModal({ outlet, options, onClose }) {
     if (!outlet) return null;
     return <Modal show={!!outlet} onClose={onClose} maxWidth="md"><DigitalBillDeliveryConfigForm key={outlet.uuid} outlet={outlet} options={options} onClose={onClose} /></Modal>;
+}
+
+function FeedbackDeliveryConfigModal({ outlet, options, onClose }) {
+    if (!outlet) return null;
+    return <Modal show={!!outlet} onClose={onClose} maxWidth="md"><FeedbackDeliveryConfigForm key={outlet.uuid} outlet={outlet} options={options} initial={outlet.feedback_delivery_config ?? {}} onClose={onClose} /></Modal>;
+}
+
+function FeedbackDeliveryConfigForm({ outlet, options, initial, onClose }) {
+    const { data, setData, put, processing, errors } = useForm({ whatsapp_phone_number_id: initial.whatsapp_phone_number_id ?? '', whatsapp_template_id: initial.whatsapp_template_id ?? '', timing_preference: initial.timing_preference ?? 'immediately', next_day_at: initial.next_day_at ?? '', google_review_url: initial.google_review_url ?? '' });
+    const sender = options.senders?.find((item) => Number(item.id) === Number(data.whatsapp_phone_number_id));
+    const submit = (event) => { event.preventDefault(); put(route('admin.restaurant.outlets.feedback-delivery-config.update', outlet.uuid), { preserveScroll: true, onSuccess: onClose }); };
+    return <form onSubmit={submit}><Modal.Header title={`Feedback configuration — ${outlet.name}`} onClose={onClose} /><Modal.Body className="space-y-4"><p className="text-sm text-neutral-600 dark:text-neutral-400">Configuration is revalidated before any future delivery. Saving does not send feedback.</p><Select label="WhatsApp sender" value={data.whatsapp_phone_number_id} onChange={(e) => { setData('whatsapp_phone_number_id', e.target.value); setData('whatsapp_template_id', ''); }} options={[{ value: '', label: 'Select a sender' }, ...(options.senders ?? []).map((item) => ({ value: item.id, label: item.label }))]} /><Select label="Approved feedback template" value={data.whatsapp_template_id} disabled={!sender} onChange={(e) => setData('whatsapp_template_id', e.target.value)} options={[{ value: '', label: sender ? 'Select a template' : 'Select a sender first' }, ...((sender?.templates ?? []).map((item) => ({ value: item.id, label: item.label })))]} /><Select label="Timing preference" value={data.timing_preference} onChange={(e) => setData('timing_preference', e.target.value)} options={[{ value: 'immediately', label: 'Immediately' }, { value: 'one_hour', label: '1 hour later' }, { value: 'five_hours', label: '5 hours later' }, { value: 'next_day', label: 'Next day at a chosen local time' }, { value: 'seven_days', label: '7 days later' }]} />{data.timing_preference === 'next_day' && <Input label="Next-day local time" type="time" value={data.next_day_at} onChange={(e) => setData('next_day_at', e.target.value)} error={errors.next_day_at} />}<Input label="Google review URL (optional)" type="url" value={data.google_review_url} onChange={(e) => setData('google_review_url', e.target.value)} error={errors.google_review_url} />{(errors.whatsapp_phone_number_id || errors.whatsapp_template_id || errors.timing_preference) && <p className="text-sm text-coral-600 dark:text-coral-400">{errors.whatsapp_phone_number_id || errors.whatsapp_template_id || errors.timing_preference}</p>}</Modal.Body><Modal.Footer><Button type="button" variant="secondary" onClick={onClose}>Cancel</Button><Button type="submit" variant="primary" disabled={processing}>Save configuration</Button></Modal.Footer></form>;
 }
 
 function DigitalBillDeliveryConfigForm({ outlet, options, onClose }) {

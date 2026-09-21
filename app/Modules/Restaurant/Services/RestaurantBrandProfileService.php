@@ -48,13 +48,31 @@ class RestaurantBrandProfileService
     public function updateOutletPublicContact(RestaurantOutlet $outlet, ?string $phone, ?string $website, AdminUser|User $actor): RestaurantOutlet
     {
         return DB::transaction(function () use ($outlet, $phone, $website, $actor): RestaurantOutlet {
-            $old = ['public_phone' => $outlet->public_phone, 'public_website' => $outlet->public_website];
+            $old = $this->auditableOutletPublicContact($outlet);
             $outlet->update(['public_phone' => $phone, 'public_website' => $website]);
-            $new = ['public_phone' => $outlet->public_phone, 'public_website' => $outlet->public_website];
+            $new = $this->auditableOutletPublicContact($outlet);
             if ($actor instanceof AdminUser) {
                 $this->audit->logAdmin('restaurant.outlet.public_contact_updated', RestaurantOutlet::class, $outlet->id, ['workspace_id' => $outlet->workspace_id], $actor, oldValues: $old, newValues: $new, workspaceId: $outlet->workspace_id);
             } else {
                 $this->audit->log('restaurant.outlet.public_contact_updated', $outlet, $old, $new, workspaceId: $outlet->workspace_id);
+            }
+
+            return $outlet->refresh();
+        });
+    }
+
+    /** @param array{name:string,address:?string,public_phone:?string,public_email:?string,public_website:?string,gstin:?string,fssai_number:?string} $attributes */
+    public function updateOutletProfile(RestaurantOutlet $outlet, array $attributes, AdminUser|User $actor): RestaurantOutlet
+    {
+        return DB::transaction(function () use ($outlet, $attributes, $actor): RestaurantOutlet {
+            $old = $this->auditableOutletProfile($outlet);
+            $outlet->fill($attributes)->save();
+            $new = $this->auditableOutletProfile($outlet->fresh());
+            $meta = ['workspace_id' => $outlet->workspace_id, 'outlet_id' => $outlet->id];
+            if ($actor instanceof AdminUser) {
+                $this->audit->logAdmin('restaurant.outlet.profile_updated', RestaurantOutlet::class, $outlet->id, $meta, $actor, oldValues: $old, newValues: $new, workspaceId: $outlet->workspace_id);
+            } else {
+                $this->audit->log('restaurant.outlet.profile_updated', $outlet, $old, $new, workspaceId: $outlet->workspace_id);
             }
 
             return $outlet->refresh();
@@ -76,11 +94,37 @@ class RestaurantBrandProfileService
     {
         return [
             'brand_name' => $profile->brand_name,
+            'legal_business_name' => $profile->legal_business_name,
+            'has_registered_business_address' => $profile->registered_business_address !== null,
             'primary_color' => $profile->primary_color,
-            'thank_you_note' => $profile->thank_you_note,
-            'social_links' => $profile->social_links,
+            'has_thank_you_note' => $profile->thank_you_note !== null,
+            'has_website' => $profile->website !== null,
+            'social_link_keys' => array_keys($profile->social_links ?? []),
             'has_logo' => $profile->logo_path !== null,
             'has_cover' => $profile->cover_path !== null,
+        ];
+    }
+
+    /** @return array{name:?string,has_address:bool,has_public_phone:bool,has_public_email:bool,has_public_website:bool,has_gstin:bool,has_fssai_number:bool} */
+    private function auditableOutletProfile(RestaurantOutlet $outlet): array
+    {
+        return [
+            'name' => $outlet->name,
+            'has_address' => $outlet->address !== null,
+            'has_public_phone' => $outlet->public_phone !== null,
+            'has_public_email' => $outlet->public_email !== null,
+            'has_public_website' => $outlet->public_website !== null,
+            'has_gstin' => $outlet->gstin !== null,
+            'has_fssai_number' => $outlet->fssai_number !== null,
+        ];
+    }
+
+    /** @return array{has_public_phone:bool,has_public_website:bool} */
+    private function auditableOutletPublicContact(RestaurantOutlet $outlet): array
+    {
+        return [
+            'has_public_phone' => $outlet->public_phone !== null,
+            'has_public_website' => $outlet->public_website !== null,
         ];
     }
 }

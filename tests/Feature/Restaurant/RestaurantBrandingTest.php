@@ -76,12 +76,10 @@ class RestaurantBrandingTest extends TestCase
         Notification::fake();
 
         $this->actingAs($owner)->get(route('client.restaurant.branding.index'))
-            ->assertOk()
-            ->assertInertia(function ($page) use ($ownOutlet, $otherOutlet) {
-                $outletUuids = array_column($page->toArray()['props']['outlets'], 'uuid');
-                $this->assertSame([$ownOutlet->uuid], $outletUuids);
-                $this->assertNotContains($otherOutlet->uuid, $outletUuids);
-            });
+            ->assertRedirect(route('client.restaurant.profile-messaging.index'));
+
+        // The consolidated page itself is covered in RestaurantProfileMessagingTest;
+        // this legacy-route test only verifies the safe redirect contract.
 
         $this->actingAs($owner)->put(route('client.restaurant.branding.update'), ['brand_name' => 'Own brand', 'social_links' => ['facebook' => 'https://facebook.com/own']])->assertRedirect();
         $this->actingAs($owner)->put(route('client.restaurant.branding.outlets.update', $ownOutlet), ['public_phone' => '+919111111111', 'public_website' => 'https://own.example'])->assertRedirect();

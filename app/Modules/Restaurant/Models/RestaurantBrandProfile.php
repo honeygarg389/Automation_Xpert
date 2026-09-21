@@ -12,12 +12,15 @@ use Illuminate\Support\Facades\Storage;
  * @property int $id
  * @property int $workspace_id
  * @property string|null $brand_name
+ * @property string|null $legal_business_name
+ * @property string|null $registered_business_address
  * @property string|null $logo_path
  * @property string|null $logo_disk
  * @property string|null $cover_path
  * @property string|null $cover_disk
  * @property string|null $primary_color
  * @property string|null $thank_you_note
+ * @property string|null $website
  * @property array<string, string>|null $social_links
  */
 class RestaurantBrandProfile extends Model
@@ -25,8 +28,8 @@ class RestaurantBrandProfile extends Model
     use BelongsToWorkspace;
 
     protected $fillable = [
-        'workspace_id', 'brand_name', 'logo_path', 'logo_disk', 'cover_path', 'cover_disk',
-        'primary_color', 'thank_you_note', 'social_links',
+        'workspace_id', 'brand_name', 'legal_business_name', 'registered_business_address',
+        'logo_path', 'logo_disk', 'cover_path', 'cover_disk', 'primary_color', 'thank_you_note', 'website', 'social_links',
     ];
 
     protected function casts(): array

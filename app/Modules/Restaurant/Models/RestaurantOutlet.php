@@ -21,7 +21,10 @@ use Illuminate\Support\Str;
  * @property string $name
  * @property string|null $address
  * @property string|null $public_phone
+ * @property string|null $public_email
  * @property string|null $public_website
+ * @property string|null $gstin
+ * @property string|null $fssai_number
  * @property string|null $timezone
  * @property string $status
  * @property bool $digital_bill_enabled
@@ -70,7 +73,10 @@ class RestaurantOutlet extends Model
         'name',
         'address',
         'public_phone',
+        'public_email',
         'public_website',
+        'gstin',
+        'fssai_number',
         'timezone',
         'status',
         'digital_bill_enabled',
@@ -138,6 +144,12 @@ class RestaurantOutlet extends Model
     public function digitalBillDeliveryConfig(): HasOne
     {
         return $this->hasOne(RestaurantDigitalBillDeliveryConfig::class, 'outlet_id');
+    }
+
+    /** @return HasOne<RestaurantFeedbackDeliveryConfig, $this> */
+    public function feedbackDeliveryConfig(): HasOne
+    {
+        return $this->hasOne(RestaurantFeedbackDeliveryConfig::class, 'outlet_id');
     }
 
     /**
