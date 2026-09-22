@@ -9,18 +9,21 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Workspace;
+use App\Modules\Restaurant\Models\RestaurantBrandProfile;
 use App\Modules\Restaurant\Models\RestaurantFeedbackDeliveryConfig;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Whatsapp\Models\WhatsappBusinessAccount;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -31,14 +34,18 @@ class RestaurantProfileMessagingTest extends TestCase
     #[Test]
     public function owner_updates_only_its_brand_outlet_and_feedback_configuration_with_safe_audits(): void
     {
+        Storage::fake('public');
         ['user' => $owner, 'workspace' => $workspace] = $this->createWorkspaceContext();
         $outlet = RestaurantOutlet::factory()->create(['workspace_id' => $workspace->id]);
         $selection = $this->selection($workspace);
 
-        $this->actingAs($owner)->put(route('client.restaurant.profile-messaging.profile.update'), [
+        $this->actingAs($owner)->post(route('client.restaurant.profile-messaging.profile.update'), [
+            '_method' => 'put',
             'brand_name' => 'North Kitchen', 'legal_business_name' => 'North Kitchen Foods LLP',
-            'registered_business_address' => '1 Market Street', 'website' => 'https://north.example',
+            'registered_business_address' => '1 Market Street', 'primary_color' => '#124578', 'thank_you_note' => 'Thank you for dining with us.', 'website' => 'https://north.example',
             'social_links' => ['google' => 'https://g.page/north'],
+            'logo' => UploadedFile::fake()->image('north-logo.png', 80, 80),
+            'cover' => UploadedFile::fake()->image('north-cover.png', 160, 90),
         ])->assertRedirect();
         $this->actingAs($owner)->put(route('client.restaurant.profile-messaging.outlets.update', $outlet->uuid), [
             'name' => 'North Downtown', 'address' => '2 Outlet Road', 'public_phone' => '+919000000000',
@@ -51,6 +58,18 @@ class RestaurantProfileMessagingTest extends TestCase
         ])->assertRedirect();
 
         $outlet->refresh();
+        $profile = RestaurantBrandProfile::query()->where('workspace_id', $workspace->id)->firstOrFail();
+        $this->assertSame('North Kitchen', $profile->brand_name);
+        $this->assertSame('North Kitchen Foods LLP', $profile->legal_business_name);
+        $this->assertSame('1 Market Street', $profile->registered_business_address);
+        $this->assertSame('#124578', $profile->primary_color);
+        $this->assertSame('Thank you for dining with us.', $profile->thank_you_note);
+        $this->assertSame('https://north.example', $profile->website);
+        $this->assertSame(['google' => 'https://g.page/north'], $profile->social_links);
+        $this->assertNotNull($profile->logo_path);
+        $this->assertNotNull($profile->cover_path);
+        Storage::disk($profile->logo_disk ?: 'public')->assertExists($profile->logo_path);
+        Storage::disk($profile->cover_disk ?: 'public')->assertExists($profile->cover_path);
         $this->assertSame('North Downtown', $outlet->name);
         $this->assertSame('27ABCDE1234F1Z5', $outlet->gstin);
         $this->assertSame('12345678901234', $outlet->fssai_number);
