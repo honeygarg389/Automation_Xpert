@@ -15,6 +15,7 @@ use App\Modules\Shared\Services\ChannelAccountRouting;
 use App\Modules\Shared\Services\ContactService;
 use App\Modules\Whatsapp\Models\WhatsappPhoneNumber;
 use App\Modules\Whatsapp\Models\WhatsappTemplate;
+use App\Services\AuditLogService;
 use App\Services\WebhookIdempotencyService;
 use App\Support\WorkspaceContext;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ class WhatsappDriver implements ChannelDriverInterface
 {
     public function __construct(
         private readonly ContactService $contactService,
+        private readonly AuditLogService $audit,
     ) {}
 
     public function send(Message $message): string
@@ -291,11 +293,20 @@ class WhatsappDriver implements ChannelDriverInterface
         array $value,
         array $msg,
     ): Message {
+        $isStopCommand = $this->isCustomerStopCommand($msg);
         $contact = $this->contactService->upsert($workspaceId, [
             'phone_e164' => '+'.$fromPhone,
-            'opt_in_whatsapp' => true,
-            'source' => 'whatsapp_inbound',
-        ]);
+            // A STOP is a narrow consent event, not a generic inbound-contact
+            // update. In particular, it must not re-opt a customer into
+            // marketing or overwrite the contact's established source.
+            ...($isStopCommand ? [] : [
+                'opt_in_whatsapp' => true,
+                'source' => 'whatsapp_inbound',
+            ]),
+        ], dispatchCreatedEvent: ! $isStopCommand);
+        if ($isStopCommand) {
+            $this->recordCustomerStop($contact, $workspaceId);
+        }
 
         $conversation = Conversation::firstOrCreate(
             ['workspace_id' => $workspaceId, 'contact_id' => $contact->id, 'channel_account_id' => $channelAccount?->id],
@@ -370,8 +381,12 @@ class WhatsappDriver implements ChannelDriverInterface
                 : $conversation->first_response_at,
         ]);
 
-        // Fire typed event for automations / AI
-        MessageReceived::dispatch($message);
+        // A recognised STOP must be recorded as an inbound message, but it
+        // must not enter generic automation/auto-reply processing. This avoids
+        // generating a reply while preserving every non-STOP inbound path.
+        if (! $isStopCommand) {
+            MessageReceived::dispatch($message);
+        }
 
         // Poll replies also arrive as nfm_reply, but only Flow replies carry
         // this name and become a submission. Keep every other nfm_reply path
@@ -392,6 +407,43 @@ class WhatsappDriver implements ChannelDriverInterface
         }
 
         return $message;
+    }
+
+    /**
+     * Only accept an exact, customer-recognised STOP command. The text comes
+     * from Meta's signed webhook payload; no request-supplied workspace or
+     * contact identifier participates in this decision.
+     *
+     * @param  array<string, mixed>  $msg
+     */
+    private function isCustomerStopCommand(array $msg): bool
+    {
+        $body = data_get($msg, 'text.body');
+
+        return is_string($body) && strcasecmp(trim($body), 'STOP') === 0;
+    }
+
+    /**
+     * Persist the broad WhatsApp opt-out exactly once. The audit deliberately
+     * contains only a stable action/source: never the phone number, message
+     * body, template, or provider credentials.
+     */
+    private function recordCustomerStop(Contact $contact, int $workspaceId): bool
+    {
+        if ($contact->whatsapp_opted_out_at !== null) {
+            return false;
+        }
+
+        $contact->forceFill([
+            'whatsapp_opted_out_at' => now(),
+            'whatsapp_opt_out_source' => 'whatsapp_inbound_stop',
+        ])->save();
+
+        $this->audit->logSystem('contact.whatsapp_opted_out', $contact, $workspaceId, [
+            'source' => 'whatsapp_inbound_stop',
+        ]);
+
+        return true;
     }
 
     private function processStatusUpdate(array $status): void

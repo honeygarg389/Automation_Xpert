@@ -64,6 +64,7 @@ class JobWorkspaceContextGuardTest extends TestCase
         // shape as ProcessPosWebhookEventJob above. It accepts only that trusted
         // ledger id, never a workspace or a contact from the caller.
         'App\Modules\Restaurant\Jobs\SendRestaurantDigitalBillJob',
+        'App\Modules\Restaurant\Jobs\SendRestaurantFeedbackRequestJob',
         'App\Modules\Social\Jobs\PublishSocialPostJob',
         'App\Modules\Whatsapp\Jobs\TemplateSyncJob',
 

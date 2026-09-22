@@ -108,6 +108,8 @@ class WorkspaceScopeBypassGuardTest extends TestCase
         // ── Cross-tenant BY DESIGN: platform-operator commands (slice 4b) ──
         'app/Console/Commands/WhatsappWebhookRegisterCommand.php' => 'Registers the platform-wide Meta callback and subscribes EVERY workspace\'s WABA; scoping it would leave the rest silently unsubscribed.',
         'app/Console/Commands/MessengerProfileTestCommand.php' => 'Diagnostic: an operator does not know which workspace a broken Messenger connection is in, so discovering the account is the point. Only the discovery is cross-tenant — the rest runs inside for().',
+        'app/Modules/Restaurant/Services/RestaurantFeedbackDeliveryService.php' => 'The due-request and stale-attempt scheduler sweeps must see every workspace, then each provider job establishes context from its trusted feedback-request ledger id; neither sweep sends directly.',
+        'app/Modules/Restaurant/Http/Controllers/Public/PublicRestaurantFeedbackController.php' => 'The public route has no authenticated workspace; it may discover exactly one workspace by a 256-bit opaque token, then immediately returns to a normal scoped query.',
     ];
 
     /**
