@@ -2,7 +2,9 @@
 
 namespace App\Modules\Restaurant;
 
+use App\Modules\Restaurant\Console\Commands\DispatchDueRestaurantFeedbackRequestsCommand;
 use App\Modules\Restaurant\Console\Commands\MarkStalledDigitalBillDeliveriesUnknownCommand;
+use App\Modules\Restaurant\Console\Commands\MarkStalledRestaurantFeedbackRequestsUnknownCommand;
 use App\Modules\Restaurant\Console\Commands\SweepStalledPosWebhookEventsCommand;
 use Illuminate\Support\ServiceProvider;
 
@@ -27,6 +29,8 @@ class RestaurantServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 MarkStalledDigitalBillDeliveriesUnknownCommand::class,
+                DispatchDueRestaurantFeedbackRequestsCommand::class,
+                MarkStalledRestaurantFeedbackRequestsUnknownCommand::class,
                 SweepStalledPosWebhookEventsCommand::class,
             ]);
         }

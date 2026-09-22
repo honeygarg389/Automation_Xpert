@@ -7,6 +7,7 @@ use App\Modules\Restaurant\Exceptions\UnprocessablePosWebhookEventException;
 use App\Modules\Restaurant\Models\PosWebhookEvent;
 use App\Modules\Restaurant\Services\PetpoojaOrderIngestionService;
 use App\Modules\Restaurant\Services\RestaurantDigitalBillDeliveryService;
+use App\Modules\Restaurant\Services\RestaurantFeedbackDeliveryService;
 use App\Services\AuditLogService;
 use App\Support\Retry\Jitter;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -118,7 +119,7 @@ class ProcessPosWebhookEventJob implements ShouldQueue
         return [EstablishesWorkspaceContext::from(PosWebhookEvent::class, $this->eventId)];
     }
 
-    public function handle(PetpoojaOrderIngestionService $ingestion, AuditLogService $audit, RestaurantDigitalBillDeliveryService $digitalBills): void
+    public function handle(PetpoojaOrderIngestionService $ingestion, AuditLogService $audit, RestaurantDigitalBillDeliveryService $digitalBills, RestaurantFeedbackDeliveryService $feedback): void
     {
         // Whole-second precision on purpose: the DB column stores no
         // fraction, and this exact value is the fencing token every later
@@ -171,7 +172,7 @@ class ProcessPosWebhookEventJob implements ShouldQueue
             // pre-provider retry path can claim it again. The delivery
             // service's afterCommit callback therefore runs only after both
             // records have committed.
-            $completed = DB::transaction(function () use ($claimedAt, $digitalBills, $billId): int {
+            $completed = DB::transaction(function () use ($claimedAt, $digitalBills, $feedback, $billId): int {
                 $completed = $this->ownedRow($claimedAt)->update([
                     'processing_status' => PosWebhookEvent::STATUS_PROCESSED,
                     'processed_at' => now(),
@@ -181,6 +182,7 @@ class ProcessPosWebhookEventJob implements ShouldQueue
 
                 if ($completed === 1) {
                     $digitalBills->schedule($billId);
+                    $feedback->schedule($billId);
                 }
 
                 return $completed;
