@@ -46,17 +46,27 @@ class RestaurantBrandingTest extends TestCase
         ['workspace' => $workspace] = $this->createWorkspaceContext();
         $outlet = RestaurantOutlet::factory()->create(['workspace_id' => $workspace->id]);
 
-        $this->actingAs($admin, 'admin')->put(route('admin.restaurant.branding.update', $workspace), [
-            'brand_name' => 'North Kitchen', 'primary_color' => '#124578', 'thank_you_note' => 'Visit again.',
+        $this->actingAs($admin, 'admin')->post(route('admin.restaurant.branding.update', $workspace), [
+            '_method' => 'put',
+            'brand_name' => 'North Kitchen', 'legal_business_name' => 'North Kitchen Foods LLP', 'registered_business_address' => '1 Market Street',
+            'primary_color' => '#124578', 'thank_you_note' => 'Visit again.', 'website' => 'https://north.example',
             'social_links' => ['instagram' => 'https://instagram.com/northkitchen'],
             'logo' => UploadedFile::fake()->image('logo.png', 80, 80),
+            'cover' => UploadedFile::fake()->image('cover.png', 160, 90),
         ])->assertRedirect();
         $this->actingAs($admin, 'admin')->put(route('admin.restaurant.branding.outlets.update', [$workspace, $outlet]), ['public_phone' => '+919000000000', 'public_website' => 'https://north.example'])->assertRedirect();
 
         $profile = RestaurantBrandProfile::query()->where('workspace_id', $workspace->id)->firstOrFail();
         $this->assertSame('North Kitchen', $profile->brand_name);
+        $this->assertSame('North Kitchen Foods LLP', $profile->legal_business_name);
+        $this->assertSame('1 Market Street', $profile->registered_business_address);
         $this->assertSame('#124578', $profile->primary_color);
+        $this->assertSame('Visit again.', $profile->thank_you_note);
+        $this->assertSame('https://north.example', $profile->website);
         $this->assertNotNull($profile->logo_path);
+        $this->assertNotNull($profile->cover_path);
+        Storage::disk($profile->logo_disk ?: 'public')->assertExists($profile->logo_path);
+        Storage::disk($profile->cover_disk ?: 'public')->assertExists($profile->cover_path);
         $this->assertSame('+919000000000', $outlet->fresh()->public_phone);
         $this->assertDatabaseHas('audit_logs', ['action' => 'restaurant.brand_profile.updated', 'actor_admin_id' => $admin->id, 'workspace_id' => $workspace->id]);
         $this->assertDatabaseHas('audit_logs', ['action' => 'restaurant.outlet.public_contact_updated', 'actor_admin_id' => $admin->id, 'auditable_id' => $outlet->id]);
