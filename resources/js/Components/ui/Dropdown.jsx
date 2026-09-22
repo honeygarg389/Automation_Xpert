@@ -1,11 +1,16 @@
-import { Fragment, createContext, useContext, useEffect, useState } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Transition } from '@headlessui/react';
 import { Link } from '@inertiajs/react';
 
 const DropdownContext = createContext();
+const VIEWPORT_MARGIN = 8;
+const MENU_GAP = 8;
+const WIDTHS = { 48: 192, 56: 224, 64: 256 };
 
 export default function Dropdown({ children }) {
     const [open, setOpen] = useState(false);
+    const triggerRef = useRef(null);
 
     // Escape-to-close: every caller of this shared component gets it for
     // free, rather than each row-actions menu having to reimplement its own
@@ -22,49 +27,107 @@ export default function Dropdown({ children }) {
     }, [open]);
 
     return (
-        <DropdownContext.Provider value={{ open, setOpen }}>
+        <DropdownContext.Provider value={{ open, setOpen, triggerRef }}>
             <div className="relative">{children}</div>
         </DropdownContext.Provider>
     );
 }
 
 function Trigger({ children }) {
-    const { open, setOpen } = useContext(DropdownContext);
+    const { open, setOpen, triggerRef } = useContext(DropdownContext);
+
     return (
-        <>
-            <div onClick={() => setOpen(!open)}>{children}</div>
-            {open && (
-                <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />
-            )}
-        </>
+        <div ref={triggerRef} onClick={() => setOpen(!open)}>{children}</div>
     );
 }
 
 function Content({ align = 'right', width = '48', children }) {
-    const { open, setOpen } = useContext(DropdownContext);
-    const alignClass = align === 'left'
-        ? 'left-0 rtl:right-0 rtl:left-auto'
-        : 'right-0 rtl:left-0 rtl:right-auto';
+    const { open, setOpen, triggerRef } = useContext(DropdownContext);
+    const menuRef = useRef(null);
+    const [geometry, setGeometry] = useState(null);
+    const [menuHeight, setMenuHeight] = useState(null);
+    const menuWidth = WIDTHS[width] ?? WIDTHS[64];
     const widthClass = width === '48' ? 'w-48' : width === '56' ? 'w-56' : 'w-64';
 
-    return (
-        <Transition
-            show={open}
-            as={Fragment}
-            enter="transition ease-out duration-150"
-            enterFrom="opacity-0 scale-95"
-            enterTo="opacity-100 scale-100"
-            leave="transition ease-in duration-100"
-            leaveFrom="opacity-100 scale-100"
-            leaveTo="opacity-0 scale-95"
-        >
-            <div
-                className={`absolute z-50 mt-2 ${alignClass} ${widthClass} rounded-soft-lg border border-soft border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 py-1 shadow-soft-lg dark:shadow-none`}
-                onClick={() => setOpen(false)}
+    useEffect(() => {
+        if (!open || !triggerRef.current) return undefined;
+
+        const rect = triggerRef.current.getBoundingClientRect();
+        const isRtl = document.documentElement.dir === 'rtl';
+        const leftAligned = (align === 'left') !== isRtl;
+        const preferredLeft = leftAligned ? rect.left : rect.right - menuWidth;
+        const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - menuWidth - VIEWPORT_MARGIN);
+        const left = Math.min(Math.max(preferredLeft, VIEWPORT_MARGIN), maxLeft);
+
+        setGeometry({ left, triggerTop: rect.top, triggerBottom: rect.bottom });
+        setMenuHeight(null);
+
+        // Fixed portal coordinates do not follow a scrolling trigger. Closing
+        // mirrors the established Flows menu behaviour and avoids visual drift.
+        const close = () => setOpen(false);
+        window.addEventListener('scroll', close, true);
+        window.addEventListener('resize', close);
+        return () => {
+            window.removeEventListener('scroll', close, true);
+            window.removeEventListener('resize', close);
+        };
+    }, [align, menuWidth, open, setOpen, triggerRef]);
+
+    const measureMenu = useCallback((node) => {
+        menuRef.current = node;
+        if (!open || !geometry || !node) return;
+
+        const height = node.getBoundingClientRect().height;
+        setMenuHeight((current) => current === height ? current : height);
+    }, [geometry, open]);
+
+    // The menu's height depends on its caller-provided children, so measure it
+    // after portal mount before choosing whether it opens above or below.
+    useLayoutEffect(() => {
+        if (!open || !geometry || !menuRef.current) return;
+        setMenuHeight(menuRef.current.getBoundingClientRect().height);
+    }, [geometry, open]);
+
+    if (typeof document === 'undefined') return null;
+
+    const spaceBelow = geometry ? window.innerHeight - geometry.triggerBottom - VIEWPORT_MARGIN : 0;
+    const spaceAbove = geometry ? geometry.triggerTop - VIEWPORT_MARGIN : 0;
+    const opensUpward = geometry && menuHeight !== null
+        && menuHeight + MENU_GAP > spaceBelow
+        && spaceAbove > spaceBelow;
+    const naturalTop = geometry && (opensUpward
+        ? geometry.triggerTop - (menuHeight ?? 0) - MENU_GAP
+        : geometry.triggerBottom + MENU_GAP);
+    const maxTop = Math.max(VIEWPORT_MARGIN, window.innerHeight - VIEWPORT_MARGIN - (menuHeight ?? 0));
+    const top = naturalTop === null || naturalTop === false
+        ? 0
+        : Math.min(Math.max(naturalTop, VIEWPORT_MARGIN), maxTop);
+
+    return createPortal(
+        <>
+            {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden="true" />}
+            <Transition
+                show={open && geometry !== null}
+                as={Fragment}
+                enter="transition ease-out duration-150"
+                enterFrom="opacity-0 scale-95"
+                enterTo="opacity-100 scale-100"
+                leave="transition ease-in duration-100"
+                leaveFrom="opacity-100 scale-100"
+                leaveTo="opacity-0 scale-95"
             >
-                {children}
-            </div>
-        </Transition>
+                <div
+                    ref={measureMenu}
+                    data-dropdown-content
+                    style={{ position: 'fixed', top, left: geometry?.left ?? 0 }}
+                    className={`z-50 ${widthClass} max-h-[calc(100vh-1rem)] overflow-y-auto rounded-soft-lg border border-soft border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 py-1 shadow-soft-lg dark:shadow-none`}
+                    onClick={() => setOpen(false)}
+                >
+                    {children}
+                </div>
+            </Transition>
+        </>,
+        document.body,
     );
 }
 
