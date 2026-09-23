@@ -67,7 +67,12 @@ final class RestaurantDigitalBillDeliveryService
                 }
 
                 $delivery->fill(['outlet_id' => $bill->outlet_id, 'status' => RestaurantDigitalBillDelivery::STATUS_PENDING, 'reason_code' => null, 'suppressed_at' => null])->save();
-                DB::afterCommit(fn () => SendRestaurantDigitalBillJob::dispatch($delivery->id));
+                // Keep the send on the same queue consumed by the POS ingress
+                // worker. Without this explicit queue, Laravel puts it on
+                // `default` while the preceding ProcessPosWebhookEventJob is
+                // on `restaurant`, leaving eligible Digital Bills stranded
+                // whenever staging workers consume only `restaurant`.
+                DB::afterCommit(fn () => SendRestaurantDigitalBillJob::dispatch($delivery->id)->onQueue('restaurant'));
 
                 return $delivery->refresh();
             });
