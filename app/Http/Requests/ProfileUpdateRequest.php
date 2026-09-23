@@ -3,6 +3,8 @@
 namespace App\Http\Requests;
 
 use App\Models\User;
+use App\Rules\ValidTimezone;
+use App\Support\TimezoneNormalizer;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -26,7 +28,12 @@ class ProfileUpdateRequest extends FormRequest
                 'max:255',
                 Rule::unique(User::class)->ignore($this->user()->id),
             ],
-            'timezone' => ['nullable', 'string', 'max:64', 'timezone:all'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge(['timezone' => TimezoneNormalizer::normalize($this->input('timezone'))]);
     }
 }

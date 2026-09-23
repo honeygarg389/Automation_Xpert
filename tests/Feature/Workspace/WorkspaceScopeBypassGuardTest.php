@@ -83,6 +83,7 @@ class WorkspaceScopeBypassGuardTest extends TestCase
         'app/Modules/Flows/Models/WhatsappFlowKeyPair.php' => 'THE public encrypted Flow endpoint has no session or workspace. Its 256-bit random endpoint token uniquely resolves one active phone-number key pair; that token, rather than an ambient tenant, is the routing boundary. Unknown and inactive tokens fold to the same null result.',
         'app/Modules/Flows/Http/Controllers/Public/PublicFlowFormController.php' => 'Slice 7. The public web-form endpoint has no session or workspace — same discovery shape as WhatsappFlowKeyPair above and SmartQrRedirectResolver: the workspace is the ANSWER this lookup resolves, not something known beforehand. Its 128-bit random public_slug (WhatsappFlow::generatePublicSlug()) is the routing boundary instead. Scoped, this would fail CLOSED and every enabled public form would 404 with no tenant context — the disabled-flow predicate is folded into the same query so an unknown slug and a disabled one share one indistinguishable 404.',
         'app/Modules/Restaurant/Http/Controllers/Public/PublicRestaurantBillController.php' => 'The public digital-bill route has no session or workspace. Its only unscoped lookup is by a server-generated 256-bit opaque token, after which WorkspaceContext is explicitly established and every further bill/outlet/brand read is scoped. Unknown and revoked links fold to the same 404.',
+        'app/Modules/Restaurant/Services/RestaurantDigitalBillDeliveryService.php' => 'The scheduled ambiguity sweeper has no single workspace context and may only transition already-sending ledger rows to terminal outcome_unknown. It performs no read of customer data, no retry, and no provider call; a scoped query would leave all but an ambient workspace permanently sending.',
 
         'app/Models/Scopes/WorkspaceScope.php' => 'The scope itself. It reads isCrossTenant() to honour the door; it does not open one.',
         'app/Jobs/Middleware/EstablishesWorkspaceContext.php' => 'THE one job-context bypass: reads a single workspace_id column so a job can establish its own tenant. One query wide. Also routes declared cross-tenant jobs.',
@@ -107,6 +108,8 @@ class WorkspaceScopeBypassGuardTest extends TestCase
         // ── Cross-tenant BY DESIGN: platform-operator commands (slice 4b) ──
         'app/Console/Commands/WhatsappWebhookRegisterCommand.php' => 'Registers the platform-wide Meta callback and subscribes EVERY workspace\'s WABA; scoping it would leave the rest silently unsubscribed.',
         'app/Console/Commands/MessengerProfileTestCommand.php' => 'Diagnostic: an operator does not know which workspace a broken Messenger connection is in, so discovering the account is the point. Only the discovery is cross-tenant — the rest runs inside for().',
+        'app/Modules/Restaurant/Services/RestaurantFeedbackDeliveryService.php' => 'The due-request and stale-attempt scheduler sweeps must see every workspace, then each provider job establishes context from its trusted feedback-request ledger id; neither sweep sends directly.',
+        'app/Modules/Restaurant/Http/Controllers/Public/PublicRestaurantFeedbackController.php' => 'The public route has no authenticated workspace; it may discover exactly one workspace by a 256-bit opaque token, then immediately returns to a normal scoped query.',
     ];
 
     /**

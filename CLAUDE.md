@@ -204,6 +204,53 @@ copy); invoke the underlying script directly, e.g.
 `php -d memory_limit=2G vendor/phpunit/phpunit/phpunit`. The suite needs ~1G; the 128M
 default exhausts.
 
+## Worktrees and dev servers — one fixed port each, checked before every start
+
+⚠️ **This rule applies to EVERY tool and agent that works in this repo — Claude Code
+(including its subagents and background shells), Codex, and a person typing in a terminal.
+It is not specific to any one of them.**
+
+This repo is worked on from several git worktrees at the same time. Each worktree has its
+own fixed port and its own database. A server started on the wrong port — or a second
+server started where one is already running — serves the wrong branch's code against the
+wrong database, and the symptom ("my change didn't take effect") is indistinguishable from
+a stale build or cache.
+
+### Port map
+
+| Worktree (directory)                      | Fixed port | Database          |
+|-------------------------------------------|------------|-------------------|
+| Main checkout — `whatsmine-V1.5.0`        | **8007**   | `whatsmine`       |
+| Flows worktree — `whatsmine-V1.5.0-flows` | **8001**   | `whatsmine_flows` |
+
+- **Any other worktree, existing or future, has NO port until it is assigned one.** Before
+  its first server start it must be given its OWN new fixed port, recorded as a new row in
+  the table above together with the database it uses. **Never reuse 8007 or 8001**, never
+  share a port between two worktrees, and never fall back to `php artisan serve`'s default
+  (8000).
+- Check that the port you pick is free (`lsof -i :<port>`) and appears nowhere in the table
+  before writing the row.
+
+### Pre-flight — mandatory before ANY dev server, in ANY worktree
+
+Before running `php artisan serve` or any dev server in ANY worktree, first run `pwd`,
+`git branch --show-current`, and `lsof -i :<that worktree's assigned port>`. If something is
+already listening on that port, do NOT start a second server — report what's already
+running instead. If nothing is listening, start the server ONLY on that worktree's assigned
+port, never a random/default one.
+
+- When you report what is already running, include its PID, its command line and its working
+  directory (`lsof -a -p <pid> -d cwd`). A listener on your port that is serving a
+  *different* worktree is a finding to surface — not something to kill or work around.
+- Start command, once the port is confirmed free:
+  `php artisan serve --host=127.0.0.1 --port=<that worktree's assigned port>`.
+- If `pwd` does not match a row in the port map, stop: that worktree has no assigned port
+  yet (see above). Do not guess one.
+
+"Any dev server" includes Vite (`npm run dev`). Vite ports are NOT assigned yet: until they
+are, run the same `lsof` check on the port Vite would use (default 5173) and do not start a
+second Vite server if it is taken.
+
 ## Branching
 
 `master` is the integration branch. **Fixes the live application needs must never sit behind

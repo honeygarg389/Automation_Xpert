@@ -246,6 +246,7 @@ class RestaurantMigrationRollbackTest extends TestCase
         $this->assertTrue(Schema::hasColumn('audit_logs', 'workspace_id'));
         $this->assertTrue(Schema::hasColumn('pos_connections', 'environment'));
         $this->assertTrue(Schema::hasColumn('pos_connections', 'active_slot'));
+        $this->assertTrue(Schema::hasTable('restaurant_digital_bill_deliveries'));
 
         Artisan::call('migrate:rollback', ['--path' => self::RESTAURANT_MIGRATIONS_PATH]);
 
@@ -258,6 +259,7 @@ class RestaurantMigrationRollbackTest extends TestCase
         $this->assertFalse(Schema::hasColumn('contacts', 'whatsapp_consent_at'));
         $this->assertFalse(Schema::hasColumn('workspaces', 'client_mode'));
         $this->assertFalse(Schema::hasColumn('audit_logs', 'workspace_id'));
+        $this->assertFalse(Schema::hasTable('restaurant_digital_bill_deliveries'));
 
         // The rest of the schema (from before this branch) must be untouched.
         $this->assertTrue(Schema::hasTable('contacts'));
@@ -277,6 +279,7 @@ class RestaurantMigrationRollbackTest extends TestCase
         $this->assertTrue(Schema::hasColumn('audit_logs', 'workspace_id'));
         $this->assertTrue(Schema::hasColumn('pos_connections', 'environment'));
         $this->assertTrue(Schema::hasColumn('pos_connections', 'active_slot'));
+        $this->assertTrue(Schema::hasTable('restaurant_digital_bill_deliveries'));
 
         // A second non-archived connection on the same outlet must still be
         // rejected after the reapplied migration — prove the UNIQUE(outlet_id,

@@ -105,16 +105,10 @@ export default function useClientNav() {
     // discoverability half of the boundary.
     if (isClientAdmin) {
         messagingItems.push({
-            label: t('nav.restaurant_messaging'),
-            href: safeRoute('client.restaurant.messaging.index'),
+            label: t('nav.restaurant_profile_messaging'),
+            href: safeRoute('client.restaurant.profile-messaging.index'),
             icon: <MessageSquare className={iconClass} />,
-            activePattern: 'client.restaurant.messaging.*',
-        });
-        messagingItems.push({
-            label: t('nav.restaurant_branding'),
-            href: safeRoute('client.restaurant.branding.index'),
-            icon: <Image className={iconClass} />,
-            activePattern: 'client.restaurant.branding.*',
+            activePattern: 'client.restaurant.profile-messaging.*',
         });
     }
 

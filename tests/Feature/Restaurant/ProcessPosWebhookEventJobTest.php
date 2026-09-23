@@ -8,6 +8,8 @@ use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\PosWebhookEvent;
 use App\Modules\Restaurant\Models\RestaurantBill;
 use App\Modules\Restaurant\Services\PetpoojaOrderIngestionService;
+use App\Modules\Restaurant\Services\RestaurantDigitalBillDeliveryService;
+use App\Modules\Restaurant\Services\RestaurantFeedbackDeliveryService;
 use App\Services\AuditLogService;
 use App\Support\WorkspaceContext;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -136,7 +138,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
         $event->update(['processing_status' => PosWebhookEvent::STATUS_PROCESSED, 'processed_at' => now()]);
 
         $job = new ProcessPosWebhookEventJob($event->id);
-        $job->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class));
+        $job->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
 
         // Raw, unscoped count deliberately — RestaurantBill::query() with no
         // ambient WorkspaceContext fails closed and would read 0 regardless
@@ -189,7 +191,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
         // this exercises the "more tries left" branch.
 
         try {
-            $job->handle($this->ingestionThatThrows(new \RuntimeException('database unavailable')), app(AuditLogService::class));
+            $job->handle($this->ingestionThatThrows(new \RuntimeException('database unavailable')), app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
             $this->fail('Expected the transient failure to propagate so Laravel can retry.');
         } catch (\RuntimeException $e) {
             $this->assertSame('database unavailable', $e->getMessage());
@@ -216,7 +218,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
         $job->setJob($fakeJob);
 
         try {
-            $job->handle($this->ingestionThatThrows(new \RuntimeException('database unavailable')), app(AuditLogService::class));
+            $job->handle($this->ingestionThatThrows(new \RuntimeException('database unavailable')), app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
             $this->fail('Expected the failure to propagate even on the last try.');
         } catch (\RuntimeException) {
         }
@@ -314,7 +316,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
         $job = new ProcessPosWebhookEventJob($event->id);
         // ONE execution, attempt #1 of 3. It must not throw (a throw is what
         // makes Laravel schedule attempts 2 and 3).
-        $job->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class));
+        $job->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
 
         $event->refresh();
         $this->assertSame(PosWebhookEvent::STATUS_FAILED, $event->processing_status, 'A deterministic payload defect must be terminal immediately.');
@@ -347,8 +349,8 @@ class ProcessPosWebhookEventJobTest extends TestCase
         unset($payload['properties']['Order']['orderID']);
         $event = $this->pendingEvent($connection, $payload);
 
-        (new ProcessPosWebhookEventJob($event->id))->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class));
-        (new ProcessPosWebhookEventJob($event->id))->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class));
+        (new ProcessPosWebhookEventJob($event->id))->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
+        (new ProcessPosWebhookEventJob($event->id))->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
 
         $event->refresh();
         $this->assertSame(PosWebhookEvent::STATUS_FAILED, $event->processing_status);
@@ -379,7 +381,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
             return 42;
         });
 
-        (new ProcessPosWebhookEventJob($event->id))->handle($ingestion, app(AuditLogService::class));
+        (new ProcessPosWebhookEventJob($event->id))->handle($ingestion, app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
 
         $event->refresh();
         $this->assertSame(PosWebhookEvent::STATUS_PROCESSING, $event->processing_status, 'The replacement still owns the event.');
@@ -414,7 +416,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
         $job->setJob($fakeJob);
 
         try {
-            $job->handle($ingestion, app(AuditLogService::class));
+            $job->handle($ingestion, app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
             $this->fail('The exception is still rethrown for Laravel.');
         } catch (\RuntimeException) {
         }
@@ -442,7 +444,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
             return 0;
         });
 
-        (new ProcessPosWebhookEventJob($event->id))->handle($ingestion, app(AuditLogService::class));
+        (new ProcessPosWebhookEventJob($event->id))->handle($ingestion, app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
 
         $this->assertSame(0, $ingestCalls, 'An exhausted event must not even be handed to the ingestion service.');
 
@@ -461,7 +463,7 @@ class ProcessPosWebhookEventJobTest extends TestCase
         $event = $this->pendingEvent($connection);
         $event->update(['attempts' => ProcessPosWebhookEventJob::MAX_CLAIMS - 1]);
 
-        (new ProcessPosWebhookEventJob($event->id))->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class));
+        (new ProcessPosWebhookEventJob($event->id))->handle(app(PetpoojaOrderIngestionService::class), app(AuditLogService::class), app(RestaurantDigitalBillDeliveryService::class), app(RestaurantFeedbackDeliveryService::class));
 
         $this->assertSame(PosWebhookEvent::STATUS_PROCESSED, $event->fresh()->processing_status);
         $this->assertSame(1, DB::table('restaurant_bills')->count());

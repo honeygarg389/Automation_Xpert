@@ -2,6 +2,7 @@
 
 use App\Modules\Restaurant\Http\Controllers\Public\PetpoojaWebhookController;
 use App\Modules\Restaurant\Http\Controllers\Public\PublicRestaurantBillController;
+use App\Modules\Restaurant\Http\Controllers\Public\PublicRestaurantFeedbackController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -30,4 +31,13 @@ Route::middleware(['web', 'throttle:60,1'])->group(function () {
     Route::get('b/{token}', PublicRestaurantBillController::class)
         ->where('token', '[a-f0-9]{64}')
         ->name('public.restaurant.bills.show');
+});
+
+Route::middleware(['web', 'throttle:10,1'])->group(function () {
+    Route::get('f/{token}', [PublicRestaurantFeedbackController::class, 'show'])
+        ->where('token', '[a-f0-9]{64}')
+        ->name('public.restaurant.feedback.show');
+    Route::post('f/{token}', [PublicRestaurantFeedbackController::class, 'submit'])
+        ->where('token', '[a-f0-9]{64}')
+        ->name('public.restaurant.feedback.submit');
 });

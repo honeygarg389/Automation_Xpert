@@ -39,6 +39,15 @@ use Illuminate\Support\Str;
  * @property Carbon|null $last_seen_at
  * @property string|null $source
  * @property int|null $lead_id
+ * @property Carbon|null $whatsapp_consent_at
+ * @property string|null $whatsapp_consent_source
+ * @property string|null $whatsapp_consent_purpose
+ * @property string|null $whatsapp_consent_text_version
+ * @property array<string, mixed>|null $whatsapp_consent_evidence
+ * @property Carbon|null $whatsapp_opted_out_at
+ * @property string|null $whatsapp_opt_out_source
+ * @property Carbon|null $digital_bill_opted_out_at
+ * @property string|null $digital_bill_opt_out_source
  * @property-read string $full_name
  * @property-read string|null $avatar_url
  */

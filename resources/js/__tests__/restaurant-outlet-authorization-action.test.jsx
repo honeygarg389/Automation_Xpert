@@ -116,6 +116,18 @@ describe('Outlets directory — Actions column', () => {
         expect(triggers[0]).toHaveAttribute('title', 'Actions');
     });
 
+    it('portals the row menu outside the horizontally scrollable table wrapper', async () => {
+        renderPage();
+        const row = screen.getByText('Downtown Branch').closest('tr');
+        await openActionsMenu(row);
+
+        const menu = document.body.querySelector('[data-dropdown-content]');
+        const scroller = row.closest('table').parentElement;
+        expect(menu).not.toBeNull();
+        expect(scroller).toHaveClass('overflow-x-auto');
+        expect(scroller.contains(menu)).toBe(false);
+    });
+
     /**
      * The trigger must not appear at all for a row with zero possible
      * actions — an admin with no relevant permission looking at an
