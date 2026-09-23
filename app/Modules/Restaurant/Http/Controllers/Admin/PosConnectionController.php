@@ -15,7 +15,9 @@ use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\PosConnectionProvisioningService;
 use App\Modules\Restaurant\Services\RestaurantOutletService;
 use App\Modules\Restaurant\Support\IpAllowlistNormalizer;
+use App\Rules\ValidTimezone;
 use App\Support\PhoneNumber;
+use App\Support\TimezoneNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -406,13 +408,14 @@ class PosConnectionController extends Controller
      */
     public function move(Request $request, PosConnection $connection): RedirectResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $data = $request->validate([
             'mode' => ['required', 'in:existing,new'],
             'target_workspace_id' => ['required', 'integer', 'exists:workspaces,id'],
             'target_outlet_id' => ['required_if:mode,existing', 'nullable', 'integer', 'exists:restaurant_outlets,id'],
             'new_outlet_name' => ['required_if:mode,new', 'nullable', 'string', 'max:128'],
             'new_outlet_address' => ['nullable', 'string', 'max:512'],
-            'new_outlet_timezone' => ['nullable', 'string', 'max:64'],
+            'new_outlet_timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
             'confirmed' => ['required', 'accepted'],
         ], [
             'confirmed.accepted' => 'You must explicitly confirm the move.',

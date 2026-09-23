@@ -43,6 +43,43 @@ class ProfileTest extends TestCase
         $this->assertNull($user->email_verified_at);
     }
 
+    public function test_profile_update_canonicalizes_and_persists_a_legacy_timezone_alias(): void
+    {
+        $user = User::factory()->create(['role' => 'client', 'email_verified_at' => now()]);
+
+        $this->actingAs($user)
+            ->patch('/app/profile', [
+                'name' => $user->name,
+                'email' => $user->email,
+                'timezone' => 'Asia/Calcutta',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('client.profile.edit'));
+
+        $this->assertSame('Asia/Kolkata', $user->fresh()->timezone);
+    }
+
+    public function test_profile_update_rejects_an_unknown_timezone_without_persisting_it(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'client',
+            'email_verified_at' => now(),
+            'timezone' => 'Asia/Kolkata',
+        ]);
+
+        $this->actingAs($user)
+            ->from(route('client.profile.edit'))
+            ->patch('/app/profile', [
+                'name' => $user->name,
+                'email' => $user->email,
+                'timezone' => 'Not/A/Timezone',
+            ])
+            ->assertRedirect(route('client.profile.edit'))
+            ->assertSessionHasErrors('timezone');
+
+        $this->assertSame('Asia/Kolkata', $user->fresh()->timezone);
+    }
+
     public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
     {
         $user = User::factory()->create(['role' => 'client', 'email_verified_at' => now()]);

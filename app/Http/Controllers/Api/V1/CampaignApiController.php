@@ -8,6 +8,8 @@ use App\Modules\Broadcasting\Jobs\LaunchCampaignJob;
 use App\Modules\Broadcasting\Models\Campaign;
 use App\Modules\Broadcasting\Models\CampaignRecipient;
 use App\Modules\Broadcasting\Models\UsageMeter;
+use App\Rules\ValidTimezone;
+use App\Support\TimezoneNormalizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -37,6 +39,7 @@ class CampaignApiController extends WorkspaceScopedController
      */
     public function store(Request $request): JsonResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:200'],
             'channel' => ['required', 'string', 'in:whatsapp,sms,email'],
@@ -45,7 +48,7 @@ class CampaignApiController extends WorkspaceScopedController
             'template_ref' => ['nullable', 'array'],
             'payload_json' => ['nullable', 'array'],
             'schedule_at' => ['nullable', 'date'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ]);
 
         // Default audience_type when omitted to keep DB enum happy.
@@ -160,6 +163,7 @@ class CampaignApiController extends WorkspaceScopedController
      */
     public function update(Request $request, int $id): CampaignResource|JsonResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $campaign = Campaign::where('workspace_id', $this->workspaceId($request))->find($id);
 
         if (! $campaign) {
@@ -178,7 +182,7 @@ class CampaignApiController extends WorkspaceScopedController
             'template_ref' => ['nullable', 'array'],
             'payload_json' => ['nullable', 'array'],
             'schedule_at' => ['nullable', 'date'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ]);
 
         $campaign->update($validated);

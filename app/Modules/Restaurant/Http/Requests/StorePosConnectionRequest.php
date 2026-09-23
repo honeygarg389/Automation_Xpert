@@ -5,7 +5,9 @@ namespace App\Modules\Restaurant\Http\Requests;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Support\IpAllowlistNormalizer;
+use App\Rules\ValidTimezone;
 use App\Support\PhoneNumber;
+use App\Support\TimezoneNormalizer;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -50,6 +52,7 @@ class StorePosConnectionRequest extends FormRequest
         if ($this->has('allowed_ips')) {
             $this->merge(['allowed_ips' => IpAllowlistNormalizer::normalize($this->input('allowed_ips'))]);
         }
+        $this->merge(['new_outlet_timezone' => TimezoneNormalizer::normalize($this->input('new_outlet_timezone'))]);
     }
 
     /**
@@ -99,7 +102,7 @@ class StorePosConnectionRequest extends FormRequest
                 'nullable', 'string', 'max:128',
             ],
             'new_outlet_address' => ['nullable', 'string', 'max:512'],
-            'new_outlet_timezone' => ['nullable', 'string', 'max:64'],
+            'new_outlet_timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
 
             // Provider is NEVER accepted from the request — it is fixed to
             // 'petpooja' by the controller, not by validating a submitted
