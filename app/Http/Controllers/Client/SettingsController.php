@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\ClientSetting;
 use App\Models\Currency;
 use App\Models\Locale;
+use App\Rules\ValidTimezone;
+use App\Support\TimezoneNormalizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -68,6 +70,7 @@ class SettingsController extends Controller
 
     public function update(Request $request): RedirectResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $user = $request->user();
         $localeCodes = Locale::enabled()->pluck('code')->all() ?: ['en'];
         $currencyCodes = Currency::where('enabled', true)->pluck('code')->all() ?: ['USD'];
@@ -76,7 +79,7 @@ class SettingsController extends Controller
             'locale' => ['nullable', 'string', 'max:16', Rule::in($localeCodes)],
             'display_currency' => ['nullable', 'string', 'max:10', Rule::in($currencyCodes)],
             'theme' => ['nullable', 'string', 'in:light,dark'],
-            'timezone' => ['nullable', 'string', 'max:64', 'timezone:all'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
             'client_name' => ['nullable', 'string', 'max:255'],
             'client_email' => ['nullable', 'email', 'max:255'],
             'client_phone' => ['nullable', 'string', 'max:64'],

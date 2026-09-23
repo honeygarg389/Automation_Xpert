@@ -9,6 +9,8 @@ use App\Modules\Social\Models\SocialAccount;
 use App\Modules\Social\Models\SocialPost;
 use App\Modules\Social\Support\DriverCapabilities;
 use App\Modules\Social\Support\NetworkCapabilities;
+use App\Rules\ValidTimezone;
+use App\Support\TimezoneNormalizer;
 use App\Support\WorkspaceContext;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -142,6 +144,7 @@ class SocialPostController extends Controller
 
     public function store(Request $request): JsonResponse|RedirectResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $wid = $this->workspaceId($request);
         $validated = $request->validate([
             'title' => ['nullable', 'string', 'max:256'],
@@ -153,7 +156,7 @@ class SocialPostController extends Controller
             'post_type' => ['nullable', 'string', 'in:image,video,text'],
             'media_type' => ['nullable', 'string', 'in:single,carousel'],
             'scheduled_at' => ['nullable', 'date'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ]);
 
         // Ensure every requested account belongs to this workspace (cross-workspace IDOR guard).
@@ -233,6 +236,7 @@ class SocialPostController extends Controller
 
     public function update(Request $request, SocialPost $post): RedirectResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         abort_unless((int) $post->workspace_id === $this->workspaceId($request), 403);
         abort_if(in_array($post->status, ['publishing', 'published']), 403, 'Cannot edit a post that is already published or being published.');
 
@@ -246,7 +250,7 @@ class SocialPostController extends Controller
             'post_type' => ['nullable', 'string', 'in:image,video,text'],
             'media_type' => ['nullable', 'string', 'in:single,carousel'],
             'scheduled_at' => ['nullable', 'date'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ]);
 
         // ⚠️ THE SAME CROSS-WORKSPACE IDOR GUARD store() HAS. It was absent from
@@ -349,6 +353,7 @@ class SocialPostController extends Controller
 
     public function aiPlan(Request $request): JsonResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $wid = $this->workspaceId($request);
 
         $validated = $request->validate([
@@ -360,7 +365,7 @@ class SocialPostController extends Controller
             'end_date' => ['required', 'date', 'after:start_date'],
             'target_accounts' => ['required', 'array', 'min:1'],
             'target_accounts.*' => ['integer'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ]);
 
         $requestedIds = collect($validated['target_accounts'])->map(fn ($id) => (int) $id);
@@ -468,6 +473,7 @@ SYSTEM;
 
     public function bulkStore(Request $request): JsonResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $wid = $this->workspaceId($request);
 
         $validated = $request->validate([
@@ -475,7 +481,7 @@ SYSTEM;
             'posts.*.title' => ['nullable', 'string', 'max:256'],
             'posts.*.body' => ['required', 'string', 'max:5000'],
             'posts.*.scheduled_at' => ['nullable', 'date'],
-            'posts.*.timezone' => ['nullable', 'string', 'max:64'],
+            'posts.*.timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
             'posts.*.target_accounts' => ['required', 'array', 'min:1'],
             'posts.*.target_accounts.*' => ['integer'],
             'posts.*.ai_prompt' => ['nullable', 'string', 'max:1000'],

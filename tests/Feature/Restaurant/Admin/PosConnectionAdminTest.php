@@ -965,6 +965,31 @@ class PosConnectionAdminTest extends TestCase
     }
 
     #[Test]
+    public function creating_a_new_outlet_canonicalizes_its_legacy_timezone_and_preserves_ip_normalization(): void
+    {
+        $admin = $this->adminWith(['manage_pos_connections']);
+        ['workspace' => $workspace] = $this->createWorkspaceContext();
+
+        $this->actingAs($admin, 'admin')->post(route('admin.restaurant.connections.store'), [
+            'environment' => 'sandbox',
+            'mode' => 'new',
+            'workspace_id' => $workspace->id,
+            'new_outlet_name' => 'Legacy Timezone Outlet',
+            'new_outlet_timezone' => 'Asia/Calcutta',
+            'external_ref' => 'REST-TIMEZONE-1',
+            'allowed_ips' => ['203.0.113.5', ' 203.0.113.5 ', '198.51.100.1', ''],
+        ])->assertSessionHasNoErrors();
+
+        $outlet = RestaurantOutlet::query()->where('name', 'Legacy Timezone Outlet')->firstOrFail();
+        $connection = PosConnection::query()->where('external_ref', 'REST-TIMEZONE-1')->firstOrFail();
+
+        $this->assertSame($workspace->id, $outlet->workspace_id);
+        $this->assertSame('Asia/Kolkata', $outlet->timezone);
+        $this->assertSame($outlet->id, $connection->outlet_id);
+        $this->assertSame(['203.0.113.5', '198.51.100.1'], $connection->allowed_ips);
+    }
+
+    #[Test]
     public function creating_a_connection_with_an_invalid_ip_is_rejected_with_a_friendly_error(): void
     {
         $admin = $this->adminWith(['manage_pos_connections']);

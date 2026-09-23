@@ -2,12 +2,24 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { Search, Clock, ChevronDown, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-const ALL_TIMEZONES = Intl.supportedValuesOf
+export const LEGACY_TIMEZONE_ALIASES = {
+    'Asia/Calcutta': 'Asia/Kolkata',
+    'Asia/Katmandu': 'Asia/Kathmandu',
+    'Asia/Rangoon': 'Asia/Yangon',
+    'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+    'America/Buenos_Aires': 'America/Argentina/Buenos_Aires',
+};
+
+export const normalizeTimezone = (timezone) => LEGACY_TIMEZONE_ALIASES[timezone] ?? timezone;
+
+const ICU_TIMEZONES = Intl.supportedValuesOf
     ? Intl.supportedValuesOf('timeZone')
     : ['UTC', 'Asia/Dhaka', 'America/New_York', 'America/Los_Angeles', 'Europe/London',
        'Asia/Kolkata', 'Asia/Dubai', 'Asia/Bangkok', 'Asia/Tokyo', 'Australia/Sydney',
        'Pacific/Auckland', 'America/Chicago', 'America/Sao_Paulo', 'Europe/Paris',
        'Europe/Berlin', 'Africa/Cairo', 'Asia/Singapore', 'Asia/Shanghai'];
+
+const ALL_TIMEZONES = [...new Set(ICU_TIMEZONES.map(normalizeTimezone))];
 
 function getUtcOffset(tz) {
     try {

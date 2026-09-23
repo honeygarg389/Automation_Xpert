@@ -7,6 +7,8 @@ use App\Models\Client;
 use App\Models\Plan;
 use App\Models\SmtpConfiguration;
 use App\Models\User;
+use App\Rules\ValidTimezone;
+use App\Support\TimezoneNormalizer;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -38,18 +40,19 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $request->validate([
-            'name'        => 'required|string|max:255',
-            'email'       => 'required|string|lowercase|email|max:255|unique:'.User::class,
-            'password'    => ['required', 'confirmed', Rules\Password::defaults()],
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
+            'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'agree_terms' => ['accepted'],
-            'timezone'    => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ], [
             'agree_terms.accepted' => 'You must accept the Terms & Conditions to create an account.',
         ]);
 
         // Use browser-detected timezone from signup; fall back to Bangladesh Standard Time.
-        $timezone = $this->resolveTimezone($request->input('timezone'));
+        $timezone = $request->input('timezone') ?: 'Asia/Dhaka';
 
         $user = DB::transaction(function () use ($request, $timezone) {
             $client = Client::create([
@@ -94,19 +97,5 @@ class RegisteredUserController extends Controller
         }
 
         return redirect(route('client.dashboard', absolute: false));
-    }
-
-    private function resolveTimezone(?string $tz): string
-    {
-        $default = 'Asia/Dhaka';
-        if (! $tz) {
-            return $default;
-        }
-        try {
-            new \DateTimeZone($tz);
-            return $tz;
-        } catch (\Exception) {
-            return $default;
-        }
     }
 }

@@ -10,6 +10,8 @@ use App\Modules\Restaurant\Models\RestaurantOutlet;
 use App\Modules\Restaurant\Services\RestaurantDigitalBillDeliveryConfigService;
 use App\Modules\Restaurant\Services\RestaurantFeedbackDeliveryConfigService;
 use App\Modules\Restaurant\Services\RestaurantOutletService;
+use App\Rules\ValidTimezone;
+use App\Support\TimezoneNormalizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -141,11 +143,12 @@ class RestaurantOutletController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $data = $request->validate([
             'workspace_id' => ['required', 'integer', 'exists:workspaces,id'],
             'name' => ['required', 'string', 'max:128'],
             'address' => ['nullable', 'string', 'max:512'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ]);
 
         $workspace = Workspace::findOrFail($data['workspace_id']);
@@ -174,10 +177,11 @@ class RestaurantOutletController extends Controller
 
     public function update(Request $request, RestaurantOutlet $outlet): RedirectResponse
     {
+        TimezoneNormalizer::normalizeRequest($request);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:128'],
             'address' => ['nullable', 'string', 'max:512'],
-            'timezone' => ['nullable', 'string', 'max:64'],
+            'timezone' => ['nullable', 'string', 'max:64', new ValidTimezone],
         ]);
 
         app(RestaurantOutletService::class)->updateOutlet(
