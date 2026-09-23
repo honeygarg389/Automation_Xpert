@@ -53,6 +53,7 @@ class RestaurantDigitalBillDeliveryTest extends TestCase
         // transaction rather than weakening production's after-commit rule.
         $this->executeDeferredAfterCommitCallbacks();
         Queue::assertPushed(SendRestaurantDigitalBillJob::class, 1);
+        Queue::assertPushedOn('restaurant', SendRestaurantDigitalBillJob::class);
     }
 
     #[Test]
