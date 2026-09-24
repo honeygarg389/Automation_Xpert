@@ -22,43 +22,43 @@ x-queue-defaults: &queue-defaults
 services:
   queue-default:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=default --sleep=3 --tries=3 --max-time=3600
+    command: php artisan queue:work --queue=default --sleep=3 --tries=3 --max-time=3600
     deploy:
       replicas: 2
 
   queue-whatsapp:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=whatsapp --sleep=2 --tries=3 --max-time=3600
+    command: php artisan queue:work --queue=whatsapp --sleep=2 --tries=3 --max-time=3600
     deploy:
       replicas: 3
 
   queue-broadcast:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=broadcast --sleep=3 --tries=2 --max-time=3600
+    command: php artisan queue:work --queue=broadcast --sleep=3 --tries=2 --max-time=3600
     deploy:
       replicas: 2
 
   queue-ai:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=ai --sleep=3 --tries=3 --max-time=600
+    command: php artisan queue:work --queue=ai --sleep=3 --tries=3 --max-time=600
     deploy:
       replicas: 2
 
   queue-social:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=social --sleep=5 --tries=3 --max-time=3600
+    command: php artisan queue:work --queue=social --sleep=5 --tries=3 --max-time=3600
     deploy:
       replicas: 2
 
   queue-leads:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=leads --sleep=5 --tries=2 --max-time=1800
+    command: php artisan queue:work --queue=leads --sleep=5 --tries=2 --max-time=1800
     deploy:
       replicas: 1
 
   queue-automation:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=automation --sleep=3 --tries=3 --max-time=1800
+    command: php artisan queue:work --queue=automation --sleep=3 --tries=3 --max-time=1800
     deploy:
       replicas: 2
 
@@ -70,7 +70,7 @@ services:
   # UPDATE and the bill write is a race-safe upsert.
   queue-restaurant:
     <<: *queue-defaults
-    command: php artisan queue:work redis --queue=restaurant --sleep=3 --tries=3 --max-time=1800
+    command: php artisan queue:work --queue=restaurant --sleep=3 --tries=3 --max-time=1800
     deploy:
       replicas: 2
 
