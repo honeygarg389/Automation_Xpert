@@ -62,7 +62,7 @@ class QueueWorkerCoverageGuardTest extends TestCase
     {
         $compose = (string) file_get_contents(base_path('docker-compose.queues.yml'));
 
-        preg_match_all('/queue:work\s+\S+\s+--queue=([a-z0-9_.,-]+)/i', $compose, $m);
+        preg_match_all('/queue:work(?:\s+\S+)?\s+--queue=([a-z0-9_.,-]+)/i', $compose, $m);
 
         $names = [];
         foreach ($m[1] as $list) {
