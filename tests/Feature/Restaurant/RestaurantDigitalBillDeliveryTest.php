@@ -34,6 +34,13 @@ class RestaurantDigitalBillDeliveryTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        config()->set('app.url', 'https://automationxpert.in');
+    }
+
     #[Test]
     public function an_eligible_bill_creates_one_pending_delivery_and_one_job_despite_duplicate_scheduling(): void
     {
@@ -85,6 +92,44 @@ class RestaurantDigitalBillDeliveryTest extends TestCase
                 && data_get($component, 'parameters.0.text') === $records['bill']->public_token
                 && ! str_contains(json_encode($component) ?: '', $records['contact']->phone_e164);
         });
+    }
+
+    #[Test]
+    public function it_uses_the_current_environment_public_host_and_rejects_a_template_from_another_environment(): void
+    {
+        config()->set('app.url', 'https://api-staging.automationxpert.in');
+        $records = $this->records([
+            ['type' => 'BODY', 'text' => 'Your bill is ready.'],
+            ['type' => 'BUTTONS', 'buttons' => [['type' => 'URL', 'text' => 'View bill', 'url' => 'https://api-staging.automationxpert.in/b/{{1}}']]],
+        ]);
+        Queue::fake();
+        Http::fake(['*' => Http::response(['messages' => [['id' => 'wamid.staging-bill']]], 200)]);
+
+        $delivery = WorkspaceContext::for($records['workspace']->id, fn () => app(RestaurantDigitalBillDeliveryService::class)->schedule($records['bill']->id));
+        WorkspaceContext::for($records['workspace']->id, fn () => app(RestaurantDigitalBillDeliveryService::class)->send($delivery->id));
+
+        $this->assertSame(RestaurantDigitalBillDelivery::STATUS_SENT, WorkspaceContext::for($records['workspace']->id, fn () => $delivery->fresh()->status));
+        Http::assertSent(fn (Request $request): bool => data_get($request->data(), 'template.components.0.parameters.0.text') === $records['bill']->public_token);
+
+        $records['template']->update(['components' => [
+            ['type' => 'BODY', 'text' => 'Your bill is ready.'],
+            ['type' => 'BUTTONS', 'buttons' => [['type' => 'URL', 'text' => 'View bill', 'url' => 'https://automationxpert.in/b/{{1}}']]],
+        ]]);
+        $secondBill = RestaurantBill::factory()->create([
+            'workspace_id' => $records['workspace']->id,
+            'outlet_id' => $records['outlet']->id,
+            'contact_id' => $records['contact']->id,
+            'connection_id' => $records['bill']->connection_id,
+            'source_order_status' => 'Success',
+        ]);
+        Http::fake();
+
+        $wrongEnvironment = WorkspaceContext::for($records['workspace']->id, fn () => app(RestaurantDigitalBillDeliveryService::class)->schedule($secondBill->id));
+        WorkspaceContext::for($records['workspace']->id, fn () => app(RestaurantDigitalBillDeliveryService::class)->send($wrongEnvironment->id));
+
+        $this->assertSame(RestaurantDigitalBillDelivery::STATUS_SUPPRESSED, WorkspaceContext::for($records['workspace']->id, fn () => $wrongEnvironment->fresh()->status));
+        $this->assertSame('template_url_button_invalid', WorkspaceContext::for($records['workspace']->id, fn () => $wrongEnvironment->fresh()->reason_code));
+        Http::assertNothingSent();
     }
 
     #[Test]

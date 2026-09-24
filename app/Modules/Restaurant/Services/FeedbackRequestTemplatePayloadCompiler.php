@@ -56,7 +56,7 @@ final class FeedbackRequestTemplatePayloadCompiler
         if (! is_string($url) || ! str_contains($url, '{{1}}')) {
             return $this->block($request, self::REASON_URL_BUTTON_STATIC);
         }
-        if ($url !== 'https://automationxpert.in/f/{{1}}') {
+        if ($url !== $this->expectedButtonUrl('/f')) {
             return $this->block($request, self::REASON_URL_BUTTON_INVALID);
         }
 
@@ -66,5 +66,19 @@ final class FeedbackRequestTemplatePayloadCompiler
     private function block(RestaurantFeedbackRequest $request, string $reason): RestaurantOutboundDecision
     {
         return RestaurantOutboundDecision::block($request->purpose, $reason, $request->workspace_id, $request->restaurant_bill_id, $request->outlet_id);
+    }
+
+    private function expectedButtonUrl(string $path): ?string
+    {
+        // The URL host comes only from trusted deployment configuration. Meta
+        // templates are static except for {{1}}, so a template from another
+        // environment would point a valid token at the wrong database.
+        $baseUrl = rtrim((string) config('app.url'), '/');
+        $parts = parse_url($baseUrl);
+        if ($baseUrl === '' || ! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || ! isset($parts['host']) || isset($parts['query'], $parts['fragment'], $parts['user'], $parts['pass'])) {
+            return null;
+        }
+
+        return $baseUrl.$path.'/{{1}}';
     }
 }
