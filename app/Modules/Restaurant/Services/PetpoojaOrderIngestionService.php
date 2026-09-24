@@ -205,12 +205,12 @@ class PetpoojaOrderIngestionService
                 // silently mangle it.
                 'first_name' => $this->stringOrNull(data_get($customer, 'name')),
                 'source' => 'petpooja',
-                // Explicit, not left to column defaults: contacts.opt_in_email
-                // DEFAULTs to true, and a customer who handed over a phone
-                // number at a till has not opted in to any marketing channel.
-                'opt_in_whatsapp' => false,
-                'opt_in_sms' => false,
-                'opt_in_email' => false,
+                // Petpooja is an approved contact-import source. Set every
+                // channel enabled when this integration creates a contact;
+                // existing contact preferences are preserved above.
+                'opt_in_whatsapp' => true,
+                'opt_in_sms' => true,
+                'opt_in_email' => true,
             ]);
 
             return $contact->id;

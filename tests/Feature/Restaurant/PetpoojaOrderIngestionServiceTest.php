@@ -290,7 +290,7 @@ class PetpoojaOrderIngestionServiceTest extends TestCase
     }
 
     #[Test]
-    public function a_newly_created_contact_has_no_marketing_opt_in_and_no_consent(): void
+    public function a_newly_created_petpooja_contact_enables_all_channel_opt_ins_without_recording_consent(): void
     {
         ['workspace' => $workspace] = $this->createWorkspaceContext();
         $connection = PosConnection::factory()->create([
@@ -303,9 +303,9 @@ class PetpoojaOrderIngestionServiceTest extends TestCase
 
         $contact = DB::table('contacts')->where('id', DB::table('restaurant_bills')->where('id', $billId)->value('contact_id'))->first();
         $this->assertNotNull($contact);
-        $this->assertSame(0, (int) $contact->opt_in_whatsapp);
-        $this->assertSame(0, (int) $contact->opt_in_sms);
-        $this->assertSame(0, (int) $contact->opt_in_email, 'contacts.opt_in_email DEFAULTs to true — a customer who gave a phone number at a till has not opted in to email marketing.');
+        $this->assertSame(1, (int) $contact->opt_in_whatsapp);
+        $this->assertSame(1, (int) $contact->opt_in_sms);
+        $this->assertSame(1, (int) $contact->opt_in_email);
         $this->assertNull($contact->whatsapp_consent_at);
         $this->assertNull($contact->whatsapp_consent_source);
     }
