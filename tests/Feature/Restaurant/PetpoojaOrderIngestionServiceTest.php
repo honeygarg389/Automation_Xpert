@@ -256,13 +256,13 @@ class PetpoojaOrderIngestionServiceTest extends TestCase
     }
 
     /**
-     * UNIQUE(workspace_id, phone_e164) includes soft-deleted rows, so a naive
-     * create() for a previously-deleted customer would hard-fail the whole
-     * bill. It must also not RESURRECT a contact somebody deliberately
-     * deleted merely because that person bought lunch again.
+     * UNIQUE(workspace_id, phone_e164) includes soft-deleted rows. A later,
+     * authenticated Petpooja bill is the source-of-truth signal that this
+     * customer has returned, so restore that same row rather than attempting
+     * a conflicting insert or creating a second contact.
      */
     #[Test]
-    public function a_soft_deleted_contact_is_linked_not_restored_and_never_fails_the_bill(): void
+    public function a_soft_deleted_contact_is_restored_and_linked_without_creating_a_duplicate_or_overwriting_preferences(): void
     {
         ['workspace' => $workspace] = $this->createWorkspaceContext();
         $connection = PosConnection::factory()->create([
@@ -274,6 +274,10 @@ class PetpoojaOrderIngestionServiceTest extends TestCase
                 'workspace_id' => $workspace->id,
                 'phone_e164' => '+918630026021',
                 'first_name' => 'Deleted Customer',
+                'source' => 'import',
+                'opt_in_whatsapp' => false,
+                'opt_in_sms' => false,
+                'opt_in_email' => false,
             ]);
             $contact->delete();
 
@@ -285,7 +289,41 @@ class PetpoojaOrderIngestionServiceTest extends TestCase
 
         $this->assertNotNull(DB::table('restaurant_bills')->where('id', $billId)->first(), 'A soft-deleted contact must never fail bill persistence.');
         $this->assertSame($deleted->id, DB::table('restaurant_bills')->where('id', $billId)->value('contact_id'));
-        $this->assertNotNull(DB::table('contacts')->where('id', $deleted->id)->value('deleted_at'), 'A POS bill must never resurrect a deleted contact.');
+        $this->assertNull(DB::table('contacts')->where('id', $deleted->id)->value('deleted_at'));
+        $this->assertSame(1, DB::table('contacts')->where('workspace_id', $workspace->id)->count());
+        $restored = WorkspaceContext::for($workspace->id, fn () => Contact::findOrFail($deleted->id));
+        $this->assertSame('Deleted Customer', $restored->first_name);
+        $this->assertSame('import', $restored->source);
+        $this->assertFalse((bool) $restored->opt_in_whatsapp);
+        $this->assertFalse((bool) $restored->opt_in_sms);
+        $this->assertFalse((bool) $restored->opt_in_email);
+    }
+
+    #[Test]
+    public function it_never_restores_a_matching_soft_deleted_contact_from_another_workspace(): void
+    {
+        ['workspace' => $workspace] = $this->createWorkspaceContext();
+        $otherWorkspace = Workspace::factory()->create();
+        $foreignDeleted = WorkspaceContext::for($otherWorkspace->id, function () use ($otherWorkspace) {
+            $contact = Contact::factory()->create([
+                'workspace_id' => $otherWorkspace->id,
+                'phone_e164' => '+918630026021',
+            ]);
+            $contact->delete();
+
+            return $contact;
+        });
+        $connection = PosConnection::factory()->create([
+            'workspace_id' => $workspace->id,
+            'default_phone_country' => 'IN',
+        ]);
+        $event = $this->pendingEvent($connection, $this->orderdetailsPayload($connection->external_ref));
+
+        $billId = WorkspaceContext::for($workspace->id, fn () => $this->service()->ingest($event));
+
+        $contactId = DB::table('restaurant_bills')->where('id', $billId)->value('contact_id');
+        $this->assertNotSame($foreignDeleted->id, $contactId);
+        $this->assertNotNull(DB::table('contacts')->where('id', $foreignDeleted->id)->value('deleted_at'));
         $this->assertSame(1, DB::table('contacts')->where('workspace_id', $workspace->id)->count());
     }
 

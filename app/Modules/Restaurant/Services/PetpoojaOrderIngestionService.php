@@ -246,18 +246,29 @@ class PetpoojaOrderIngestionService
     /**
      * `withTrashed()`: UNIQUE(workspace_id, phone_e164) covers soft-deleted
      * rows too, so a deleted contact still occupies its phone and must be
-     * found here rather than re-created (which would violate the index).
+     * found and restored here rather than re-created (which would violate
+     * the index). A valid, authenticated Petpooja bill shows that the
+     * customer has returned; restoring preserves their original record and
+     * saved preferences.
      * The explicit workspace_id predicate is belt-and-braces alongside the
      * BelongsToWorkspace scope the job's context middleware applies.
      */
     private function findContactId(int $workspaceId, string $phone): ?int
     {
-        $id = Contact::withTrashed()
+        $contact = Contact::withTrashed()
             ->where('workspace_id', $workspaceId)
             ->where('phone_e164', $phone)
-            ->value('id');
+            ->first();
 
-        return $id === null ? null : (int) $id;
+        if ($contact === null) {
+            return null;
+        }
+
+        if ($contact->trashed()) {
+            $contact->restore();
+        }
+
+        return (int) $contact->id;
     }
 
     /**

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import AdminLayout from '@/Layouts/AdminLayout';
 import { Badge, Button, Card, Checkbox, ConfirmDestructiveModal, Input, Modal, Select, Textarea } from '@/Components/ui';
 import { Archive, Check, Copy, KeyRound, PauseCircle, Radio, RotateCcw, ShieldAlert, Shuffle, Trash2 } from 'lucide-react';
+import { formatInTz } from '@/Utils/datetime';
 
 const STATUS_VARIANTS = { pending: 'warning', connected: 'success', paused: 'danger', archived: 'default', disconnected: 'danger' };
 const EVENT_STATUS_VARIANTS = { pending: 'brand', processed: 'success', failed: 'danger', quarantined: 'warning' };
@@ -126,6 +127,7 @@ export default function Show({ connection, recentEvents, recentRejections, webho
     const page = usePage();
     const permissions = page.props.auth?.permissions ?? [];
     const flash = page.props.flash || {};
+    const adminTz = page.props.timezone || 'Asia/Dhaka';
 
     const canRotateToken = permissions.includes('rotate_pos_webhook_secret');
     const canManage = permissions.includes('manage_pos_connections');
@@ -511,14 +513,14 @@ export default function Show({ connection, recentEvents, recentRejections, webho
                 <Card className="lg:col-span-2">
                     <Card.Header title="Recent accepted events" />
                     <Card.Body>
-                        <EventsTable events={recentEvents} />
+                        <EventsTable events={recentEvents} timezone={adminTz} />
                     </Card.Body>
                 </Card>
 
                 <Card className="lg:col-span-2">
                     <Card.Header title="Recent rejections" />
                     <Card.Body>
-                        <RejectionsTable rejections={recentRejections} />
+                        <RejectionsTable rejections={recentRejections} timezone={adminTz} />
                     </Card.Body>
                 </Card>
             </div>
@@ -692,7 +694,7 @@ function Row({ label, value, mono = false }) {
     );
 }
 
-function EventsTable({ events }) {
+export function EventsTable({ events, timezone }) {
     if (!events.length) {
         return <div className="py-6 text-center text-sm text-neutral-500 dark:text-neutral-400">No events received yet.</div>;
     }
@@ -709,7 +711,7 @@ function EventsTable({ events }) {
             <tbody>
                 {events.map((e) => (
                     <tr key={e.id} className="border-b border-neutral-100 dark:border-neutral-800/60">
-                        <td className="py-2 pr-4">{e.received_at}</td>
+                        <td className="py-2 pr-4">{formatInTz(e.received_at, timezone)}</td>
                         <td className="py-2 pr-4">{e.event_type ?? '—'}</td>
                         <td className="py-2 pr-4">
                             <Badge variant={EVENT_STATUS_VARIANTS[e.processing_status] ?? 'default'} size="sm">
@@ -724,7 +726,7 @@ function EventsTable({ events }) {
     );
 }
 
-function RejectionsTable({ rejections }) {
+export function RejectionsTable({ rejections, timezone }) {
     if (!rejections.length) {
         return <div className="py-6 text-center text-sm text-neutral-500 dark:text-neutral-400">No rejected requests.</div>;
     }
@@ -740,7 +742,7 @@ function RejectionsTable({ rejections }) {
             <tbody>
                 {rejections.map((r) => (
                     <tr key={r.id} className="border-b border-neutral-100 dark:border-neutral-800/60">
-                        <td className="py-2 pr-4">{r.received_at}</td>
+                        <td className="py-2 pr-4">{formatInTz(r.received_at, timezone)}</td>
                         <td className="py-2 pr-4">
                             <Badge variant="warning" size="sm">{r.failure_reason}</Badge>
                         </td>
