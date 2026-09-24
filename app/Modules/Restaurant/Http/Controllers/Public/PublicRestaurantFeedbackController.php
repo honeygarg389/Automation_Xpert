@@ -3,6 +3,7 @@
 namespace App\Modules\Restaurant\Http\Controllers\Public;
 
 use App\Http\Controllers\Controller;
+use App\Models\Workspace;
 use App\Modules\Restaurant\Models\RestaurantBrandProfile;
 use App\Modules\Restaurant\Models\RestaurantFeedbackAlert;
 use App\Modules\Restaurant\Models\RestaurantFeedbackDeliveryConfig;
@@ -43,7 +44,7 @@ final class PublicRestaurantFeedbackController extends Controller
         return redirect()->route('public.restaurant.feedback.show', ['token' => $token]);
     }
 
-    /** @return array{RestaurantFeedbackRequest, array{name:string,logo_url:?string,primary_color:string}, ?string} */
+    /** @return array{RestaurantFeedbackRequest, array{name:string,logo_url:?string,cover_url:?string,primary_color:string,website:?string,social_links:array<string,string>}, ?string} */
     private function publicData(string $token): array
     {
         /** @var RestaurantFeedbackRequest|null $candidate */
@@ -60,8 +61,24 @@ final class PublicRestaurantFeedbackController extends Controller
                 abort(404);
             }
             $profile = RestaurantBrandProfile::query()->where('workspace_id', $feedback->workspace_id)->first();
+            $workspace = Workspace::query()->find($feedback->workspace_id);
             $config = $feedback->outlet_id === null ? null : RestaurantFeedbackDeliveryConfig::query()->where('outlet_id', $feedback->outlet_id)->first();
-            $brand = ['name' => $profile?->brand_name ?: 'Restaurant', 'logo_url' => $profile?->logoUrl(), 'primary_color' => $profile?->primary_color ?: '#2563eb'];
+            $links = [];
+            $profileLinks = is_array($profile?->social_links) ? $profile->social_links : [];
+            foreach (['instagram', 'facebook', 'google', 'x', 'youtube'] as $key) {
+                $url = $profileLinks[$key] ?? null;
+                if (is_string($url) && filter_var($url, FILTER_VALIDATE_URL) && in_array(parse_url($url, PHP_URL_SCHEME), ['http', 'https'], true)) {
+                    $links[$key] = $url;
+                }
+            }
+            $brand = [
+                'name' => $profile?->brand_name ?: $workspace?->name ?: 'Restaurant',
+                'logo_url' => $profile?->logoUrl(),
+                'cover_url' => $profile?->coverUrl(),
+                'primary_color' => $profile?->primary_color ?: '#2563eb',
+                'website' => $profile?->website,
+                'social_links' => $links,
+            ];
 
             return [$feedback, $brand, $config?->google_review_url];
         });

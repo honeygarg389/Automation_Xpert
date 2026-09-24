@@ -71,7 +71,9 @@ class RestaurantFeedbackAutomationTest extends TestCase
         WorkspaceContext::for($records['workspace']->id, fn () => $request->update(['status' => RestaurantFeedbackRequest::STATUS_SENT, 'sent_at' => now()]));
 
         $this->get(route('public.restaurant.feedback.show', $request->public_token))
-            ->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertDontSee('+919876543210');
+            ->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertDontSee('+919876543210')
+            ->assertSee($records['workspace']->name)
+            ->assertSee('How was your experience?');
         $this->post(route('public.restaurant.feedback.submit', $request->public_token), ['rating' => 2, 'comment' => 'Private note'])->assertRedirect();
         $this->post(route('public.restaurant.feedback.submit', $request->public_token), ['rating' => 2, 'comment' => 'Duplicate'])->assertRedirect();
         $this->assertDatabaseCount('restaurant_feedback_alerts', 1);

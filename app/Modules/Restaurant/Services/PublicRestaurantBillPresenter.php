@@ -6,6 +6,7 @@ use App\Models\Workspace;
 use App\Modules\Restaurant\Models\RestaurantBill;
 use App\Modules\Restaurant\Models\RestaurantBrandProfile;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
+use App\Modules\Shared\Models\Contact;
 
 /**
  * The only translation from provider-shaped bill JSON to the public page.
@@ -14,7 +15,7 @@ use App\Modules\Restaurant\Models\RestaurantOutlet;
 final class PublicRestaurantBillPresenter
 {
     /** @return array<string, mixed> */
-    public function present(RestaurantBill $bill, ?RestaurantOutlet $outlet, ?RestaurantBrandProfile $brand, Workspace $workspace): array
+    public function present(RestaurantBill $bill, ?RestaurantOutlet $outlet, ?RestaurantBrandProfile $brand, Workspace $workspace, ?Contact $contact): array
     {
         $primaryColor = is_string($brand?->primary_color) && preg_match('/^#[0-9A-Fa-f]{6}$/', $brand->primary_color)
             ? $brand->primary_color
@@ -49,6 +50,18 @@ final class PublicRestaurantBillPresenter
             ],
             'thank_you_note' => $this->text($brand?->thank_you_note, 1000),
             'social_links' => $this->socialLinks($brand?->social_links),
+            // This is intentionally limited to the one contact already linked
+            // to this bearer-token bill. It never accepts a contact id from the
+            // browser and it does not expose POS-supplied customer data.
+            'customer_profile' => $contact === null ? null : [
+                'first_name' => $this->text($contact->first_name, 100),
+                'last_name' => $this->text($contact->last_name, 100),
+                'email' => $this->text($contact->email, 255),
+                'birthday' => $contact->birthday?->format('Y-m-d'),
+                'postal_code' => $this->text($contact->postal_code, 20),
+                'gender' => in_array($contact->gender, Contact::GENDERS, true) ? $contact->gender : null,
+                'phone' => $this->text($contact->phone_e164, 32),
+            ],
             'disclaimer' => 'This is a system-generated digital copy.',
         ];
     }

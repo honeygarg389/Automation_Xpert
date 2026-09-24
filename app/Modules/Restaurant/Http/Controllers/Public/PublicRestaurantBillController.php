@@ -25,7 +25,7 @@ class PublicRestaurantBillController extends Controller
         abort_unless($candidate !== null, 404);
 
         return WorkspaceContext::for((int) $candidate->workspace_id, function () use ($candidate, $presenter): Response {
-            $bill = RestaurantBill::query()->with('outlet')->find($candidate->id);
+            $bill = RestaurantBill::query()->with(['outlet', 'contact'])->find($candidate->id);
             abort_unless($bill !== null, 404);
 
             $workspace = Workspace::find($bill->workspace_id);
@@ -33,7 +33,7 @@ class PublicRestaurantBillController extends Controller
             $brand = RestaurantBrandProfile::query()->where('workspace_id', $bill->workspace_id)->first();
 
             return response()
-                ->view('restaurant.public-bill', ['bill' => $presenter->present($bill, $bill->outlet, $brand, $workspace)])
+                ->view('restaurant.public-bill', ['bill' => $presenter->present($bill, $bill->outlet, $brand, $workspace, $bill->contact)])
                 ->header('Cache-Control', 'private, no-store')
                 ->header('X-Robots-Tag', 'noindex, nofollow, noarchive, nosnippet');
         });

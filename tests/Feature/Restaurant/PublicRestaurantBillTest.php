@@ -2,9 +2,11 @@
 
 namespace Tests\Feature\Restaurant;
 
+use App\Models\AuditLog;
 use App\Modules\Restaurant\Models\PosConnection;
 use App\Modules\Restaurant\Models\RestaurantBill;
 use App\Modules\Restaurant\Models\RestaurantOutlet;
+use App\Modules\Shared\Models\Contact;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -76,5 +78,48 @@ class PublicRestaurantBillTest extends TestCase
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $first->public_token);
         $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $second->public_token);
         $this->assertNotSame($first->public_token, $second->public_token);
+    }
+
+    #[Test]
+    public function a_bill_link_can_update_only_its_linked_contacts_profile_without_storing_values_in_audit_metadata(): void
+    {
+        ['workspace' => $workspace] = $this->createWorkspaceContext();
+        $contact = Contact::factory()->create(['workspace_id' => $workspace->id, 'phone_e164' => '+918630026042']);
+        $other = Contact::factory()->create(['workspace_id' => $workspace->id, 'first_name' => 'Unchanged']);
+        $bill = RestaurantBill::factory()->create(['workspace_id' => $workspace->id, 'contact_id' => $contact->id]);
+
+        $this->post(route('public.restaurant.bills.profile.update', $bill->public_token), [
+            'first_name' => 'Honey', 'last_name' => 'Sharma', 'email' => 'honey@example.test',
+            'birthday' => '1995-01-02', 'postal_code' => '122001', 'gender' => 'female',
+            'contact_id' => $other->id,
+        ])->assertRedirect(route('public.restaurant.bills.show', $bill->public_token));
+
+        $this->assertDatabaseHas('contacts', ['id' => $contact->id, 'first_name' => 'Honey', 'last_name' => 'Sharma', 'email' => 'honey@example.test', 'postal_code' => '122001', 'gender' => 'female']);
+        $this->assertDatabaseHas('contacts', ['id' => $other->id, 'first_name' => 'Unchanged']);
+        $audit = AuditLog::query()->where('action', 'restaurant.public_bill_contact_profile_updated')->latest('id')->firstOrFail();
+        $this->assertSame($bill->id, $audit->meta['restaurant_bill_id']);
+        $this->assertEqualsCanonicalizing(['first_name', 'last_name', 'email', 'birthday', 'postal_code', 'gender'], $audit->meta['updated_fields']);
+        $this->assertStringNotContainsString('honey@example.test', json_encode($audit->meta, JSON_THROW_ON_ERROR));
+    }
+
+    #[Test]
+    public function profile_collection_is_not_rendered_or_accepted_when_a_bill_has_no_linked_contact(): void
+    {
+        $bill = RestaurantBill::factory()->create(['contact_id' => null]);
+
+        $this->get(route('public.restaurant.bills.show', $bill->public_token))->assertOk()->assertDontSee('Complete your profile');
+        $this->post(route('public.restaurant.bills.profile.update', $bill->public_token), ['first_name' => 'Honey'])->assertNotFound();
+    }
+
+    #[Test]
+    public function public_profile_rejects_unknown_gender_and_invalid_dates(): void
+    {
+        ['workspace' => $workspace] = $this->createWorkspaceContext();
+        $contact = Contact::factory()->create(['workspace_id' => $workspace->id]);
+        $bill = RestaurantBill::factory()->create(['workspace_id' => $workspace->id, 'contact_id' => $contact->id]);
+
+        $this->from(route('public.restaurant.bills.show', $bill->public_token))->post(route('public.restaurant.bills.profile.update', $bill->public_token), [
+            'first_name' => 'Honey', 'birthday' => 'not-a-date', 'gender' => 'unknown',
+        ])->assertRedirect(route('public.restaurant.bills.show', $bill->public_token))->assertSessionHasErrors(['birthday', 'gender']);
     }
 }
