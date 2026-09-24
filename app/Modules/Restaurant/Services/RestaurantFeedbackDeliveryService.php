@@ -81,10 +81,19 @@ final class RestaurantFeedbackDeliveryService
                     return $request->refresh();
                 }
 
+                $sendImmediately = $config->timing_preference === RestaurantFeedbackDeliveryConfig::TIMING_IMMEDIATELY;
                 $request->fill([
-                    'status' => RestaurantFeedbackRequest::STATUS_SCHEDULED,
+                    'status' => $sendImmediately ? RestaurantFeedbackRequest::STATUS_PENDING : RestaurantFeedbackRequest::STATUS_SCHEDULED,
                     'reason_code' => null,
                 ])->save();
+
+                // Match Digital Bill delivery: an immediate preference must
+                // cross the provider boundary through the restaurant worker as
+                // soon as the durable ledger row commits. Delayed preferences
+                // remain scheduled and are claimed by the five-minute sweep.
+                if ($sendImmediately) {
+                    DB::afterCommit(fn () => SendRestaurantFeedbackRequestJob::dispatch($request->id)->onQueue('restaurant'));
+                }
 
                 return $request->refresh();
             });

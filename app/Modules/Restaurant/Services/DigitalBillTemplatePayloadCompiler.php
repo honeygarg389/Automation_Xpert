@@ -73,7 +73,7 @@ final class DigitalBillTemplatePayloadCompiler
         if (! is_string($url) || ! str_contains($url, '{{1}}')) {
             return RestaurantOutboundDecision::block(RestaurantDigitalBillDelivery::PURPOSE_DIGITAL_BILL, self::REASON_URL_BUTTON_STATIC, $workspaceId, $bill->id, $bill->outlet_id, $bill->contact_id);
         }
-        if ($url !== 'https://automationxpert.in/b/{{1}}') {
+        if ($url !== $this->expectedButtonUrl('/b')) {
             return RestaurantOutboundDecision::block(RestaurantDigitalBillDelivery::PURPOSE_DIGITAL_BILL, self::REASON_URL_BUTTON_INVALID, $workspaceId, $bill->id, $bill->outlet_id, $bill->contact_id);
         }
 
@@ -90,5 +90,20 @@ final class DigitalBillTemplatePayloadCompiler
     private function listOrEmpty(mixed $value): array
     {
         return is_array($value) ? $value : [];
+    }
+
+    private function expectedButtonUrl(string $path): ?string
+    {
+        // APP_URL is deployment configuration, unlike a request Host header.
+        // A Meta URL button is static apart from {{1}}, so accepting a template
+        // for another environment would send a valid staging token to a
+        // production database (or the reverse) and result in a misleading 404.
+        $baseUrl = rtrim((string) config('app.url'), '/');
+        $parts = parse_url($baseUrl);
+        if ($baseUrl === '' || ! is_array($parts) || ($parts['scheme'] ?? null) !== 'https' || ! isset($parts['host']) || isset($parts['query'], $parts['fragment'], $parts['user'], $parts['pass'])) {
+            return null;
+        }
+
+        return $baseUrl.$path.'/{{1}}';
     }
 }
